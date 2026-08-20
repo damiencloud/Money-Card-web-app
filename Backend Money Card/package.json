@@ -12,7 +12,9 @@
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx prisma/seed.ts",
     "prisma:studio": "prisma studio",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run"
   },
   "dependencies": {
     "@prisma/client": "^5.18.0",
@@ -43,7 +45,8 @@
     "@types/pdfkit": "^0.13.4",
     "prisma": "^5.18.0",
     "tsx": "^4.16.2",
-    "typescript": "^5.5.3"
+    "typescript": "^5.5.3",
+    "vitest": "^4.1.11"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

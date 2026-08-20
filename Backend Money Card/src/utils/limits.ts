@@ -1,9 +1,13 @@
-﻿import { prisma } from '../config/database.js';
+import { prisma } from '../config/database.js';
 
 export interface EffectiveLimits {
   branchLimit: number;
   staffLimit: number;
   cardLimit: number;
+  isCustomBranches?: boolean;
+  isCustomStaff?: boolean;
+  isCustomCards?: boolean;
+  hasAnyCustomOverride?: boolean;
 }
 
 export function formatSubscription(sub: any) {
@@ -28,6 +32,37 @@ export function formatSubscription(sub: any) {
   };
 }
 
+export function calculateEffectiveLimits(org: any): EffectiveLimits {
+  const activePlan = org?.subscription?.plan || org?.plan || org?.subscriptionPlan;
+  const sub = org?.subscription;
+
+  const isCustomBranches = (sub?.branchLimitOverride !== null && sub?.branchLimitOverride !== undefined) || (org?.customMaxBranches !== null && org?.customMaxBranches !== undefined);
+  const isCustomStaff = (sub?.staffLimitOverride !== null && sub?.staffLimitOverride !== undefined) || (org?.customMaxStaff !== null && org?.customMaxStaff !== undefined);
+  const isCustomCards = (sub?.cardLimitOverride !== null && sub?.cardLimitOverride !== undefined) || (org?.customMaxCards !== null && org?.customMaxCards !== undefined);
+
+  const branchLimit = isCustomBranches
+    ? Number(sub?.branchLimitOverride ?? org?.customMaxBranches)
+    : (activePlan?.branchLimit ?? activePlan?.maxBranches ?? 3);
+
+  const staffLimit = isCustomStaff
+    ? Number(sub?.staffLimitOverride ?? org?.customMaxStaff)
+    : (activePlan?.staffLimit ?? activePlan?.maxStaff ?? 25);
+
+  const cardLimit = isCustomCards
+    ? Number(sub?.cardLimitOverride ?? org?.customMaxCards)
+    : (activePlan?.cardLimit ?? activePlan?.maxCards ?? 1000);
+
+  return {
+    branchLimit,
+    staffLimit,
+    cardLimit,
+    isCustomBranches,
+    isCustomStaff,
+    isCustomCards,
+    hasAnyCustomOverride: isCustomBranches || isCustomStaff || isCustomCards,
+  };
+}
+
 export async function getEffectiveLimits(organizationId: string): Promise<EffectiveLimits> {
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
@@ -39,25 +74,7 @@ export async function getEffectiveLimits(organizationId: string): Promise<Effect
     },
   });
 
-  const activePlan = org?.subscription?.plan || org?.plan;
-  const sub = org?.subscription;
-
-  // Custom Organization Override > Subscription Plan Limit > Default
-  const branchLimit = sub?.branchLimitOverride !== null && sub?.branchLimitOverride !== undefined
-    ? Number(sub.branchLimitOverride)
-    : (activePlan?.branchLimit ?? 3);
-
-  const staffLimit = sub?.staffLimitOverride !== null && sub?.staffLimitOverride !== undefined
-    ? Number(sub.staffLimitOverride)
-    : (activePlan?.staffLimit ?? 25);
-
-  const cardLimit = sub?.cardLimitOverride !== null && sub?.cardLimitOverride !== undefined
-    ? Number(sub.cardLimitOverride)
-    : (activePlan?.cardLimit ?? 1000);
-
-  return {
-    branchLimit,
-    staffLimit,
-    cardLimit,
-  };
+  return calculateEffectiveLimits(org);
 }
+
+export const getOrganizationEffectiveLimits = calculateEffectiveLimits;
