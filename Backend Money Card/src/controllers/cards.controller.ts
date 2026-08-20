@@ -3,6 +3,7 @@ import { prisma } from '../config/database.js';
 import { sendError, sendSuccess } from '../utils/response.js';
 import { generateQrToken } from '../utils/crypto.js';
 import { CardStatus } from '@prisma/client';
+import { getEffectiveLimits } from '../utils/limits.js';
 
 export async function getCards(req: Request, res: Response) {
   const orgId = req.user?.organizationId;
@@ -95,14 +96,36 @@ export async function createCard(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', `Card '${cleanNum}' already exists in your organization`);
   }
 
+  // Authoritative Effective Card Limit Check
+  const [effectiveLimits, currentCardCount] = await Promise.all([
+    getEffectiveLimits(orgId),
+    prisma.card.count({ where: { organizationId: orgId } }),
+  ]);
+
+  if (currentCardCount >= effectiveLimits.cardLimit) {
+    return sendError(
+      res,
+      409,
+      'CARD_LIMIT_REACHED',
+      `Your organization has reached its card limit of ${effectiveLimits.cardLimit}. Please upgrade your plan or request a custom limit override to register more cards.`,
+    );
+  }
+
   const qrToken = generateQrToken();
-  const card = await prisma.card.create({
-    data: {
-      organizationId: orgId,
-      physicalCardNumber: cleanNum,
-      qrToken,
-      status: CardStatus.AVAILABLE,
-    },
+  const card = await prisma.$transaction(async (tx) => {
+    const countInTx = await tx.card.count({ where: { organizationId: orgId } });
+    if (countInTx >= effectiveLimits.cardLimit) {
+      throw new Error('CARD_LIMIT_REACHED');
+    }
+
+    return tx.card.create({
+      data: {
+        organizationId: orgId,
+        physicalCardNumber: cleanNum,
+        qrToken,
+        status: CardStatus.AVAILABLE,
+      },
+    });
   });
 
   return sendSuccess(res, card, 201);
@@ -114,32 +137,71 @@ export async function createCardBatch(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
   }
 
-  const { prefix = 'MC-', startNumber = 1, count = 10 } = req.body;
-  const numCount = Math.min(Math.max(1, parseInt(count, 10)), 100);
-  const startNum = Math.max(1, parseInt(startNumber, 10));
+  const { prefix = 'MC-', startNumber = 1, count = 10, cardNumbers, cards: rawCards } = req.body;
+
+  // Determine list of card numbers to create (either from CSV list or auto-generated range)
+  let targetCardEntries: { cardNumber: string; qrToken?: string }[] = [];
+
+  if (Array.isArray(cardNumbers) && cardNumbers.length > 0) {
+    targetCardEntries = cardNumbers.map((num: string) => ({ cardNumber: String(num).trim().toUpperCase() }));
+  } else if (Array.isArray(rawCards) && rawCards.length > 0) {
+    targetCardEntries = rawCards.map((c: any) => ({
+      cardNumber: String(c.cardNumber || c.physicalCardNumber || c.number || '').trim().toUpperCase(),
+      qrToken: c.qrToken || c.qrCode || c.token,
+    })).filter((c) => !!c.cardNumber);
+  } else {
+    const numCount = Math.min(Math.max(1, parseInt(count, 10)), 500);
+    const startNum = Math.max(1, parseInt(startNumber, 10));
+    for (let i = 0; i < numCount; i++) {
+      targetCardEntries.push({
+        cardNumber: `${prefix}${String(startNum + i).padStart(3, '0')}`,
+      });
+    }
+  }
+
+  const totalToCreate = targetCardEntries.length;
+  if (totalToCreate === 0) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'No card numbers provided');
+  }
+
+  const [effectiveLimits, currentCardCount] = await Promise.all([
+    getEffectiveLimits(orgId),
+    prisma.card.count({ where: { organizationId: orgId } }),
+  ]);
+
+  if (currentCardCount + totalToCreate > effectiveLimits.cardLimit) {
+    return sendError(
+      res,
+      409,
+      'CARD_LIMIT_REACHED',
+      `Adding ${totalToCreate} cards exceeds your card pool limit of ${effectiveLimits.cardLimit} (${currentCardCount} current cards). Please upgrade your plan or request a custom limit override.`,
+    );
+  }
 
   const createdCards: any[] = [];
 
-  for (let i = 0; i < numCount; i++) {
-    const cardNum = `${prefix}${String(startNum + i).padStart(3, '0')}`;
-    const qrToken = generateQrToken();
-
+  for (const entry of targetCardEntries) {
+    const token = entry.qrToken || generateQrToken();
     try {
       const card = await prisma.card.create({
         data: {
           organizationId: orgId,
-          physicalCardNumber: cardNum,
-          qrToken,
+          physicalCardNumber: entry.cardNumber,
+          qrToken: token,
           status: CardStatus.AVAILABLE,
         },
       });
       createdCards.push(card);
     } catch {
-      // Skip duplicates if any
+      // Skip duplicates if already present
     }
   }
 
-  return sendSuccess(res, { created: createdCards.length, cards: createdCards }, 201);
+  return sendSuccess(res, {
+    created: createdCards.length,
+    importedCount: createdCards.length,
+    cards: createdCards,
+  }, 201);
 }
 
 export async function getCardById(req: Request, res: Response) {

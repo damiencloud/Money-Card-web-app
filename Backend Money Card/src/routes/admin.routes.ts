@@ -14,6 +14,7 @@ import {
   getSubscriptionPayments,
   getPlanChangeRequests,
   reviewPlanChangeRequest,
+  resetOrgAdminPassword,
 } from '../controllers/admin.controller.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
 import { requireRole } from '../middlewares/role.middleware.js';
@@ -28,6 +29,7 @@ router.get('/organizations', getOrganizations);
 router.post('/organizations', createOrganization);
 router.get('/organizations/:id', getOrganizationById);
 router.patch('/organizations/:id', updateOrganization);
+router.post('/organizations/:id/reset-admin-password', resetOrgAdminPassword);
 router.get('/organizations/:id/subscription', getOrganizationSubscription);
 router.patch('/organizations/:id/subscription', updateOrganizationSubscription);
 

@@ -1,11 +1,12 @@
-// ─── Forgot Password Page ──────────────────────────────────
-// M0 Rule 14.3: Never reveal whether an account exists.
+//  Forgot Password Page 
+// Dedicated Super Admin Password Recovery workflow.
+// Org Admins are directed to contact Super Admin for temporary password reset.
 
 import { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, Button, Input } from '@/components/ui';
 import { apiService } from '@/services/api';
-import { Mail, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Mail, ArrowLeft, CheckCircle2, AlertCircle, ShieldAlert, ShieldCheck } from 'lucide-react';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -22,7 +23,7 @@ export function ForgotPasswordPage() {
       setApiError(null);
 
       if (!email.trim()) {
-        setEmailError('Email is required');
+        setEmailError('Email address is required');
         return;
       }
       if (!EMAIL_REGEX.test(email.trim())) {
@@ -36,8 +37,6 @@ export function ForgotPasswordPage() {
         const result = await apiService.auth.forgotPassword({ email: email.trim() });
 
         if (!result.success) {
-          // Even on error, M0 rule says do NOT reveal account existence.
-          // But surface real API errors (network / server).
           setApiError(result.error.message || 'An error occurred. Please try again.');
           return;
         }
@@ -56,14 +55,13 @@ export function ForgotPasswordPage() {
     return (
       <Card padding="lg">
         <div className="space-y-5 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
             <CheckCircle2 className="h-8 w-8 text-emerald-400" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-slate-100">Check your email</h2>
+            <h2 className="text-xl font-semibold text-slate-100">Check Your Email</h2>
             <p className="mt-2 text-sm text-slate-400">
-              If an account associated with that email exists, password reset instructions have been
-              sent. Please check your inbox and spam folder.
+              If an authorized Super Admin account associated with that email exists, password reset instructions have been sent.
             </p>
           </div>
           <Link
@@ -82,9 +80,23 @@ export function ForgotPasswordPage() {
     <Card padding="lg">
       <form onSubmit={handleSubmit} noValidate className="space-y-5">
         <div className="text-center">
-          <h2 className="text-xl font-semibold text-slate-100">Forgot password?</h2>
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-violet-500/10 border border-violet-500/20 mb-3">
+            <ShieldCheck className="h-6 w-6 text-violet-400" />
+          </div>
+          <h2 className="text-xl font-semibold text-slate-100">Super Admin Password Recovery</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Enter your email and we&apos;ll send you reset instructions.
+            Enter your registered Super Admin email to receive a secure, single-use password reset link.
+          </p>
+        </div>
+
+        {/* Role Separation Guidance Notice */}
+        <div className="rounded-xl border border-violet-500/20 bg-violet-500/10 p-3.5 text-xs text-slate-300 space-y-1">
+          <div className="flex items-center gap-1.5 font-semibold text-violet-300">
+            <ShieldAlert className="h-3.5 w-3.5 text-violet-400 shrink-0" />
+            <span>Role-Based Password Policy</span>
+          </div>
+          <p className="text-slate-400 leading-relaxed">
+            Email recovery is reserved strictly for Super Admin accounts. Org Admins who forgot their credentials should contact the platform Super Admin for a temporary password reset.
           </p>
         </div>
 
@@ -101,9 +113,9 @@ export function ForgotPasswordPage() {
 
         <Input
           id="forgot-email"
-          label="Email address"
+          label="Super Admin Email Address *"
           type="email"
-          placeholder="admin@example.com"
+          placeholder="superadmin@moneycard.platform"
           autoComplete="email"
           autoFocus
           value={email}

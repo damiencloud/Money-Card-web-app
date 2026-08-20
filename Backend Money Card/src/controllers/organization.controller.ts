@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../config/database.js';
 import { sendError, sendSuccess } from '../utils/response.js';
 import { Role } from '@prisma/client';
+import { getEffectiveLimits, formatSubscription } from '../utils/limits.js';
 
 export async function getOrganizationProfile(req: Request, res: Response) {
   const orgId = req.user?.organizationId;
@@ -9,27 +10,54 @@ export async function getOrganizationProfile(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
   }
 
-  const org = await prisma.organization.findUnique({
-    where: { id: orgId },
-    include: {
-      plan: true,
-      subscription: true,
-      branches: true,
-      _count: {
-        select: {
-          users: true,
-          cards: true,
-          products: true,
+  const [org, effectiveLimits, branchCount, staffCount, cardCount] = await Promise.all([
+    prisma.organization.findUnique({
+      where: { id: orgId },
+      include: {
+        plan: true,
+        subscription: {
+          include: { plan: true },
         },
+        branches: true,
       },
-    },
-  });
+    }),
+    getEffectiveLimits(orgId),
+    prisma.branch.count({ where: { organizationId: orgId } }),
+    prisma.user.count({ where: { organizationId: orgId, role: Role.STAFF } }),
+    prisma.card.count({ where: { organizationId: orgId } }),
+  ]);
 
   if (!org) {
     return sendError(res, 404, 'NOT_FOUND', 'Organization not found');
   }
 
-  return sendSuccess(res, org);
+  const activePlan = org.subscription?.plan || org.plan;
+
+  const formatted = {
+    id: org.id,
+    name: org.name,
+    status: org.status,
+    logoUrl: org.logoUrl,
+    phone: org.phone,
+    email: org.email,
+    address: org.address,
+    planId: org.subscription?.planId || org.planId,
+    plan: activePlan,
+    subscription: formatSubscription(org.subscription),
+    usage: {
+      branchCount,
+      branchLimit: effectiveLimits.branchLimit,
+      staffCount,
+      staffLimit: effectiveLimits.staffLimit,
+      cardCount,
+      cardLimit: effectiveLimits.cardLimit,
+    },
+    branches: org.branches,
+    createdAt: org.createdAt,
+    updatedAt: org.updatedAt,
+  };
+
+  return sendSuccess(res, formatted);
 }
 
 export async function updateOrganizationProfile(req: Request, res: Response) {
@@ -106,34 +134,34 @@ export async function createBranch(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'Branch name is required');
   }
 
-  // Check branch limit
-  const org = await prisma.organization.findUnique({
-    where: { id: orgId },
-    include: { plan: true, subscription: true },
-  });
+  // Authoritative Effective Branch Limit Check
+  const [effectiveLimits, currentBranchCount] = await Promise.all([
+    getEffectiveLimits(orgId),
+    prisma.branch.count({ where: { organizationId: orgId } }),
+  ]);
 
-  const branchLimit =
-    org?.subscription?.branchLimitOverride ?? org?.plan?.branchLimit ?? 5;
-
-  const currentBranchCount = await prisma.branch.count({
-    where: { organizationId: orgId },
-  });
-
-  if (currentBranchCount >= branchLimit) {
+  if (currentBranchCount >= effectiveLimits.branchLimit) {
     return sendError(
       res,
-      400,
-      'LIMIT_REACHED',
-      `Branch limit of ${branchLimit} reached for your plan. Please upgrade to add more branches.`,
+      409,
+      'BRANCH_LIMIT_REACHED',
+      `Your organization has reached its branch limit of ${effectiveLimits.branchLimit}. Please upgrade your plan or request a custom limit override to create more branches.`,
     );
   }
 
-  const branch = await prisma.branch.create({
-    data: {
-      organizationId: orgId,
-      name: name.trim(),
-      location: location?.trim(),
-    },
+  const branch = await prisma.$transaction(async (tx) => {
+    const countInTx = await tx.branch.count({ where: { organizationId: orgId } });
+    if (countInTx >= effectiveLimits.branchLimit) {
+      throw new Error('BRANCH_LIMIT_REACHED');
+    }
+
+    return tx.branch.create({
+      data: {
+        organizationId: orgId,
+        name: name.trim(),
+        location: location?.trim(),
+      },
+    });
   });
 
   return sendSuccess(res, branch, 201);

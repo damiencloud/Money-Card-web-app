@@ -10,6 +10,7 @@ import {
   ForgotPasswordPage,
   ResetPasswordPage,
   UnauthorizedPage,
+  MandatoryChangePasswordPage,
 } from '@/features/auth';
 import { OrganizationsPage } from '@/features/organizations';
 import { DashboardPage } from '@/features/dashboard';
@@ -52,6 +53,14 @@ export function AppRoutes() {
       </Route>
 
       {/* ── Unauthorized (authenticated but no permission) ── */}
+      <Route
+        path="/change-password"
+        element={
+          <AuthGuard>
+            <MandatoryChangePasswordPage />
+          </AuthGuard>
+        }
+      />
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
       {/* ── Dashboard Routes (authenticated) ── */}

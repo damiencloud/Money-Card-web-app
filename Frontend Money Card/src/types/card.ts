@@ -138,13 +138,20 @@ export interface CardImportValidationError {
 export interface CardImportPreview {
   totalRows: number;
   validCards: string[];
+  validEntries?: { cardNumber: string; qrToken?: string }[];
   duplicateCards: string[];
   invalidCards: CardImportValidationError[];
 }
 
+export interface ImportCardEntry {
+  cardNumber: string;
+  qrToken?: string;
+}
+
 export interface ImportCardsRequest {
   branchId?: string;
-  cardNumbers: string[];
+  cardNumbers?: string[];
+  cards?: ImportCardEntry[];
 }
 
 export interface ImportCardsResponseData {

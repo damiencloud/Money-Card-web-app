@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../config/database.js';
 import { sendError, sendSuccess } from '../utils/response.js';
 import { Role } from '@prisma/client';
+import { formatSubscription } from './admin.controller.js';
 
 export async function getPublicPlans(_req: Request, res: Response) {
   const plans = await prisma.plan.findMany({
@@ -38,7 +39,7 @@ export async function getMySubscription(req: Request, res: Response) {
     return sendError(res, 404, 'NOT_FOUND', 'Subscription not found for this organization');
   }
 
-  return sendSuccess(res, subscription);
+  return sendSuccess(res, formatSubscription(subscription));
 }
 
 export async function getOrgSubscriptionPayments(req: Request, res: Response) {
@@ -155,6 +156,6 @@ export async function renewOrgSubscription(req: Request, res: Response) {
 
   return sendSuccess(res, {
     message: 'Renewal request recorded. Please contact Super Admin for invoice clearance.',
-    subscription,
+    subscription: formatSubscription(subscription),
   });
 }

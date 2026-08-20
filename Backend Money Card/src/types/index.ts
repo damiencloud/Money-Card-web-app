@@ -53,6 +53,7 @@ export interface AuthenticatedUser {
   role: Role;
   organizationId: string | null;
   status: UserStatus;
+  mustChangePassword: boolean;
   permissions: PermissionCode[];
   assignedBranchIds: string[];
   tokenVersion: number;

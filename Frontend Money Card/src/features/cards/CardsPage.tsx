@@ -290,7 +290,7 @@ export function CardsPage() {
 
   // ── Download Sample CSV ───────────────────────────────────
   const handleDownloadSampleCsv = () => {
-    const sampleContent = 'cardNumber\nMC-101\nMC-102\nMC-103\nMC-104\nMC-105\nMC-106\nMC-107\nMC-108\nMC-109\nMC-110\n';
+    const sampleContent = 'cardNumber,qrCode\nMC-101,\nMC-102,\nMC-103,VENDOR_QR_TOKEN_103\nMC-104,\nMC-105,\n';
     const blob = new Blob([sampleContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -341,12 +341,15 @@ export function CardsPage() {
         const seenInFile = new Set<string>();
 
         const validCards: string[] = [];
+        const validEntries: { cardNumber: string; qrToken?: string }[] = [];
         const duplicateCards: string[] = [];
         const invalidCards: { rowNumber: number; cardNumber: string; reason: string }[] = [];
 
         for (let i = startIndex; i < lines.length; i++) {
           const rowNum = i + 1;
-          const rawVal = lines[i].split(',')[0]?.replace(/["']/g, '').trim();
+          const parts = lines[i].split(',').map((s: string) => s.replace(/["']/g, '').trim());
+          const rawVal = parts[0];
+          const rawQr = parts[1] || undefined;
 
           if (!rawVal) {
             invalidCards.push({
@@ -393,11 +396,13 @@ export function CardsPage() {
 
           seenInFile.add(lower);
           validCards.push(rawVal);
+          validEntries.push({ cardNumber: rawVal, qrToken: rawQr });
         }
 
         setImportPreview({
           totalRows: lines.length - startIndex,
           validCards,
+          validEntries,
           duplicateCards,
           invalidCards,
         });
@@ -420,6 +425,7 @@ export function CardsPage() {
       const res = await apiService.cards.importCards({
         branchId: importBranchId || undefined,
         cardNumbers: importPreview.validCards,
+        cards: importPreview.validEntries || importPreview.validCards.map((num) => ({ cardNumber: num })),
       });
 
       if (!res.success) {

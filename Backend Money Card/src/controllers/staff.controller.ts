@@ -1,3 +1,4 @@
+import { getEffectiveLimits } from '../utils/limits.js';
 import { Request, Response } from 'express';
 import { prisma } from '../config/database.js';
 import { sendError, sendSuccess } from '../utils/response.js';
@@ -99,6 +100,21 @@ export async function createStaffMember(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'Password must be at least 6 characters');
   }
 
+  // Authoritative Effective Staff Limit Check
+  const [effectiveLimits, currentStaffCount] = await Promise.all([
+    getEffectiveLimits(orgId),
+    prisma.user.count({ where: { organizationId: orgId, role: Role.STAFF } }),
+  ]);
+
+  if (currentStaffCount >= effectiveLimits.staffLimit) {
+    return sendError(
+      res,
+      409,
+      'STAFF_LIMIT_REACHED',
+      `Your organization has reached its staff limit of ${effectiveLimits.staffLimit}. Please upgrade your plan or request a custom limit override to add more staff.`,
+    );
+  }
+
   const passwordHash = await hashPassword(password);
   const targetPermissions: PermissionCode[] = Array.isArray(permissions) && permissions.length > 0
     ? permissions
@@ -114,6 +130,11 @@ export async function createStaffMember(req: Request, res: Response) {
       ];
 
   const result = await prisma.$transaction(async (tx) => {
+    const countInTx = await tx.user.count({ where: { organizationId: orgId, role: Role.STAFF } });
+    if (countInTx >= effectiveLimits.staffLimit) {
+      throw new Error('STAFF_LIMIT_REACHED');
+    }
+
     const user = await tx.user.create({
       data: {
         name: name.trim(),
@@ -198,7 +219,7 @@ export async function getStaffById(req: Request, res: Response) {
 export async function updateStaffMember(req: Request, res: Response) {
   const { id } = req.params;
   const orgId = req.user?.organizationId;
-  const { name, status } = req.body;
+  const { name, email, status, permissions, assignedBranchIds, branchIds } = req.body;
 
   const staff = await prisma.user.findFirst({
     where: { id, organizationId: orgId || undefined },
@@ -208,24 +229,72 @@ export async function updateStaffMember(req: Request, res: Response) {
     return sendError(res, 404, 'NOT_FOUND', 'Staff member not found');
   }
 
-  const updated = await prisma.user.update({
+  const targetBranches = assignedBranchIds || branchIds;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id },
+      data: {
+        ...(name ? { name: name.trim() } : {}),
+        ...(email ? { email: email.trim().toLowerCase() } : {}),
+        ...(status ? { status } : {}),
+        ...(status === UserStatus.DEACTIVATED ? { tokenVersion: { increment: 1 } } : {}),
+      },
+    });
+
+    if (Array.isArray(permissions)) {
+      await tx.userPermission.deleteMany({ where: { userId: id } });
+      for (const perm of permissions) {
+        await tx.userPermission.create({
+          data: { userId: id, permission: perm as PermissionCode },
+        });
+      }
+      await tx.user.update({
+        where: { id },
+        data: { tokenVersion: { increment: 1 } },
+      });
+    }
+
+    if (Array.isArray(targetBranches)) {
+      await tx.userBranch.deleteMany({ where: { userId: id } });
+      for (const bId of targetBranches) {
+        await tx.userBranch.create({
+          data: { userId: id, branchId: bId },
+        });
+      }
+    }
+  });
+
+  const fullStaff = await prisma.user.findUnique({
     where: { id },
-    data: {
-      ...(name ? { name: name.trim() } : {}),
-      ...(status ? { status } : {}),
-      ...(status === UserStatus.DEACTIVATED ? { tokenVersion: { increment: 1 } } : {}),
+    include: {
+      permissions: true,
+      assignedBranches: { include: { branch: true } },
     },
   });
 
-  return sendSuccess(res, updated);
+  return sendSuccess(res, {
+    id: fullStaff!.id,
+    name: fullStaff!.name,
+    email: fullStaff!.email,
+    role: fullStaff!.role,
+    status: fullStaff!.status,
+    assignedBranchIds: fullStaff!.assignedBranches.map((b) => b.branchId),
+    assignedBranches: fullStaff!.assignedBranches.map((b) => ({ id: b.branch.id, name: b.branch.name })),
+    permissions: fullStaff!.permissions.map((p) => p.permission),
+    createdAt: fullStaff!.createdAt,
+    updatedAt: fullStaff!.updatedAt,
+    message: 'Staff member updated successfully.',
+  });
 }
 
 export async function updateStaffBranches(req: Request, res: Response) {
   const { id } = req.params;
   const orgId = req.user?.organizationId;
-  const { branchIds } = req.body;
+  const { branchIds, assignedBranchIds } = req.body;
 
-  if (!Array.isArray(branchIds)) {
+  const targetBranchIds = branchIds || assignedBranchIds;
+  if (!Array.isArray(targetBranchIds)) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'branchIds must be an array of branch IDs');
   }
 
@@ -239,14 +308,25 @@ export async function updateStaffBranches(req: Request, res: Response) {
 
   await prisma.$transaction(async (tx) => {
     await tx.userBranch.deleteMany({ where: { userId: id } });
-    for (const bId of branchIds) {
+    for (const bId of targetBranchIds) {
       await tx.userBranch.create({
         data: { userId: id, branchId: bId },
       });
     }
   });
 
-  return sendSuccess(res, { id, assignedBranchIds: branchIds });
+  const fullStaff = await prisma.user.findUnique({
+    where: { id },
+    include: { permissions: true, assignedBranches: { include: { branch: true } } },
+  });
+
+  return sendSuccess(res, {
+    id,
+    assignedBranchIds: fullStaff!.assignedBranches.map((b) => b.branchId),
+    assignedBranches: fullStaff!.assignedBranches.map((b) => ({ id: b.branch.id, name: b.branch.name })),
+    permissions: fullStaff!.permissions.map((p) => p.permission),
+    message: 'Branch assignments updated successfully.',
+  });
 }
 
 export async function updateStaffPermissions(req: Request, res: Response) {
@@ -280,5 +360,16 @@ export async function updateStaffPermissions(req: Request, res: Response) {
     });
   });
 
-  return sendSuccess(res, { id, permissions });
+  const fullStaff = await prisma.user.findUnique({
+    where: { id },
+    include: { permissions: true, assignedBranches: { include: { branch: true } } },
+  });
+
+  return sendSuccess(res, {
+    id,
+    permissions: fullStaff!.permissions.map((p) => p.permission),
+    assignedBranchIds: fullStaff!.assignedBranches.map((b) => b.branchId),
+    assignedBranches: fullStaff!.assignedBranches.map((b) => ({ id: b.branch.id, name: b.branch.name })),
+    message: 'Permissions updated successfully.',
+  });
 }

@@ -144,15 +144,27 @@ export function OrgAdminDashboard() {
     };
   }, [currentBranch]);
 
-  // Usage metrics vs plan limits
+  // Authoritative Effective Limits: Custom Override > Plan Default
   const branchUsage = branches.length;
-  const branchLimit = currentPlan?.branchLimit || 1;
+  const branchLimit =
+    subscription?.overrides?.branchLimit ??
+    (subscription as any)?.branchLimitOverride ??
+    currentPlan?.branchLimit ??
+    1;
 
   const staffUsage = staffList.length;
-  const staffLimit = currentPlan?.staffLimit || 10;
+  const staffLimit =
+    subscription?.overrides?.staffLimit ??
+    (subscription as any)?.staffLimitOverride ??
+    currentPlan?.staffLimit ??
+    10;
 
   const cardUsage = cardsList.length;
-  const cardLimit = currentPlan?.cardLimit || 250;
+  const cardLimit =
+    subscription?.overrides?.cardLimit ??
+    (subscription as any)?.cardLimitOverride ??
+    currentPlan?.cardLimit ??
+    250;
 
   const txnUsage = analytics?.totalTransactions || 0;
 

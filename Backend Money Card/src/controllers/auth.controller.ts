@@ -1,10 +1,12 @@
+import { sendSuperAdminPasswordResetEmail } from '../services/email.service.js';
 import { Request, Response } from 'express';
 import { z } from 'zod';
+import crypto from 'crypto';
 import { prisma } from '../config/database.js';
 import { sendError, sendSuccess } from '../utils/response.js';
 import { comparePassword, hashPassword } from '../utils/crypto.js';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/token.js';
-import { PermissionCode, Role, UserStatus } from '@prisma/client';
+import { Role, UserStatus } from '@prisma/client';
 
 export const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -13,6 +15,10 @@ export const loginSchema = z.object({
 
 export async function login(req: Request, res: Response) {
   const { email, password } = req.body;
+
+  if (!email || !password) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Email and password are required');
+  }
 
   const user = await prisma.user.findUnique({
     where: { email: email.trim().toLowerCase() },
@@ -75,6 +81,7 @@ export async function login(req: Request, res: Response) {
       organizationId: user.organizationId,
       organizationName: user.organization?.name || null,
       status: user.status,
+      mustChangePassword: user.mustChangePassword,
       permissions,
       assignedBranches,
     },
@@ -142,6 +149,7 @@ export async function getMe(req: Request, res: Response) {
     organizationId: user.organizationId,
     organizationName: user.organization?.name || null,
     status: user.status,
+    mustChangePassword: user.mustChangePassword,
     permissions: user.permissions.map((p) => p.permission),
     assignedBranches: user.assignedBranches.map((b) => ({
       id: b.branch.id,
@@ -151,17 +159,93 @@ export async function getMe(req: Request, res: Response) {
 }
 
 export async function forgotPassword(req: Request, res: Response) {
-  // Anti-user enumeration: always return 200 generic message
+  const { email } = req.body;
+  if (!email || !email.trim()) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Email is required');
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const user = await prisma.user.findUnique({
+    where: { email: cleanEmail },
+  });
+
+  // Password reset via email is strictly restricted to SUPER_ADMIN role
+  if (user && user.role === Role.SUPER_ADMIN && user.status === UserStatus.ACTIVE) {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour validity
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetPasswordToken: tokenHash,
+        resetPasswordExpires: resetExpires,
+      },
+    });
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const resetLink = `${frontendUrl}/reset-password?token=${rawToken}`;
+
+    // Dispatch email via Resend or log in console
+    await sendSuperAdminPasswordResetEmail(user.email, user.name, resetLink);
+  }
+
+  // Anti-user enumeration message
   return sendSuccess(res, {
-    message: 'If an account exists with this email address, password reset instructions have been sent.',
+    message: 'If a Super Admin account exists with this email address, password reset instructions have been sent.',
   });
 }
 
 export async function resetPassword(req: Request, res: Response) {
-  const { newPassword, token } = req.body;
-  if (!newPassword || newPassword.length < 6) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'Password must be at least 6 characters');
+  const { token, newPassword } = req.body;
+
+  if (!token || !token.trim()) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Reset token is required');
   }
+
+  if (!newPassword || newPassword.length < 6) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'New password must be at least 6 characters');
+  }
+
+  const rawToken = token.trim();
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { resetPasswordToken: tokenHash },
+        { resetPasswordToken: rawToken },
+      ],
+    },
+  });
+
+  if (!user || !user.resetPasswordExpires) {
+    return sendError(res, 400, 'INVALID_TOKEN', 'Password reset token is invalid or has expired');
+  }
+
+  // Timezone-safe timestamp comparison (epoch milliseconds)
+  const isExpired = new Date(user.resetPasswordExpires).getTime() < Date.now();
+  if (isExpired) {
+    return sendError(res, 400, 'INVALID_TOKEN', 'Password reset token has expired. Please request a new link.');
+  }
+
+  if (user.role !== Role.SUPER_ADMIN) {
+    return sendError(res, 403, 'FORBIDDEN', 'Email password recovery is strictly for Super Admin accounts');
+  }
+
+  const newHash = await hashPassword(newPassword);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash: newHash,
+      resetPasswordToken: null,
+      resetPasswordExpires: null,
+      mustChangePassword: false,
+      tokenVersion: { increment: 1 }, // Invalidate old tokens
+    },
+  });
+
   return sendSuccess(res, {
     message: 'Password reset successfully. You may now log in with your new password.',
   });
@@ -174,33 +258,81 @@ export async function changePassword(req: Request, res: Response) {
 
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'Current and new password are required');
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Current password and new password are required');
   }
 
   if (newPassword.length < 6) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'New password must be at least 6 characters');
   }
 
-  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  if (currentPassword === newPassword) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'New password must be different from current password');
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    include: {
+      permissions: true,
+      assignedBranches: { include: { branch: true } },
+      organization: true,
+    },
+  });
+
   if (!user) {
     return sendError(res, 404, 'NOT_FOUND', 'User not found');
   }
 
   const isValid = await comparePassword(currentPassword, user.passwordHash);
   if (!isValid) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'Current password does not match');
+    return sendError(res, 400, 'INVALID_CREDENTIALS', 'Current password does not match');
   }
 
   const newHash = await hashPassword(newPassword);
-  await prisma.user.update({
+  const updatedUser = await prisma.user.update({
     where: { id: user.id },
     data: {
       passwordHash: newHash,
-      tokenVersion: { increment: 1 }, // Invalidate all existing tokens
+      mustChangePassword: false,
+      tokenVersion: { increment: 1 }, // Invalidate previous sessions
+    },
+    include: {
+      permissions: true,
+      assignedBranches: { include: { branch: true } },
+      organization: true,
     },
   });
 
-  return sendSuccess(res, { message: 'Password changed successfully' });
+  // Generate fresh token with updated tokenVersion and mustChangePassword = false
+  const tokenPayload = {
+    userId: updatedUser.id,
+    email: updatedUser.email,
+    role: updatedUser.role,
+    organizationId: updatedUser.organizationId,
+    tokenVersion: updatedUser.tokenVersion,
+  };
+
+  const newAccessToken = generateAccessToken(tokenPayload);
+
+  return sendSuccess(res, {
+    message: 'Password changed successfully.',
+    token: newAccessToken,
+    accessToken: newAccessToken,
+    user: {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      role: updatedUser.role,
+      organizationId: updatedUser.organizationId,
+      organizationName: updatedUser.organization?.name || null,
+      status: updatedUser.status,
+      mustChangePassword: false,
+      permissions: updatedUser.permissions.map((p) => p.permission),
+      assignedBranches: updatedUser.assignedBranches.map((b) => ({
+        id: b.branch.id,
+        name: b.branch.name,
+      })),
+    },
+  });
 }
 
 export async function logout(_req: Request, res: Response) {

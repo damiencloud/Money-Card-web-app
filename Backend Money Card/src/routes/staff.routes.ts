@@ -22,4 +22,6 @@ staffRouter.post('/', requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN), createStaff
 staffRouter.get('/:id', getStaffById);
 staffRouter.patch('/:id', requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN), updateStaffMember);
 staffRouter.put('/:id/branches', requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN), updateStaffBranches);
+staffRouter.patch('/:id/branches', requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN), updateStaffBranches);
 staffRouter.put('/:id/permissions', requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN), updateStaffPermissions);
+staffRouter.patch('/:id/permissions', requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN), updateStaffPermissions);

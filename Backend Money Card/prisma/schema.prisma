@@ -137,16 +137,19 @@ enum PermissionCode {
 // ==========================================
 
 model User {
-  id             String      @id @default(uuid())
-  email          String      @unique
-  passwordHash   String
-  name           String
-  role           Role
-  organizationId String?
-  status         UserStatus  @default(ACTIVE)
-  tokenVersion   Int         @default(1)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id                   String      @id @default(uuid())
+  email                String      @unique
+  passwordHash         String
+  name                 String
+  role                 Role
+  organizationId       String?
+  status               UserStatus  @default(ACTIVE)
+  mustChangePassword   Boolean     @default(false)
+  resetPasswordToken   String?
+  resetPasswordExpires DateTime? @db.Timestamptz(3)
+  tokenVersion         Int         @default(1)
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 
   organization       Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   assignedBranches   UserBranch[]

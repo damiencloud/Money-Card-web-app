@@ -9,12 +9,18 @@ export async function getProducts(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
   }
 
-  const { search, category, status = 'ACTIVE' } = req.query as Record<string, string>;
+  const { search, category, status } = req.query as Record<string, string>;
 
   const whereClause: any = {
     organizationId: orgId,
-    status: status as ProductStatus,
+    // Do NOT filter by ARCHIVED products (soft-deleted), but show both ACTIVE and INACTIVE
+    status: { not: ProductStatus.ARCHIVED },
   };
+
+  // If a specific status filter is requested (ACTIVE or INACTIVE), apply it
+  if (status && status !== 'ALL' && (status === 'ACTIVE' || status === 'INACTIVE')) {
+    whereClause.status = status as ProductStatus;
+  }
 
   if (search) {
     whereClause.itemName = { contains: search, mode: 'insensitive' };

@@ -176,10 +176,11 @@ class ApiClient {
 
   private normalizeError(error: unknown): ApiError {
     if (axios.isAxiosError(error)) {
+      const serverMessage = error.response?.data?.error?.message || error.response?.data?.message;
       return {
-        message: error.response?.data?.message || error.message || 'An unexpected error occurred',
+        message: serverMessage || error.message || 'An unexpected error occurred',
         status: error.response?.status || 0,
-        errors: error.response?.data?.errors || undefined,
+        errors: error.response?.data?.error?.details || error.response?.data?.errors || undefined,
       };
     }
     return {

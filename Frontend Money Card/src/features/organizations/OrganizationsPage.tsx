@@ -28,6 +28,7 @@ import {
   CreditCard,
   ShieldAlert,
   Plus,
+  KeyRound,
 } from 'lucide-react';
 
 export function OrganizationsPage() {
@@ -43,6 +44,11 @@ export function OrganizationsPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+  const [tempPassword, setTempPassword] = useState('');
+  const [confirmTempPassword, setConfirmTempPassword] = useState('');
+  const [tempPasswordError, setTempPasswordError] = useState<string | null>(null);
+  const [confirmTempPasswordError, setConfirmTempPasswordError] = useState<string | null>(null);
 
   // Form State for Create Organization (4 Required Fields)
   const [formName, setFormName] = useState('');
@@ -123,6 +129,63 @@ export function OrganizationsPage() {
   }, [searchQuery]);
 
   // ── Open Create Modal ─────────────────────────────────────
+  //  Open Reset Password Modal
+  const handleOpenResetPasswordModal = (org: OrganizationOverview) => {
+    setSelectedOrg(org);
+    setTempPassword('');
+    setConfirmTempPassword('');
+    setTempPasswordError(null);
+    setConfirmTempPasswordError(null);
+    setModalApiError(null);
+    setShowResetPasswordModal(true);
+  };
+
+  const handleResetPasswordSubmit = async () => {
+    if (!selectedOrg) return;
+    setTempPasswordError(null);
+    setConfirmTempPasswordError(null);
+    setModalApiError(null);
+
+    let hasErrors = false;
+    if (!tempPassword) {
+      setTempPasswordError('Temporary password is required');
+      hasErrors = true;
+    } else if (tempPassword.length < 6) {
+      setTempPasswordError('Temporary password must be at least 6 characters');
+      hasErrors = true;
+    }
+
+    if (!confirmTempPassword) {
+      setConfirmTempPasswordError('Please confirm the temporary password');
+      hasErrors = true;
+    } else if (tempPassword && confirmTempPassword !== tempPassword) {
+      setConfirmTempPasswordError('Passwords do not match');
+      hasErrors = true;
+    }
+
+    if (hasErrors) return;
+
+    setIsSubmitting(true);
+    try {
+      const res = await apiService.organizations.resetOrgAdminPassword(selectedOrg.id, {
+        temporaryPassword: tempPassword,
+      });
+
+      if (!res.success) {
+        setModalApiError(res.error.message || 'Failed to reset Org Admin password');
+        return;
+      }
+
+      notify.success(res.data.message || `Password reset successfully for ${selectedOrg.adminUser?.name || 'Org Admin'}.`);
+      setShowResetPasswordModal(false);
+      fetchOrganizations();
+    } catch {
+      setModalApiError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleOpenCreateModal = () => {
     setFormName('');
     setFormAdminEmail('');
@@ -360,6 +423,16 @@ export function OrganizationsPage() {
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => handleOpenResetPasswordModal(org)}
+            title="Reset Org Admin Password"
+            className="text-amber-400 hover:text-amber-300"
+          >
+            <KeyRound className="h-4 w-4" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => handleOpenStatusModal(org)}
             className={org.status === 'ACTIVE' ? 'text-rose-400 hover:text-rose-300' : 'text-emerald-400 hover:text-emerald-300'}
             title={org.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
@@ -581,6 +654,44 @@ export function OrganizationsPage() {
               </Badge>
             </div>
 
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Assigned Org Admin
+                </span>
+                {selectedOrg.adminUser?.mustChangePassword ? (
+                  <Badge variant="warning" className="text-[10px]">
+                    Password Reset Pending
+                  </Badge>
+                ) : (
+                  <Badge variant="success" className="text-[10px]">
+                    Active
+                  </Badge>
+                )}
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
+                <div>
+                  <p className="text-sm font-semibold text-slate-200">
+                    {selectedOrg.adminUser?.name || 'Org Admin'}
+                  </p>
+                  <p className="text-xs font-mono text-slate-400">
+                    {selectedOrg.adminUser?.email || 'admin@' + selectedOrg.name.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com'}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowDetailsModal(false);
+                    handleOpenResetPasswordModal(selectedOrg);
+                  }}
+                  leftIcon={<KeyRound className="h-3.5 w-3.5 text-amber-400" />}
+                >
+                  Reset Password
+                </Button>
+              </div>
+            </div>
+
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -700,6 +811,90 @@ export function OrganizationsPage() {
               disabled={isSubmitting}
             >
               Confirm {selectedOrg?.status === 'ACTIVE' ? 'Deactivation' : 'Activation'}
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
+      {/*  Reset Org Admin Password Modal  */}
+      <Modal
+        isOpen={showResetPasswordModal}
+        onClose={() => setShowResetPasswordModal(false)}
+        title="Reset Org Admin Password"
+      >
+        <div className="space-y-4 py-2">
+          {modalApiError && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
+              <span>{modalApiError}</span>
+            </div>
+          )}
+
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3.5 text-xs text-amber-200 space-y-1">
+            <p className="font-semibold">
+              Are you sure you want to reset the password for {selectedOrg?.adminUser?.name || 'Org Admin'}?
+            </p>
+            <p className="text-amber-300/80">
+              Setting a temporary password will require the Org Admin to create a new private password upon their next login.
+            </p>
+          </div>
+
+          <div className="space-y-2 text-xs border border-slate-800 rounded-lg p-3 bg-slate-950/50">
+            <div className="flex justify-between">
+              <span className="text-slate-400">Organization:</span>
+              <span className="font-semibold text-slate-200">{selectedOrg?.name}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Admin Name:</span>
+              <span className="font-semibold text-slate-200">{selectedOrg?.adminUser?.name || 'Org Admin'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Admin Email:</span>
+              <span className="font-mono text-slate-300">
+                {selectedOrg?.adminUser?.email || 'admin@' + (selectedOrg?.name.toLowerCase().replace(/[^a-z0-9]/g, '') || 'org') + '.com'}
+              </span>
+            </div>
+          </div>
+
+          <Input
+            label="Temporary Password *"
+            type="password"
+            placeholder="Enter temporary password (min 6 characters)"
+            value={tempPassword}
+            onChange={(e) => {
+              setTempPassword(e.target.value);
+              if (tempPasswordError) setTempPasswordError(null);
+              if (modalApiError) setModalApiError(null);
+            }}
+            error={tempPasswordError ?? undefined}
+            disabled={isSubmitting}
+          />
+
+          <Input
+            label="Confirm Temporary Password *"
+            type="password"
+            placeholder="Confirm temporary password"
+            value={confirmTempPassword}
+            onChange={(e) => {
+              setConfirmTempPassword(e.target.value);
+              if (confirmTempPasswordError) setConfirmTempPasswordError(null);
+              if (modalApiError) setModalApiError(null);
+            }}
+            error={confirmTempPasswordError ?? undefined}
+            disabled={isSubmitting}
+          />
+
+          <ModalFooter>
+            <Button variant="outline" onClick={() => setShowResetPasswordModal(false)} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleResetPasswordSubmit}
+              isLoading={isSubmitting}
+              disabled={isSubmitting}
+              leftIcon={<KeyRound className="h-4 w-4" />}
+            >
+              Reset Org Admin Password
             </Button>
           </ModalFooter>
         </div>

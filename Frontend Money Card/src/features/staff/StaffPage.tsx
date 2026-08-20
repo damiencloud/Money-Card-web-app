@@ -250,6 +250,104 @@ export function StaffPage() {
   };
 
   // ── Save Unified Staff Details & Permissions & Branches ───
+  //  Save Staff Profile Information
+  const handleSaveProfile = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedStaff) return;
+
+    const errors: Record<string, string> = {};
+    if (!formName.trim()) errors.name = 'Staff name is required';
+    if (!formEmail.trim()) {
+      errors.email = 'Email address is required';
+    } else if (!/\S+@\S+\.\S+/.test(formEmail)) {
+      errors.email = 'Enter a valid email address';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      setStaffTab('overview');
+      return;
+    }
+
+    setFormErrors({});
+    setModalApiError(null);
+    setIsSubmitting(true);
+
+    try {
+      const res = await apiService.staff.updateStaff(selectedStaff.id, {
+        name: formName.trim(),
+        email: formEmail.trim(),
+      });
+
+      if (!res.success) {
+        setModalApiError(res.error.message || 'Failed to update staff profile');
+        return;
+      }
+
+      notify.success('Staff profile updated successfully.');
+      setSelectedStaff((prev) => (prev ? { ...prev, name: formName.trim(), email: formEmail.trim() } : null));
+      fetchStaffData();
+    } catch {
+      setModalApiError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  //  Save Staff Permissions
+  const handleSavePermissions = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedStaff) return;
+
+    setFormErrors({});
+    setModalApiError(null);
+    setIsSubmitting(true);
+
+    try {
+      const res = await apiService.staff.updateStaffPermissions(selectedStaff.id, formPermissions);
+
+      if (!res.success) {
+        setModalApiError(res.error.message || 'Failed to update staff permissions');
+        return;
+      }
+
+      notify.success('Permissions updated successfully.');
+      setSelectedStaff((prev) => (prev ? { ...prev, permissions: formPermissions } : null));
+      fetchStaffData();
+    } catch {
+      setModalApiError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  //  Save Staff Branch Assignments
+  const handleSaveBranches = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedStaff) return;
+
+    setFormErrors({});
+    setModalApiError(null);
+    setIsSubmitting(true);
+
+    try {
+      const res = await apiService.staff.updateStaffBranches(selectedStaff.id, formBranchIds);
+
+      if (!res.success) {
+        setModalApiError(res.error.message || 'Failed to update branch assignments');
+        return;
+      }
+
+      notify.success('Branch assignments updated successfully.');
+      setSelectedStaff((prev) => (prev ? { ...prev, assignedBranchIds: formBranchIds } : null));
+      fetchStaffData();
+    } catch {
+      setModalApiError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSaveStaffChanges = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStaff) return;
@@ -696,6 +794,8 @@ export function StaffPage() {
                     )}
                   </div>
                 </div>
+
+
               </div>
             )}
 
@@ -755,6 +855,8 @@ export function StaffPage() {
                   onChange={canManage ? setFormPermissions : undefined}
                   readOnly={!canManage}
                 />
+
+
               </div>
             )}
 
@@ -835,17 +937,29 @@ export function StaffPage() {
                     );
                   })}
                 </div>
+
+
               </div>
             )}
           </div>
 
           <ModalFooter>
             <Button variant="outline" onClick={() => setShowStaffModal(false)} disabled={isSubmitting}>
-              {canManage ? 'Cancel' : 'Close'}
+              {canManage ? 'Close' : 'Close'}
             </Button>
-            {canManage && (
-              <Button type="submit" variant="primary" isLoading={isSubmitting} disabled={isSubmitting}>
-                Save Staff Changes
+            {canManage && staffTab === 'overview' && (
+              <Button type="button" variant="primary" onClick={handleSaveProfile} isLoading={isSubmitting} disabled={isSubmitting}>
+                Save Staff Information
+              </Button>
+            )}
+            {canManage && staffTab === 'permissions' && (
+              <Button type="button" variant="primary" onClick={handleSavePermissions} isLoading={isSubmitting} disabled={isSubmitting} leftIcon={<ShieldCheck className="h-4 w-4" />}>
+                Save Permissions
+              </Button>
+            )}
+            {canManage && staffTab === 'branches' && (
+              <Button type="button" variant="primary" onClick={handleSaveBranches} isLoading={isSubmitting} disabled={isSubmitting} leftIcon={<Building2 className="h-4 w-4" />}>
+                Save Branches
               </Button>
             )}
           </ModalFooter>

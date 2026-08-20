@@ -325,4 +325,14 @@ export const mockOrganizationsHandlers = {
     mockStore.organizations[index] = updated;
     return createMockSuccess(updated);
   },
+
+  async resetOrgAdminPassword(
+    _id: string,
+    _data: { temporaryPassword: string },
+  ): Promise<ApiResult<{ message: string; user?: any }>> {
+    return {
+      success: true,
+      data: { message: 'Password reset successfully for Org Admin.' },
+    };
+  },
 };

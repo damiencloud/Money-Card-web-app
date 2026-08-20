@@ -39,6 +39,7 @@ export interface AuthUser {
   name: string;
   role: UserRole;
   organizationId: string | null;
+  mustChangePassword?: boolean;
   permissions: Permission[];
   assignedBranchIds: string[];
 }

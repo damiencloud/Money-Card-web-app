@@ -41,7 +41,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     }
 
     if (user.tokenVersion !== payload.tokenVersion) {
-      return sendError(res, 401, 'UNAUTHORIZED', 'Session expired due to credential or permission changes');
+      return sendError(res, 401, 'UNAUTHORIZED', 'Session expired due to credential changes. Please log in again.');
     }
 
     const permissions: PermissionCode[] = user.permissions.map((p) => p.permission);
@@ -54,10 +54,25 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       role: user.role,
       organizationId: user.organizationId,
       status: user.status,
+      mustChangePassword: user.mustChangePassword,
       permissions,
       assignedBranchIds,
       tokenVersion: user.tokenVersion,
     };
+
+    // If user must change password, restrict access strictly to change-password, me, and logout
+    if (user.mustChangePassword) {
+      const allowedPaths = ['/auth/change-password', '/auth/me', '/auth/logout'];
+      const isAllowed = allowedPaths.some((p) => req.originalUrl.includes(p));
+      if (!isAllowed) {
+        return sendError(
+          res,
+          403,
+          'PASSWORD_CHANGE_REQUIRED',
+          'Temporary password detected. You must change your password before accessing platform features.',
+        );
+      }
+    }
 
     return next();
   } catch {
@@ -94,6 +109,7 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
         role: user.role,
         organizationId: user.organizationId,
         status: user.status,
+        mustChangePassword: user.mustChangePassword,
         permissions: user.permissions.map((p) => p.permission),
         assignedBranchIds: user.assignedBranches.map((b) => b.branchId),
         tokenVersion: user.tokenVersion,

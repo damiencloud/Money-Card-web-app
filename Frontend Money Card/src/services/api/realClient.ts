@@ -181,6 +181,18 @@ export const realClient: typeof mockClient = {
     ): Promise<ApiResult<OrganizationOverview>> {
       return handleApiCall(() => apiClient.patch<OrganizationOverview>(`/v1/admin/organizations/${id}`, data));
     },
+
+    async resetOrgAdminPassword(
+      id: string,
+      data: { temporaryPassword: string },
+    ): Promise<ApiResult<{ message: string; user?: any }>> {
+      return handleApiCall(() =>
+        apiClient.post<{ message: string; user?: any }>(
+          `/v1/admin/organizations/${id}/reset-admin-password`,
+          data,
+        ),
+      );
+    },
   },
 
   branches: {

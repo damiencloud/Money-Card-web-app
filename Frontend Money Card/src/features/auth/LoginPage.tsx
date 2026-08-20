@@ -71,9 +71,14 @@ export function LoginPage() {
 
         login(user, accessToken);
 
-        // Redirect to intended destination or dashboard
-        const redirectTo = searchParams.get('redirect') || '/dashboard';
-        navigate(redirectTo, { replace: true });
+        // If user must change temporary password, redirect immediately to /change-password
+        if (user.mustChangePassword) {
+          navigate('/change-password', { replace: true });
+        } else {
+          // Redirect to intended destination or dashboard
+          const redirectTo = searchParams.get('redirect') || '/dashboard';
+          navigate(redirectTo, { replace: true });
+        }
       } catch {
         setApiError('Unable to connect to the server. Please check your network and try again.');
       } finally {

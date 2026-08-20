@@ -22,6 +22,12 @@ export interface CreateOrganizationRequest {
 export interface OrganizationOverview extends Organization {
   plan?: Plan;
   subscription?: Subscription;
+  adminUser?: {
+    id: string;
+    name: string;
+    email: string;
+    mustChangePassword?: boolean;
+  } | null;
   usage?: {
     branchCount: number;
     branchLimit: number;

@@ -4,18 +4,45 @@ import { sendError, sendSuccess } from '../utils/response.js';
 import { hashPassword } from '../utils/crypto.js';
 import {
   Role,
+  UserStatus,
   OrgStatus,
   SubscriptionStatus,
-  PermissionCode,
   DirectPaymentMethod,
   PlanRequestStatus,
 } from '@prisma/client';
+
+export function formatSubscription(sub: any) {
+  if (!sub) return null;
+  const overrides: Record<string, any> = {};
+  if (sub.branchLimitOverride !== null && sub.branchLimitOverride !== undefined) {
+    overrides.branchLimit = sub.branchLimitOverride;
+  }
+  if (sub.staffLimitOverride !== null && sub.staffLimitOverride !== undefined) {
+    overrides.staffLimit = sub.staffLimitOverride;
+  }
+  if (sub.cardLimitOverride !== null && sub.cardLimitOverride !== undefined) {
+    overrides.cardLimit = sub.cardLimitOverride;
+  }
+
+  return {
+    ...sub,
+    branchLimitOverride: sub.branchLimitOverride ?? null,
+    staffLimitOverride: sub.staffLimitOverride ?? null,
+    cardLimitOverride: sub.cardLimitOverride ?? null,
+    overrides: Object.keys(overrides).length > 0 ? overrides : null,
+  };
+}
 
 export async function getOrganizations(_req: Request, res: Response) {
   const orgs = await prisma.organization.findMany({
     include: {
       plan: true,
       subscription: true,
+      users: {
+        where: { role: Role.ORG_ADMIN },
+        select: { id: true, name: true, email: true, mustChangePassword: true },
+        take: 1,
+      },
       _count: {
         select: {
           branches: true,
@@ -27,139 +54,204 @@ export async function getOrganizations(_req: Request, res: Response) {
     orderBy: { createdAt: 'desc' },
   });
 
-  const formatted = orgs.map((org) => ({
-    id: org.id,
-    name: org.name,
-    status: org.status,
-    planId: org.planId,
-    plan: org.plan,
-    subscription: org.subscription,
-    usage: {
-      branchCount: org._count.branches,
-      branchLimit: org.subscription?.branchLimitOverride || org.plan?.branchLimit || 3,
-      staffCount: org._count.users,
-      staffLimit: org.subscription?.staffLimitOverride || org.plan?.staffLimit || 25,
-      cardCount: org._count.cards,
-      cardLimit: org.subscription?.cardLimitOverride || org.plan?.cardLimit || 1000,
-    },
-    createdAt: org.createdAt,
-    updatedAt: org.updatedAt,
-  }));
+  const formatted = orgs.map((org) => {
+    const subFormatted = formatSubscription(org.subscription);
+    const orgAdmin = org.users && org.users.length > 0 ? org.users[0] : null;
+    return {
+      id: org.id,
+      name: org.name,
+      status: org.status,
+      planId: org.planId,
+      plan: org.plan,
+      adminUser: orgAdmin,
+      subscription: subFormatted,
+      usage: {
+        branchCount: org._count.branches,
+        branchLimit: org.subscription?.branchLimitOverride || org.plan?.branchLimit || 3,
+        staffCount: org._count.users,
+        staffLimit: org.subscription?.staffLimitOverride || org.plan?.staffLimit || 25,
+        cardCount: org._count.cards,
+        cardLimit: org.subscription?.cardLimitOverride || org.plan?.cardLimit || 1000,
+      },
+      createdAt: org.createdAt,
+      updatedAt: org.updatedAt,
+    };
+  });
 
   return sendSuccess(res, formatted);
 }
 
 export async function createOrganization(req: Request, res: Response) {
-  const { name, adminEmail, password, planId } = req.body;
+  const { name, status, planId, overrides, adminEmail, adminName, adminPassword } = req.body;
 
   if (!name || !name.trim()) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'Organization name is required');
   }
 
-  if (!adminEmail || !adminEmail.trim()) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'Org Admin email is required');
-  }
-
-  const cleanEmail = adminEmail.trim().toLowerCase();
-  const existingUser = await prisma.user.findUnique({
-    where: { email: cleanEmail },
-  });
-
-  if (existingUser) {
-    return sendError(res, 400, 'VALIDATION_ERROR', `Account with email '${adminEmail}' already exists`);
-  }
-
-  if (!password || password.length < 6) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'Password must be at least 6 characters');
-  }
-
-  const targetPlanId = planId || 'plan_002';
-  const plan = await prisma.plan.findUnique({ where: { id: targetPlanId } });
+  const selectedPlanId = planId || 'plan_002';
+  const plan = await prisma.plan.findUnique({ where: { id: selectedPlanId } });
   if (!plan) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'Selected plan does not exist');
+    return sendError(res, 400, 'VALIDATION_ERROR', `Plan '${selectedPlanId}' does not exist`);
   }
 
-  const passwordHash = await hashPassword(password);
+  const email = adminEmail || `admin@${name.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
+  const existingUser = await prisma.user.findUnique({ where: { email } });
+  if (existingUser) {
+    return sendError(res, 400, 'VALIDATION_ERROR', `Admin email '${email}' is already in use`);
+  }
+
+  const passwordHash = await hashPassword(adminPassword || 'OrgAdmin@123');
 
   const result = await prisma.$transaction(async (tx) => {
     const org = await tx.organization.create({
       data: {
         name: name.trim(),
-        planId: plan.id,
-        status: OrgStatus.ACTIVE,
+        status: (status as OrgStatus) || OrgStatus.ACTIVE,
+        planId: selectedPlanId,
       },
     });
 
     const sub = await tx.subscription.create({
       data: {
         organizationId: org.id,
-        planId: plan.id,
+        planId: selectedPlanId,
         status: SubscriptionStatus.ACTIVE,
         startDate: new Date(),
         endDate: new Date(Date.now() + 30 * 86400000),
         renewalDate: new Date(Date.now() + 30 * 86400000),
-      },
-    });
-
-    const defaultBranch = await tx.branch.create({
-      data: {
-        organizationId: org.id,
-        name: 'Main Cafeteria',
+        branchLimitOverride: overrides?.branchLimit ? Number(overrides.branchLimit) : null,
+        staffLimitOverride: overrides?.staffLimit ? Number(overrides.staffLimit) : null,
+        cardLimitOverride: overrides?.cardLimit ? Number(overrides.cardLimit) : null,
       },
     });
 
     const adminUser = await tx.user.create({
       data: {
-        email: cleanEmail,
-        passwordHash,
-        name: `${name.trim()} Admin`,
-        role: Role.ORG_ADMIN,
         organizationId: org.id,
-      },
-    });
-
-    const allPermissions = Object.values(PermissionCode);
-    for (const perm of allPermissions) {
-      await tx.userPermission.create({
-        data: {
-          userId: adminUser.id,
-          permission: perm,
-        },
-      });
-    }
-
-    await tx.userBranch.create({
-      data: {
-        userId: adminUser.id,
-        branchId: defaultBranch.id,
+        name: adminName || `${name} Admin`,
+        email,
+        passwordHash,
+        role: Role.ORG_ADMIN,
+        status: UserStatus.ACTIVE,
       },
     });
 
     return { org, sub, adminUser };
   });
 
-  return sendSuccess(
-    res,
-    {
-      id: result.org.id,
-      name: result.org.name,
-      status: result.org.status,
-      planId: result.org.planId,
-      plan,
-      subscription: result.sub,
-      usage: {
-        branchCount: 1,
-        branchLimit: plan.branchLimit,
-        staffCount: 1,
-        staffLimit: plan.staffLimit,
-        cardCount: 0,
-        cardLimit: plan.cardLimit,
-      },
-      createdAt: result.org.createdAt,
-      updatedAt: result.org.updatedAt,
+  return sendSuccess(res, {
+    id: result.org.id,
+    name: result.org.name,
+    status: result.org.status,
+    planId: result.org.planId,
+    plan,
+    subscription: formatSubscription(result.sub),
+    adminUser: {
+      id: result.adminUser.id,
+      email: result.adminUser.email,
+      name: result.adminUser.name,
     },
-    201,
-  );
+    usage: {
+      branchCount: 0,
+      branchLimit: result.sub?.branchLimitOverride || plan.branchLimit,
+      staffCount: 1,
+      staffLimit: result.sub?.staffLimitOverride || plan.staffLimit,
+      cardCount: 0,
+      cardLimit: result.sub?.cardLimitOverride || plan.cardLimit,
+    },
+    createdAt: result.org.createdAt,
+    updatedAt: result.org.updatedAt,
+  }, 201);
+}
+
+export async function updateOrganization(req: Request, res: Response) {
+  const { id } = req.params;
+  const { name, status, planId, overrides } = req.body;
+
+  const org = await prisma.organization.findUnique({
+    where: { id },
+  });
+
+  if (!org) {
+    return sendError(res, 404, 'NOT_FOUND', 'Organization not found');
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const o = await tx.organization.update({
+      where: { id },
+      data: {
+        ...(name ? { name: name.trim() } : {}),
+        ...(status ? { status: status as OrgStatus } : {}),
+        ...(planId ? { planId } : {}),
+      },
+      include: {
+        plan: true,
+        subscription: true,
+        _count: {
+          select: {
+            branches: true,
+            users: true,
+            cards: true,
+          },
+        },
+      },
+    });
+
+    if (overrides !== undefined || planId) {
+      await tx.subscription.upsert({
+        where: { organizationId: id },
+        create: {
+          organizationId: id,
+          planId: planId || org.planId || 'plan_002',
+          status: SubscriptionStatus.ACTIVE,
+          startDate: new Date(),
+          endDate: new Date(Date.now() + 30 * 86400000),
+          renewalDate: new Date(Date.now() + 30 * 86400000),
+          branchLimitOverride: overrides?.branchLimit !== undefined && overrides.branchLimit !== null ? Number(overrides.branchLimit) : null,
+          staffLimitOverride: overrides?.staffLimit !== undefined && overrides.staffLimit !== null ? Number(overrides.staffLimit) : null,
+          cardLimitOverride: overrides?.cardLimit !== undefined && overrides.cardLimit !== null ? Number(overrides.cardLimit) : null,
+        },
+        update: {
+          ...(planId ? { planId } : {}),
+          ...(overrides?.branchLimit !== undefined
+            ? { branchLimitOverride: overrides.branchLimit !== null ? Number(overrides.branchLimit) : null }
+            : {}),
+          ...(overrides?.staffLimit !== undefined
+            ? { staffLimitOverride: overrides.staffLimit !== null ? Number(overrides.staffLimit) : null }
+            : {}),
+          ...(overrides?.cardLimit !== undefined
+            ? { cardLimitOverride: overrides.cardLimit !== null ? Number(overrides.cardLimit) : null }
+            : {}),
+        },
+      });
+    }
+
+    return o;
+  });
+
+  const refreshedSub = await prisma.subscription.findUnique({
+    where: { organizationId: id },
+    include: { plan: true },
+  });
+
+  return sendSuccess(res, {
+    id: updated.id,
+    name: updated.name,
+    status: updated.status,
+    planId: updated.planId,
+    plan: updated.plan,
+    subscription: formatSubscription(refreshedSub),
+    usage: {
+      branchCount: updated._count.branches,
+      branchLimit: refreshedSub?.branchLimitOverride || updated.plan?.branchLimit || 3,
+      staffCount: updated._count.users,
+      staffLimit: refreshedSub?.staffLimitOverride || updated.plan?.staffLimit || 25,
+      cardCount: updated._count.cards,
+      cardLimit: refreshedSub?.cardLimitOverride || updated.plan?.cardLimit || 1000,
+    },
+    createdAt: updated.createdAt,
+    updatedAt: updated.updatedAt,
+  });
 }
 
 export async function getOrganizationById(req: Request, res: Response) {
@@ -169,7 +261,11 @@ export async function getOrganizationById(req: Request, res: Response) {
     include: {
       plan: true,
       subscription: true,
-      branches: true,
+      users: {
+        where: { role: Role.ORG_ADMIN },
+        select: { id: true, name: true, email: true, mustChangePassword: true },
+        take: 1,
+      },
       _count: {
         select: {
           branches: true,
@@ -180,88 +276,17 @@ export async function getOrganizationById(req: Request, res: Response) {
     },
   });
 
-  if (!org) {
-    return sendError(res, 404, 'NOT_FOUND', 'Organization not found');
-  }
+  if (!org) return sendError(res, 404, 'NOT_FOUND', 'Organization not found');
 
+  const orgAdmin = org.users && org.users.length > 0 ? org.users[0] : null;
   const formatted = {
     id: org.id,
     name: org.name,
     status: org.status,
     planId: org.planId,
     plan: org.plan,
-    subscription: org.subscription,
-    branches: org.branches,
-    usage: {
-      branchCount: org._count.branches,
-      branchLimit: org.subscription?.branchLimitOverride || org.plan?.branchLimit || 3,
-      staffCount: org._count.users,
-      staffLimit: org.subscription?.staffLimitOverride || org.plan?.staffLimit || 25,
-      cardCount: org._count.cards,
-      cardLimit: org.subscription?.cardLimitOverride || org.plan?.cardLimit || 1000,
-    },
-    createdAt: org.createdAt,
-    updatedAt: org.updatedAt,
-  };
-
-  return sendSuccess(res, formatted);
-}
-
-export async function updateOrganization(req: Request, res: Response) {
-  const { id } = req.params;
-  const { name, status, planId, overrides } = req.body;
-
-  if (planId) {
-    await prisma.subscription.upsert({
-      where: { organizationId: id },
-      create: {
-        organizationId: id,
-        planId,
-        startDate: new Date(),
-        endDate: new Date(Date.now() + 30 * 86400000),
-        renewalDate: new Date(Date.now() + 30 * 86400000),
-        branchLimitOverride: overrides?.branchLimit,
-        staffLimitOverride: overrides?.staffLimit,
-        cardLimitOverride: overrides?.cardLimit,
-      },
-      update: {
-        planId,
-        ...(overrides ? {
-          branchLimitOverride: overrides.branchLimit ?? null,
-          staffLimitOverride: overrides.staffLimit ?? null,
-          cardLimitOverride: overrides.cardLimit ?? null,
-        } : {}),
-      },
-    });
-  }
-
-  const org = await prisma.organization.update({
-    where: { id },
-    data: {
-      ...(name ? { name: name.trim() } : {}),
-      ...(status ? { status } : {}),
-      ...(planId ? { planId } : {}),
-    },
-    include: {
-      plan: true,
-      subscription: true,
-      _count: {
-        select: {
-          branches: true,
-          users: true,
-          cards: true,
-        },
-      },
-    },
-  });
-
-  const formatted = {
-    id: org.id,
-    name: org.name,
-    status: org.status,
-    planId: org.planId,
-    plan: org.plan,
-    subscription: org.subscription,
+    adminUser: orgAdmin,
+    subscription: formatSubscription(org.subscription),
     usage: {
       branchCount: org._count.branches,
       branchLimit: org.subscription?.branchLimitOverride || org.plan?.branchLimit || 3,
@@ -284,49 +309,77 @@ export async function getOrganizationSubscription(req: Request, res: Response) {
     include: { plan: true, organization: true },
   });
   if (!sub) return sendError(res, 404, 'NOT_FOUND', 'Subscription not found');
-  return sendSuccess(res, sub);
+  return sendSuccess(res, formatSubscription(sub));
 }
 
 export async function updateOrganizationSubscription(req: Request, res: Response) {
   const { id } = req.params;
   const { planId, status, overrides } = req.body;
 
-  const org = await prisma.organization.findUnique({
-    where: { id },
-  });
-  if (!org) return sendError(res, 404, 'NOT_FOUND', 'Organization not found');
-
-  const sub = await prisma.subscription.upsert({
-    where: { organizationId: id },
-    create: {
-      organizationId: id,
-      planId: planId || org.planId || 'plan_002',
-      status: status || 'ACTIVE',
-      startDate: new Date(),
-      endDate: new Date(Date.now() + 30 * 86400000),
-      renewalDate: new Date(Date.now() + 30 * 86400000),
-      branchLimitOverride: overrides?.branchLimit ?? null,
-      staffLimitOverride: overrides?.staffLimit ?? null,
-      cardLimitOverride: overrides?.cardLimit ?? null,
-    },
-    update: {
-      ...(planId ? { planId } : {}),
-      ...(status ? { status } : {}),
-      branchLimitOverride: overrides?.branchLimit ?? null,
-      staffLimitOverride: overrides?.staffLimit ?? null,
-      cardLimitOverride: overrides?.cardLimit ?? null,
-    },
-    include: { plan: true, organization: true },
-  });
-
-  if (planId && planId !== org.planId) {
-    await prisma.organization.update({
+  try {
+    const org = await prisma.organization.findUnique({
       where: { id },
-      data: { planId },
     });
-  }
+    if (!org) return sendError(res, 404, 'NOT_FOUND', 'Organization not found');
 
-  return sendSuccess(res, sub);
+    const existingSub = await prisma.subscription.findUnique({
+      where: { organizationId: id },
+    });
+
+    let branchLimitOverride = existingSub?.branchLimitOverride ?? null;
+    let staffLimitOverride = existingSub?.staffLimitOverride ?? null;
+    let cardLimitOverride = existingSub?.cardLimitOverride ?? null;
+
+    if (overrides === null) {
+      branchLimitOverride = null;
+      staffLimitOverride = null;
+      cardLimitOverride = null;
+    } else if (typeof overrides === 'object') {
+      branchLimitOverride = overrides.branchLimit !== undefined && overrides.branchLimit !== null
+        ? Number(overrides.branchLimit)
+        : null;
+      staffLimitOverride = overrides.staffLimit !== undefined && overrides.staffLimit !== null
+        ? Number(overrides.staffLimit)
+        : null;
+      cardLimitOverride = overrides.cardLimit !== undefined && overrides.cardLimit !== null
+        ? Number(overrides.cardLimit)
+        : null;
+    }
+
+    const sub = await prisma.subscription.upsert({
+      where: { organizationId: id },
+      create: {
+        organizationId: id,
+        planId: planId || org.planId || 'plan_002',
+        status: status || 'ACTIVE',
+        startDate: new Date(),
+        endDate: new Date(Date.now() + 30 * 86400000),
+        renewalDate: new Date(Date.now() + 30 * 86400000),
+        branchLimitOverride,
+        staffLimitOverride,
+        cardLimitOverride,
+      },
+      update: {
+        ...(planId ? { planId } : {}),
+        ...(status ? { status } : {}),
+        branchLimitOverride,
+        staffLimitOverride,
+        cardLimitOverride,
+      },
+      include: { plan: true, organization: true },
+    });
+
+    if (planId && planId !== org.planId) {
+      await prisma.organization.update({
+        where: { id },
+        data: { planId },
+      });
+    }
+
+    return sendSuccess(res, formatSubscription(sub));
+  } catch (error: any) {
+    return sendError(res, 400, 'UPDATE_FAILED', error.message || 'Failed to update organization subscription');
+  }
 }
 
 export async function getPlans(_req: Request, res: Response) {
@@ -363,22 +416,26 @@ export async function updatePlan(req: Request, res: Response) {
   const { id } = req.params;
   const { name, price, billingInterval, branchLimit, staffLimit, cardLimit, description, features, isPopular } = req.body;
 
-  const plan = await prisma.plan.update({
-    where: { id },
-    data: {
-      ...(name ? { name } : {}),
-      ...(price !== undefined ? { price: Number(price) } : {}),
-      ...(billingInterval ? { billingInterval } : {}),
-      ...(branchLimit !== undefined ? { branchLimit: Number(branchLimit) } : {}),
-      ...(staffLimit !== undefined ? { staffLimit: Number(staffLimit) } : {}),
-      ...(cardLimit !== undefined ? { cardLimit: Number(cardLimit) } : {}),
-      ...(description !== undefined ? { description } : {}),
-      ...(features ? { features } : {}),
-      ...(isPopular !== undefined ? { isPopular: !!isPopular } : {}),
-    },
-  });
+  try {
+    const plan = await prisma.plan.update({
+      where: { id },
+      data: {
+        ...(name ? { name } : {}),
+        ...(price !== undefined ? { price: Number(price) } : {}),
+        ...(billingInterval ? { billingInterval } : {}),
+        ...(branchLimit !== undefined ? { branchLimit: Number(branchLimit) } : {}),
+        ...(staffLimit !== undefined ? { staffLimit: Number(staffLimit) } : {}),
+        ...(cardLimit !== undefined ? { cardLimit: Number(cardLimit) } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(features ? { features } : {}),
+        ...(isPopular !== undefined ? { isPopular: !!isPopular } : {}),
+      },
+    });
 
-  return sendSuccess(res, plan);
+    return sendSuccess(res, plan);
+  } catch (error: any) {
+    return sendError(res, 400, 'UPDATE_FAILED', error.message || 'Failed to update plan');
+  }
 }
 
 export async function getSubscriptions(_req: Request, res: Response) {
@@ -389,7 +446,7 @@ export async function getSubscriptions(_req: Request, res: Response) {
     },
     orderBy: { createdAt: 'desc' },
   });
-  return sendSuccess(res, subs);
+  return sendSuccess(res, subs.map(formatSubscription));
 }
 
 export async function recordSubscriptionPayment(req: Request, res: Response) {
@@ -506,4 +563,53 @@ export async function getSubscriptionPayments(_req: Request, res: Response) {
     include: { organization: true },
   });
   return sendSuccess(res, payments);
+}
+
+export async function resetOrgAdminPassword(req: Request, res: Response) {
+  const { id } = req.params;
+  const { temporaryPassword } = req.body;
+
+  if (!temporaryPassword || temporaryPassword.length < 6) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Temporary password must be at least 6 characters');
+  }
+
+  const org = await prisma.organization.findUnique({
+    where: { id },
+  });
+
+  if (!org) {
+    return sendError(res, 404, 'NOT_FOUND', 'Organization not found');
+  }
+
+  const orgAdmin = await prisma.user.findFirst({
+    where: {
+      organizationId: id,
+      role: Role.ORG_ADMIN,
+    },
+  });
+
+  if (!orgAdmin) {
+    return sendError(res, 404, 'NOT_FOUND', 'No Org Admin user found for this organization');
+  }
+
+  const tempHash = await hashPassword(temporaryPassword);
+
+  await prisma.user.update({
+    where: { id: orgAdmin.id },
+    data: {
+      passwordHash: tempHash,
+      mustChangePassword: true,
+      tokenVersion: { increment: 1 }, // Invalidate existing sessions
+    },
+  });
+
+  return sendSuccess(res, {
+    message: `Password reset successfully for ${orgAdmin.name}.`,
+    user: {
+      id: orgAdmin.id,
+      name: orgAdmin.name,
+      email: orgAdmin.email,
+      mustChangePassword: true,
+    },
+  });
 }

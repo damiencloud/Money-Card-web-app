@@ -51,6 +51,7 @@ export function ProductsPage() {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [branchFilter, setBranchFilter] = useState<string>('ALL');
 
@@ -81,6 +82,7 @@ export function ProductsPage() {
         apiService.products.getProducts({
           search: searchQuery,
           branchId: targetBranch,
+          status: statusFilter,
         }),
         apiService.branches.getBranches(),
       ]);
@@ -107,7 +109,7 @@ export function ProductsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery, categoryFilter, branchFilter, currentBranch]);
+  }, [searchQuery, statusFilter, categoryFilter, branchFilter, currentBranch]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -119,6 +121,7 @@ export function ProductsPage() {
           apiService.products.getProducts({
             search: searchQuery,
             branchId: targetBranch,
+            status: statusFilter,
           }),
           apiService.branches.getBranches(),
         ]);
@@ -152,7 +155,7 @@ export function ProductsPage() {
     return () => {
       isCancelled = true;
     };
-  }, [searchQuery, categoryFilter, branchFilter, currentBranch]);
+  }, [searchQuery, statusFilter, categoryFilter, branchFilter, currentBranch]);
 
   // Categories extraction for header filter dropdown
   const allAvailableCategories = useMemo(() => {
@@ -323,7 +326,6 @@ export function ProductsPage() {
           </div>
           <div>
             <p className="font-semibold text-slate-100">{product.itemName}</p>
-            <p className="text-xs text-slate-500">ID: {product.id}</p>
           </div>
         </div>
       ),
@@ -507,6 +509,20 @@ export function ProductsPage() {
           />
         </div>
 
+        {/* Status Filter */}
+        <div className="w-full sm:w-36">
+          <Select
+            id="status-filter-prod"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            options={[
+              { value: 'ALL', label: 'All Statuses' },
+              { value: 'ACTIVE', label: 'Active' },
+              { value: 'INACTIVE', label: 'Inactive' },
+            ]}
+          />
+        </div>
+
         {/* Branch Filter */}
         <div className="w-full sm:w-48">
           <Select
@@ -535,7 +551,7 @@ export function ProductsPage() {
           icon={<Package className="h-8 w-8 text-slate-500" />}
           title="No products found"
           description={
-            searchQuery || categoryFilter !== 'ALL' || branchFilter !== 'ALL'
+            searchQuery || statusFilter !== 'ALL' || categoryFilter !== 'ALL' || branchFilter !== 'ALL'
               ? 'No products matching the selected filters.'
               : 'Add your first catalog product or import via CSV.'
           }

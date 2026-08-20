@@ -122,11 +122,14 @@ export function AdminPlansSubscriptionsView() {
         return;
       }
 
-      setPlans(plansRes.data);
-      if (subsRes.success) setSubscriptions(subsRes.data);
-      if (payRes.success) setPayments(payRes.data);
-      if (reqsRes.success) setPlanRequests(reqsRes.data);
-      if (orgsRes.success) setOrgs(orgsRes.data.items);
+      setPlans(plansRes.data || []);
+      if (subsRes.success) setSubscriptions(subsRes.data || []);
+      if (payRes.success) setPayments(payRes.data || []);
+      if (reqsRes.success) setPlanRequests(reqsRes.data || []);
+      if (orgsRes.success) {
+        const orgItems = (orgsRes.data as any)?.items || (Array.isArray(orgsRes.data) ? orgsRes.data : []);
+        setOrgs(orgItems);
+      }
     } catch {
       setError('Unable to connect to server. Please try again.');
     } finally {
@@ -143,7 +146,7 @@ export function AdminPlansSubscriptionsView() {
           apiService.plans.getPlans(),
           apiService.subscriptions.getAllSubscriptions(),
           apiService.subscriptions.getAllPayments(),
-          apiService.subscriptions.getPlanRequests(),
+          apiService.plans.getAllPlanRequests(),
           apiService.organizations.getOrganizations(),
         ]);
         if (isCancelled) return;
@@ -153,11 +156,14 @@ export function AdminPlansSubscriptionsView() {
           return;
         }
 
-        setPlans(plansRes.data);
-        if (subsRes.success) setSubscriptions(subsRes.data);
-        if (payRes.success) setPayments(payRes.data);
-        if (reqsRes.success) setPlanRequests(reqsRes.data);
-        if (orgsRes.success) setOrgs(orgsRes.data.items);
+        setPlans(plansRes.data || []);
+        if (subsRes.success) setSubscriptions(subsRes.data || []);
+        if (payRes.success) setPayments(payRes.data || []);
+        if (reqsRes.success) setPlanRequests(reqsRes.data || []);
+        if (orgsRes.success) {
+          const orgItems = (orgsRes.data as any)?.items || (Array.isArray(orgsRes.data) ? orgsRes.data : []);
+          setOrgs(orgItems);
+        }
       } catch {
         if (!isCancelled) setError('Unable to connect to server. Please try again.');
       } finally {
@@ -208,9 +214,12 @@ export function AdminPlansSubscriptionsView() {
     const sub = subscriptions.find((s) => s.organizationId === org.id) || org.subscription;
     setSubFormPlanId(sub?.planId || org.planId || (plans[0]?.id ?? ''));
     setSubFormStatus(sub?.status || 'ACTIVE');
-    setSubOverrideBranch(sub?.overrides?.branchLimit !== undefined && sub?.overrides?.branchLimit !== null ? String(sub.overrides.branchLimit) : '');
-    setSubOverrideStaff(sub?.overrides?.staffLimit !== undefined && sub?.overrides?.staffLimit !== null ? String(sub.overrides.staffLimit) : '');
-    setSubOverrideCard(sub?.overrides?.cardLimit !== undefined && sub?.overrides?.cardLimit !== null ? String(sub.overrides.cardLimit) : '');
+    const bOvr = sub?.overrides?.branchLimit ?? (sub as any)?.branchLimitOverride;
+    const sOvr = sub?.overrides?.staffLimit ?? (sub as any)?.staffLimitOverride;
+    const cOvr = sub?.overrides?.cardLimit ?? (sub as any)?.cardLimitOverride;
+    setSubOverrideBranch(bOvr !== undefined && bOvr !== null ? String(bOvr) : '');
+    setSubOverrideStaff(sOvr !== undefined && sOvr !== null ? String(sOvr) : '');
+    setSubOverrideCard(cOvr !== undefined && cOvr !== null ? String(cOvr) : '');
     setModalApiError(null);
     setShowOrgSubModal(true);
   };
@@ -612,13 +621,20 @@ export function AdminPlansSubscriptionsView() {
       key: 'effectiveLimits',
       header: 'Effective Limits (Default vs Override)',
       render: (org: OrganizationOverview) => {
-        const sub = subscriptions.find((s) => s.organizationId === org.id);
+        const sub = subscriptions.find((s) => s.organizationId === org.id) || org.subscription;
         const plan = plans.find((p) => p.id === (sub?.planId || org.planId)) || org.plan;
-        const hasOverrides = !!(sub?.overrides && Object.keys(sub.overrides).length > 0);
 
-        const effBranches = sub?.overrides?.branchLimit ?? plan?.branchLimit ?? 1;
-        const effStaff = sub?.overrides?.staffLimit ?? plan?.staffLimit ?? 10;
-        const effCards = sub?.overrides?.cardLimit ?? plan?.cardLimit ?? 250;
+        const bOvr = sub?.overrides?.branchLimit ?? (sub as any)?.branchLimitOverride;
+        const sOvr = sub?.overrides?.staffLimit ?? (sub as any)?.staffLimitOverride;
+        const cOvr = sub?.overrides?.cardLimit ?? (sub as any)?.cardLimitOverride;
+
+        const hasOverrides = (bOvr !== undefined && bOvr !== null) ||
+                             (sOvr !== undefined && sOvr !== null) ||
+                             (cOvr !== undefined && cOvr !== null);
+
+        const effBranches = bOvr ?? plan?.branchLimit ?? 1;
+        const effStaff = sOvr ?? plan?.staffLimit ?? 10;
+        const effCards = cOvr ?? plan?.cardLimit ?? 250;
 
         return (
           <div className="space-y-1">
