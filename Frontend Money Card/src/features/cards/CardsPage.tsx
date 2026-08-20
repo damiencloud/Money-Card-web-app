@@ -1043,8 +1043,11 @@ export function CardsPage() {
               <p className="font-semibold text-slate-200 text-sm">
                 Click to upload or drag and drop CSV file
               </p>
-              <p className="text-xs text-slate-500 mt-1">
-                Accepts .csv with a single <code className="text-violet-300">cardNumber</code> column
+              <p className="text-xs text-slate-400 mt-1">
+                Supports <strong>1-column</strong> (<code className="text-violet-300">cardNumber</code>) or <strong>2-column</strong> (<code className="text-violet-300">cardNumber,qrCode</code>) CSV files
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Leave QR column blank for automatic secure QR token generation
               </p>
               <input
                 ref={fileInputRef}
@@ -1147,14 +1150,23 @@ export function CardsPage() {
               <div className="max-h-56 overflow-y-auto space-y-2 pr-1 rounded-xl border border-slate-800 bg-slate-950 p-3">
                 {/* Valid Rows */}
                 {(previewFilter === 'ALL' || previewFilter === 'VALID') &&
-                  importPreview.validCards.map((num) => (
+                  (importPreview.validEntries || importPreview.validCards.map((num): { cardNumber: string; qrToken?: string } => ({ cardNumber: num }))).map((entry) => (
                     <div
-                      key={num}
+                      key={entry.cardNumber}
                       className="flex items-center justify-between rounded-lg border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-xs"
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <CreditCard className="h-3.5 w-3.5 text-violet-400" />
-                        <span className="font-mono font-bold text-slate-200">{num}</span>
+                        <span className="font-mono font-bold text-slate-200">{entry.cardNumber}</span>
+                        {entry.qrToken ? (
+                          <span className="font-mono text-[11px] text-violet-300 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">
+                            QR: {entry.qrToken}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-slate-400 italic">
+                            (Auto QR)
+                          </span>
+                        )}
                       </div>
                       <Badge variant="success" className="text-[10px]">
                         READY TO IMPORT
