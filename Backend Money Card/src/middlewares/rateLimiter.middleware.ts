@@ -3,7 +3,7 @@ import { sendError } from '../utils/response.js';
 
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 15,
+  max: process.env.NODE_ENV === 'development' ? 500 : 30,
   standardHeaders: true,
   legacyHeaders: false,
   handler: (_req, res) => {

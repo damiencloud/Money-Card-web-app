@@ -1,4 +1,4 @@
-import { sendSuperAdminPasswordResetEmail } from '../services/email.service.js';
+import { sendPasswordResetEmail } from '../services/email.service.js';
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
@@ -169,11 +169,11 @@ export async function forgotPassword(req: Request, res: Response) {
     where: { email: cleanEmail },
   });
 
-  // Password reset via email is strictly restricted to SUPER_ADMIN role
-  if (user && user.role === Role.SUPER_ADMIN && user.status === UserStatus.ACTIVE) {
+  // Allow both SUPER_ADMIN and ORG_ADMIN (and any active user) to receive password reset email
+  if (user && user.status === UserStatus.ACTIVE && [Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.STAFF].includes(user.role)) {
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour validity
+    const resetExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes validity
 
     await prisma.user.update({
       where: { id: user.id },
@@ -185,14 +185,15 @@ export async function forgotPassword(req: Request, res: Response) {
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const resetLink = `${frontendUrl}/reset-password?token=${rawToken}`;
+    const roleName = user.role === Role.SUPER_ADMIN ? 'Super Admin' : user.role === Role.ORG_ADMIN ? 'Organization Admin' : 'Staff';
 
-    // Dispatch email via Resend or log in console
-    await sendSuperAdminPasswordResetEmail(user.email, user.name, resetLink);
+    // Dispatch email via Resend
+    await sendPasswordResetEmail(user.email, user.name, resetLink, roleName);
   }
 
-  // Anti-user enumeration message
+  // Anti-user enumeration message (always generic for all users)
   return sendSuccess(res, {
-    message: 'If a Super Admin account exists with this email address, password reset instructions have been sent.',
+    message: 'If an account exists with this email address, a password reset link has been sent.',
   });
 }
 
@@ -226,11 +227,7 @@ export async function resetPassword(req: Request, res: Response) {
   // Timezone-safe timestamp comparison (epoch milliseconds)
   const isExpired = new Date(user.resetPasswordExpires).getTime() < Date.now();
   if (isExpired) {
-    return sendError(res, 400, 'INVALID_TOKEN', 'Password reset token has expired. Please request a new link.');
-  }
-
-  if (user.role !== Role.SUPER_ADMIN) {
-    return sendError(res, 403, 'FORBIDDEN', 'Email password recovery is strictly for Super Admin accounts');
+    return sendError(res, 400, 'INVALID_TOKEN', 'This password reset link has expired. Please request a new one.');
   }
 
   const newHash = await hashPassword(newPassword);
@@ -241,13 +238,13 @@ export async function resetPassword(req: Request, res: Response) {
       passwordHash: newHash,
       resetPasswordToken: null,
       resetPasswordExpires: null,
-      mustChangePassword: false,
-      tokenVersion: { increment: 1 }, // Invalidate old tokens
+      mustChangePassword: false, // User personally chose their new password
+      tokenVersion: { increment: 1 }, // Invalidate old sessions/tokens
     },
   });
 
   return sendSuccess(res, {
-    message: 'Password reset successfully. You may now log in with your new password.',
+    message: 'Password changed successfully. Please log in with your new password.',
   });
 }
 
