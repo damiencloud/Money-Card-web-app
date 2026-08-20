@@ -174,7 +174,7 @@ export async function forgotPassword(req: Request, res: Response) {
   if (user && user.status === UserStatus.ACTIVE && [Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.STAFF].includes(user.role)) {
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const resetExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes validity
+    const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour validity // 30 minutes validity
 
     await prisma.user.update({
       where: { id: user.id },
