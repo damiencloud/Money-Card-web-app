@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "data": {
+    "id": "PLAN_PRO",
+    "name": "Pro Plus Plan",
+    "status": "ACTIVE",
+    "price": 3299,
+    "currency": "INR",
+    "billingInterval": "MONTHLY",
+    "branchLimit": 10,
+    "staffLimit": 75,
+    "cardLimit": 6000,
+    "inventoryLevel": "Advanced",
+    "reportsLevel": "Yes",
+    "analyticsLevel": "Advanced",
+    "multiBranchEnabled": true,
+    "whiteLabelEnabled": true,
+    "supportLevel": "Priority",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-02-15T12:00:00.000Z"
+  }
+}

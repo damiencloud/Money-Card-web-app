@@ -1,0 +1,42 @@
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": "staff_001",
+      "name": "John Doe",
+      "email": "staff@example.com",
+      "role": "STAFF",
+      "organizationId": "org_001",
+      "permissions": [
+        "CARD_VIEW",
+        "CARD_ISSUE",
+        "RECHARGE",
+        "PURCHASE",
+        "REFUND"
+      ],
+      "assignedBranchIds": [
+        "branch_001"
+      ]
+    },
+    "organization": {
+      "id": "org_001",
+      "name": "Acme Cafeteria Group",
+      "status": "ACTIVE"
+    },
+    "permissions": [
+      "CARD_VIEW",
+      "CARD_ISSUE",
+      "RECHARGE",
+      "PURCHASE",
+      "REFUND"
+    ],
+    "branches": [
+      {
+        "id": "branch_001",
+        "name": "Main Cafeteria",
+        "organizationId": "org_001",
+        "status": "ACTIVE"
+      }
+    ]
+  }
+}

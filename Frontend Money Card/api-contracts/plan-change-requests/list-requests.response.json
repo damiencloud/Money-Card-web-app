@@ -1,0 +1,28 @@
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "PCR001",
+        "organizationId": "org_001",
+        "requestedByUserId": "staff_admin_001",
+        "currentPlanId": "PLAN_STANDARD",
+        "currentPlanName": "Standard Plan",
+        "requestedPlanId": "PLAN_PRO",
+        "requestedPlanName": "Pro Plan",
+        "requestType": "UPGRADE",
+        "message": "Need higher staff/card limits for expansion.",
+        "status": "PENDING",
+        "createdAt": "2026-02-15T12:00:00.000Z",
+        "updatedAt": "2026-02-15T12:00:00.000Z",
+        "resolvedAt": null
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 1,
+      "totalPages": 1
+    }
+  }
+}

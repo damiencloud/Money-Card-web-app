@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "data": {
+    "id": "PLAN_PRO",
+    "name": "Pro Plan",
+    "status": "ACTIVE",
+    "price": 2999,
+    "currency": "INR",
+    "billingInterval": "MONTHLY",
+    "branchLimit": 10,
+    "staffLimit": 75,
+    "cardLimit": 5000,
+    "inventoryLevel": "Advanced",
+    "reportsLevel": "Yes",
+    "analyticsLevel": "Advanced",
+    "multiBranchEnabled": true,
+    "whiteLabelEnabled": true,
+    "supportLevel": "Priority",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  }
+}

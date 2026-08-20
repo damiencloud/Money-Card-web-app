@@ -1,0 +1,10 @@
+{
+  "branchId": "branch_001",
+  "itemName": "Veg Burger",
+  "category": [
+    "Veg",
+    "Fast Food"
+  ],
+  "price": 120,
+  "status": "ACTIVE"
+}

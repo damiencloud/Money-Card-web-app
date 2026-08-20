@@ -1,0 +1,43 @@
+{
+  "success": true,
+  "data": {
+    "totalTransactions": 1420,
+    "totalRechargeVolume": 450000,
+    "totalPurchaseVolume": 385000,
+    "totalRefundVolume": 65000,
+    "activeSessionsCount": 18,
+    "activeCardsCount": 250,
+    "lowStockItemsCount": 3,
+    "branchPerformance": [
+      {
+        "branchId": "branch_001",
+        "branchName": "Main Cafeteria",
+        "status": "ACTIVE",
+        "transactionCount": 980,
+        "purchaseCount": 720,
+        "purchaseVolume": 275000,
+        "rechargeCount": 260,
+        "rechargeVolume": 320000,
+        "refundCount": 45,
+        "refundVolume": 45000,
+        "totalRevenue": 275000,
+        "sessionCount": 310,
+        "activeSessionsCount": 12,
+        "settledSessionsCount": 298,
+        "avgTransactionValue": 280.61,
+        "avgPurchaseValue": 381.94,
+        "productsSoldCount": 1450,
+        "inventoryItemCount": 45,
+        "lowStockItemCount": 2
+      }
+    ],
+    "peakAnalytics": {
+      "busiestHour": "13:00 - 14:00",
+      "busiestBranchName": "Main Cafeteria",
+      "peakTransactions": 580,
+      "offPeakTransactions": 400,
+      "peakVolume": 195000,
+      "offPeakVolume": 80000
+    }
+  }
+}

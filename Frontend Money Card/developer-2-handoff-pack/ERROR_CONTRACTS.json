@@ -1,0 +1,258 @@
+{
+  "description": "Authoritative Error Contracts Catalog according to M0 Shared System Contract V10 Section 9",
+  "errors": {
+    "VALIDATION_ERROR": {
+      "httpStatus": 400,
+      "meaning": "Invalid input, parameters, headers, or state-independent format failures.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Valid product itemName, category selection, and non-negative price are required"
+        }
+      }
+    },
+    "CSV_VALIDATION_ERROR": {
+      "httpStatus": 400,
+      "meaning": "Invalid CSV file format, header mismatch, duplicate rows, or malformed data lines.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "CSV_VALIDATION_ERROR",
+          "message": "Invalid CSV headers. Required headers: 'itemName', 'category', 'price'"
+        }
+      }
+    },
+    "UNAUTHORIZED": {
+      "httpStatus": 401,
+      "meaning": "Missing, invalid, or expired authentication credentials.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "UNAUTHORIZED",
+          "message": "Authentication required or credentials invalid."
+        }
+      }
+    },
+    "FORBIDDEN": {
+      "httpStatus": 403,
+      "meaning": "Authenticated identity lacks general required role or administrative privilege.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "Super Admin privileges required"
+        }
+      }
+    },
+    "PERMISSION_DENIED": {
+      "httpStatus": 403,
+      "meaning": "Authenticated user lacks the specific required M0 operational permission code.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "PERMISSION_DENIED",
+          "message": "Missing required permission: CARD_ISSUE"
+        }
+      }
+    },
+    "ORGANIZATION_ACCESS_DENIED": {
+      "httpStatus": 403,
+      "meaning": "Resource belongs to another tenant organization (Multi-tenant isolation barrier).",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "ORGANIZATION_ACCESS_DENIED",
+          "message": "Access denied: Resource does not belong to your organization."
+        }
+      }
+    },
+    "BRANCH_ACCESS_DENIED": {
+      "httpStatus": 403,
+      "meaning": "Staff member is not assigned to the requested branch.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "BRANCH_ACCESS_DENIED",
+          "message": "You do not have access to this branch."
+        }
+      }
+    },
+    "NOT_FOUND": {
+      "httpStatus": 404,
+      "meaning": "Generic resource does not exist or is intentionally hidden.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Requested resource not found"
+        }
+      }
+    },
+    "CARD_NOT_FOUND": {
+      "httpStatus": 404,
+      "meaning": "Card ID or QR token does not resolve to any physical card in current scope.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "CARD_NOT_FOUND",
+          "message": "Card 'CARD999' not found"
+        }
+      }
+    },
+    "SESSION_NOT_FOUND": {
+      "httpStatus": 404,
+      "meaning": "Requested Card Session ID was not found.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "SESSION_NOT_FOUND",
+          "message": "Session 'SESSION999' not found"
+        }
+      }
+    },
+    "SUBSCRIPTION_NOT_FOUND": {
+      "httpStatus": 404,
+      "meaning": "Requested organization subscription record was not found.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "SUBSCRIPTION_NOT_FOUND",
+          "message": "Subscription for organization 'org_999' not found"
+        }
+      }
+    },
+    "CARD_NOT_AVAILABLE": {
+      "httpStatus": 409,
+      "meaning": "Attempted to issue/start a session with a card not in AVAILABLE state (e.g. ACTIVE or BLOCKED).",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "CARD_NOT_AVAILABLE",
+          "message": "Card is currently ACTIVE and cannot be issued a new session."
+        }
+      }
+    },
+    "ALREADY_SETTLED": {
+      "httpStatus": 409,
+      "meaning": "Attempted operation on a Card Session that has already been returned or settled.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "ALREADY_SETTLED",
+          "message": "This card session has already been settled and returned."
+        }
+      }
+    },
+    "REFUND_ALREADY_PROCESSED": {
+      "httpStatus": 409,
+      "meaning": "Attempted to double-refund a transaction or settled session.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "REFUND_ALREADY_PROCESSED",
+          "message": "Refund has already been processed for this transaction."
+        }
+      }
+    },
+    "DUPLICATE_REQUEST": {
+      "httpStatus": 409,
+      "meaning": "Idempotency violation or duplicate resource creation request.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "DUPLICATE_REQUEST",
+          "message": "Duplicate request detected with idempotency key."
+        }
+      }
+    },
+    "PLAN_LIMIT_REACHED": {
+      "httpStatus": 409,
+      "meaning": "Action blocked because current organization reached effective staff, branch, or card limits.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "PLAN_LIMIT_REACHED",
+          "message": "Plan limit reached: Maximum allowed branches (3) for this organization."
+        }
+      }
+    },
+    "DOWNGRADE_LIMIT_EXCEEDED": {
+      "httpStatus": 409,
+      "meaning": "Plan downgrade cannot be applied because current usage exceeds lower plan limits.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "DOWNGRADE_LIMIT_EXCEEDED",
+          "message": "Cannot downgrade plan: Active staff count (20) exceeds target plan limit (10)."
+        }
+      }
+    },
+    "PORTAL_SESSION_EXPIRED": {
+      "httpStatus": 410,
+      "meaning": "User Portal temporary session token has expired or the underlying card session was settled.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "PORTAL_SESSION_EXPIRED",
+          "message": "Your User Portal session has expired. Please scan your card QR again."
+        }
+      }
+    },
+    "INSUFFICIENT_BALANCE": {
+      "httpStatus": 422,
+      "meaning": "Card session balance is lower than purchase amount. Authoritative server check failed.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "INSUFFICIENT_BALANCE",
+          "message": "Insufficient balance: Current balance (₹50.00) is less than required (₹120.00)."
+        }
+      }
+    },
+    "INSUFFICIENT_INVENTORY": {
+      "httpStatus": 422,
+      "meaning": "Available inventory stock is insufficient to fulfill purchase quantity or stock adjustment.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "INSUFFICIENT_INVENTORY",
+          "message": "Insufficient inventory: Only 2 units remaining in stock."
+        }
+      }
+    },
+    "PAYMENT_VERIFICATION_FAILED": {
+      "httpStatus": 422,
+      "meaning": "Manual UPI or payment reference verification failed during session recharge.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "PAYMENT_VERIFICATION_FAILED",
+          "message": "Payment verification failed: Invalid UPI reference provided."
+        }
+      }
+    },
+    "INVALID_BUSINESS_STATE": {
+      "httpStatus": 422,
+      "meaning": "Operation violates M0 business rules or state machine constraints.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "INVALID_BUSINESS_STATE",
+          "message": "Cannot perform purchase: Card is BLOCKED."
+        }
+      }
+    },
+    "INTERNAL_SERVER_ERROR": {
+      "httpStatus": 500,
+      "meaning": "Unexpected server failure or unhandled exception.",
+      "envelope": {
+        "success": false,
+        "error": {
+          "code": "INTERNAL_SERVER_ERROR",
+          "message": "An unexpected server error occurred. Please contact support."
+        }
+      }
+    }
+  }
+}

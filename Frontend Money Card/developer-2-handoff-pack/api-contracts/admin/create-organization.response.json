@@ -1,0 +1,10 @@
+{
+  "success": true,
+  "data": {
+    "id": "org_003",
+    "name": "Acme Cafeteria",
+    "status": "ACTIVE",
+    "createdAt": "2026-02-01T00:00:00.000Z",
+    "updatedAt": "2026-02-01T00:00:00.000Z"
+  }
+}

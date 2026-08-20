@@ -1,0 +1,27 @@
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "INV001",
+        "branchId": "branch_001",
+        "productId": "PRODUCT001",
+        "quantity": 50,
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "INV002",
+        "branchId": "branch_001",
+        "productId": "PRODUCT002",
+        "quantity": 100,
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 2,
+      "totalPages": 1
+    }
+  }
+}

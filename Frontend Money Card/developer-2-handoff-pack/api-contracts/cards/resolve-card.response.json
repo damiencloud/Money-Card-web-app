@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "data": {
+    "cardId": "CARD001",
+    "physicalCardNumber": "MC-001",
+    "status": "AVAILABLE",
+    "branchId": "branch_001",
+    "activeSessionId": null,
+    "activeBalance": 0
+  }
+}

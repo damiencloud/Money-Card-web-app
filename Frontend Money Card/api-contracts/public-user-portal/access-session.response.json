@@ -1,0 +1,7 @@
+{
+  "success": true,
+  "data": {
+    "sessionToken": "portal_jwt_session_token_xyz",
+    "expiresAt": "2026-02-15T14:00:00.000Z"
+  }
+}

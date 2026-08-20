@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "data": {
+    "cardDisplayNumber": "MC-***-001",
+    "hasActiveSession": true,
+    "branchDisplayName": "Main Cafeteria",
+    "status": "ACTIVE"
+  }
+}

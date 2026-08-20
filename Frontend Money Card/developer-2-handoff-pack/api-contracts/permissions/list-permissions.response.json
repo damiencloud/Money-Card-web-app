@@ -1,0 +1,25 @@
+{
+  "success": true,
+  "data": [
+    { "code": "CARD_VIEW", "name": "View Cards", "area": "Cards" },
+    { "code": "CARD_ISSUE", "name": "Issue Cards", "area": "Cards" },
+    { "code": "CARD_RETURN", "name": "Return Cards", "area": "Cards" },
+    { "code": "CARD_BLOCK", "name": "Block Cards", "area": "Cards" },
+    { "code": "CARD_UNBLOCK", "name": "Unblock Cards", "area": "Cards" },
+    { "code": "RECHARGE", "name": "Recharge Sessions", "area": "Sessions / Payments" },
+    { "code": "PURCHASE", "name": "Process Purchases", "area": "Sessions / Payments" },
+    { "code": "REFUND", "name": "Process Refunds", "area": "Sessions / Payments" },
+    { "code": "SESSION_VIEW", "name": "View Sessions", "area": "Sessions / Payments" },
+    { "code": "PRODUCT_VIEW", "name": "View Products", "area": "Products / Inventory" },
+    { "code": "PRODUCT_MANAGE", "name": "Manage Products", "area": "Products / Inventory" },
+    { "code": "INVENTORY_VIEW", "name": "View Inventory", "area": "Products / Inventory" },
+    { "code": "INVENTORY_MANAGE", "name": "Manage Inventory", "area": "Products / Inventory" },
+    { "code": "INVENTORY_IMPORT", "name": "Import Inventory CSV", "area": "Products / Inventory" },
+    { "code": "VIEW_ANALYTICS", "name": "View Analytics", "area": "Analytics / Reports" },
+    { "code": "VIEW_REPORTS", "name": "View Reports", "area": "Analytics / Reports" },
+    { "code": "STAFF_VIEW", "name": "View Staff", "area": "Staff" },
+    { "code": "STAFF_MANAGE", "name": "Manage Staff", "area": "Staff" },
+    { "code": "BRANCH_VIEW", "name": "View Branches", "area": "Branch" },
+    { "code": "BRANCH_MANAGE", "name": "Manage Branches", "area": "Branch" }
+  ]
+}

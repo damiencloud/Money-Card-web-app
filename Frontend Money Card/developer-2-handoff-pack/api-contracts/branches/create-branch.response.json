@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "data": {
+    "id": "branch_003",
+    "organizationId": "org_001",
+    "name": "North Campus Kiosk",
+    "status": "ACTIVE",
+    "createdAt": "2026-02-15T12:00:00.000Z",
+    "updatedAt": "2026-02-15T12:00:00.000Z"
+  }
+}

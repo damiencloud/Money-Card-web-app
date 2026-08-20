@@ -1,0 +1,16 @@
+{
+  "name": "Custom Corporate",
+  "price": 3999,
+  "currency": "INR",
+  "billingInterval": "MONTHLY",
+  "branchLimit": 15,
+  "staffLimit": 100,
+  "cardLimit": 8000,
+  "inventoryLevel": "Advanced",
+  "reportsLevel": "Yes",
+  "analyticsLevel": "Advanced",
+  "multiBranchEnabled": true,
+  "whiteLabelEnabled": true,
+  "supportLevel": "Priority",
+  "status": "ACTIVE"
+}

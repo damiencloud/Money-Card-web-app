@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "data": {
+    "sessionId": "SESSION001",
+    "refundedAmount": 380,
+    "sessionStatus": "SETTLED",
+    "cardStatus": "AVAILABLE"
+  }
+}

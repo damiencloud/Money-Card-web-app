@@ -1,0 +1,32 @@
+{
+  "success": true,
+  "data": {
+    "subscription": {
+      "id": "sub_001",
+      "organizationId": "org_001",
+      "planId": "PLAN_STANDARD",
+      "status": "ACTIVE",
+      "startDate": "2026-01-01T00:00:00.000Z",
+      "endDate": "2026-12-31T23:59:59.000Z",
+      "renewalDate": "2026-12-31T23:59:59.000Z",
+      "paymentStatus": "SUCCESS"
+    },
+    "plan": {
+      "id": "PLAN_STANDARD",
+      "name": "Standard Plan",
+      "branchLimit": 3,
+      "staffLimit": 25,
+      "cardLimit": 1000
+    },
+    "effectiveLimits": {
+      "branchLimit": 4,
+      "staffLimit": 30,
+      "cardLimit": 1500
+    },
+    "overrides": {
+      "branchLimit": 4,
+      "staffLimit": 30,
+      "cardLimit": 1500
+    }
+  }
+}

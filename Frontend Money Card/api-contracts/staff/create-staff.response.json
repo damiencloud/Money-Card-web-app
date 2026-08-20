@@ -1,0 +1,21 @@
+{
+  "success": true,
+  "data": {
+    "id": "staff_002",
+    "organizationId": "org_001",
+    "name": "Sarah Connor",
+    "email": "sarah@example.com",
+    "status": "ACTIVE",
+    "permissions": [
+      "CARD_VIEW",
+      "CARD_ISSUE",
+      "RECHARGE",
+      "PURCHASE"
+    ],
+    "assignedBranchIds": [
+      "branch_001"
+    ],
+    "createdAt": "2026-02-15T12:00:00.000Z",
+    "updatedAt": "2026-02-15T12:00:00.000Z"
+  }
+}

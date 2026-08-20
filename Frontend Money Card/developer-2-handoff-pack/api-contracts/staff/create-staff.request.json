@@ -1,0 +1,13 @@
+{
+  "name": "Sarah Connor",
+  "email": "sarah@example.com",
+  "permissions": [
+    "CARD_VIEW",
+    "CARD_ISSUE",
+    "RECHARGE",
+    "PURCHASE"
+  ],
+  "branchIds": [
+    "branch_001"
+  ]
+}

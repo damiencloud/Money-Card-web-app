@@ -1,0 +1,27 @@
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "org_001",
+        "name": "Acme Cafeteria Group",
+        "status": "ACTIVE",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "org_002",
+        "name": "Zenith Food Services",
+        "status": "ACTIVE",
+        "createdAt": "2026-01-15T00:00:00.000Z",
+        "updatedAt": "2026-01-15T00:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 2,
+      "totalPages": 1
+    }
+  }
+}

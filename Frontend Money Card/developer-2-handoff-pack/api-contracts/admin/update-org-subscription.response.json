@@ -1,0 +1,20 @@
+{
+  "success": true,
+  "data": {
+    "subscription": {
+      "id": "sub_001",
+      "organizationId": "org_001",
+      "planId": "PLAN_PRO",
+      "status": "ACTIVE",
+      "startDate": "2026-02-01T00:00:00.000Z",
+      "endDate": "2027-02-01T00:00:00.000Z",
+      "renewalDate": "2027-02-01T00:00:00.000Z",
+      "paymentStatus": "SUCCESS"
+    },
+    "effectiveLimits": {
+      "branchLimit": 10,
+      "staffLimit": 75,
+      "cardLimit": 5000
+    }
+  }
+}

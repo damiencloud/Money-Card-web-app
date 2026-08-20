@@ -1,0 +1,28 @@
+{
+  "success": true,
+  "data": {
+    "id": "staff_001",
+    "organizationId": "org_001",
+    "name": "John Doe",
+    "email": "john@example.com",
+    "status": "ACTIVE",
+    "permissions": [
+      "CARD_VIEW",
+      "CARD_ISSUE",
+      "RECHARGE",
+      "PURCHASE",
+      "REFUND"
+    ],
+    "assignedBranchIds": [
+      "branch_001"
+    ],
+    "branches": [
+      {
+        "id": "branch_001",
+        "name": "Main Cafeteria"
+      }
+    ],
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  }
+}

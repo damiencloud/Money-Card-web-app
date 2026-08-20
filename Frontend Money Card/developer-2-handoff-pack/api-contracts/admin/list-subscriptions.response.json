@@ -1,0 +1,25 @@
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "sub_001",
+        "organizationId": "org_001",
+        "planId": "PLAN_STANDARD",
+        "status": "ACTIVE",
+        "startDate": "2026-01-01T00:00:00.000Z",
+        "endDate": "2026-12-31T23:59:59.000Z",
+        "renewalDate": "2026-12-31T23:59:59.000Z",
+        "paymentStatus": "SUCCESS",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 1,
+      "totalPages": 1
+    }
+  }
+}

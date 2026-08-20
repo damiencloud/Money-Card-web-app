@@ -1,0 +1,32 @@
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "staff_001",
+        "organizationId": "org_001",
+        "name": "John Doe",
+        "email": "john@example.com",
+        "status": "ACTIVE",
+        "permissions": [
+          "CARD_VIEW",
+          "CARD_ISSUE",
+          "RECHARGE",
+          "PURCHASE",
+          "REFUND"
+        ],
+        "assignedBranchIds": [
+          "branch_001"
+        ],
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 1,
+      "totalPages": 1
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "permissions": [
+    "CARD_VIEW",
+    "CARD_ISSUE",
+    "RECHARGE",
+    "PURCHASE"
+  ]
+}

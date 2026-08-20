@@ -1,0 +1,30 @@
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "PCR001",
+        "organizationId": "org_001",
+        "organizationName": "Acme Cafeteria Group",
+        "requestedByUserId": "staff_admin_001",
+        "currentPlanId": "PLAN_STANDARD",
+        "currentPlanName": "Standard Plan",
+        "requestedPlanId": "PLAN_PRO",
+        "requestedPlanName": "Pro Plan",
+        "requestType": "UPGRADE",
+        "message": "Need higher staff and card limits for new campus branch.",
+        "status": "PENDING",
+        "adminNote": null,
+        "createdAt": "2026-02-10T10:00:00.000Z",
+        "updatedAt": "2026-02-10T10:00:00.000Z",
+        "resolvedAt": null
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 1,
+      "totalPages": 1
+    }
+  }
+}

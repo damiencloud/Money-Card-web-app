@@ -1,0 +1,23 @@
+{
+  "success": true,
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdGFmZl8wMDEiLCJyb2xlIjoiU1RBRkYiLCJleHAiOjE3NzEwMDAwMDB9.sample_token_signature",
+    "user": {
+      "id": "staff_001",
+      "name": "John Doe",
+      "email": "staff@example.com",
+      "role": "STAFF",
+      "organizationId": "org_001",
+      "permissions": [
+        "CARD_VIEW",
+        "CARD_ISSUE",
+        "RECHARGE",
+        "PURCHASE",
+        "REFUND"
+      ],
+      "assignedBranchIds": [
+        "branch_001"
+      ]
+    }
+  }
+}

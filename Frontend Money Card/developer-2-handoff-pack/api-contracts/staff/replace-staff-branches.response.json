@@ -1,0 +1,10 @@
+{
+  "success": true,
+  "data": {
+    "staffId": "staff_001",
+    "assignedBranchIds": [
+      "branch_001",
+      "branch_002"
+    ]
+  }
+}

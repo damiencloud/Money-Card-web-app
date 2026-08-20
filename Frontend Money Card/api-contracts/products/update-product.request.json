@@ -1,0 +1,10 @@
+{
+  "itemName": "Super Veg Burger",
+  "category": [
+    "Veg",
+    "Fast Food",
+    "Chef Special"
+  ],
+  "price": 140,
+  "status": "ACTIVE"
+}

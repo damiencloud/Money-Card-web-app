@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "data": {
+    "transactionId": "TXN001",
+    "amount": 120,
+    "balance": 380,
+    "status": "SUCCESS"
+  }
+}

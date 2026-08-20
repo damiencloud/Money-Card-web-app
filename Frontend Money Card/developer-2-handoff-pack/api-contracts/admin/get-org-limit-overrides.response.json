@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "data": {
+    "overrides": {
+      "branchLimit": 5,
+      "staffLimit": 40,
+      "cardLimit": 2500
+    },
+    "effectiveLimits": {
+      "branchLimit": 5,
+      "staffLimit": 40,
+      "cardLimit": 2500
+    }
+  }
+}

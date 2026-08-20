@@ -1,0 +1,29 @@
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "rep_001",
+        "title": "Monthly Financial Settlement & Reconciliation Report",
+        "type": "FINANCIAL_AUDIT",
+        "format": "PDF",
+        "generatedAt": "2026-02-01T00:00:00.000Z",
+        "downloadUrl": "/api/v1/reports/rep_001/pdf"
+      },
+      {
+        "id": "rep_002",
+        "title": "Branch Inventory & Product Movement Summary",
+        "type": "INVENTORY_AUDIT",
+        "format": "PDF",
+        "generatedAt": "2026-02-01T00:00:00.000Z",
+        "downloadUrl": "/api/v1/reports/rep_002/pdf"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 2,
+      "totalPages": 1
+    }
+  }
+}

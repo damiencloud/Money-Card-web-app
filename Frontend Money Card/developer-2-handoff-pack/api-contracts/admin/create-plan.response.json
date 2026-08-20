@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "data": {
+    "id": "plan_custom_001",
+    "name": "Custom Corporate",
+    "status": "ACTIVE",
+    "price": 3999,
+    "currency": "INR",
+    "billingInterval": "MONTHLY",
+    "branchLimit": 15,
+    "staffLimit": 100,
+    "cardLimit": 8000,
+    "inventoryLevel": "Advanced",
+    "reportsLevel": "Yes",
+    "analyticsLevel": "Advanced",
+    "multiBranchEnabled": true,
+    "whiteLabelEnabled": true,
+    "supportLevel": "Priority",
+    "createdAt": "2026-02-15T12:00:00.000Z",
+    "updatedAt": "2026-02-15T12:00:00.000Z"
+  }
+}

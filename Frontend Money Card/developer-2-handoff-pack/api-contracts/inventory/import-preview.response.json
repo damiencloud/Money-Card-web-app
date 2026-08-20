@@ -1,0 +1,31 @@
+{
+  "success": true,
+  "data": {
+    "branchId": "branch_001",
+    "totalRows": 2,
+    "validRows": [
+      {
+        "rowNumber": 2,
+        "itemName": "Veg Burger",
+        "category": [
+          "Veg",
+          "Fast Food"
+        ],
+        "price": 120
+      },
+      {
+        "rowNumber": 3,
+        "itemName": "Masala Chai",
+        "category": [
+          "Beverage",
+          "Hot"
+        ],
+        "price": 30
+      }
+    ],
+    "invalidRows": [],
+    "createsCount": 1,
+    "updatesCount": 1,
+    "previewToken": "preview_token_sample_12345"
+  }
+}

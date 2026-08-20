@@ -1,0 +1,395 @@
+// ─── Prisma Schema for Money Card Multi-Tenant System (M0 V10) ────
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
+
+enum Role {
+  SUPER_ADMIN
+  ORG_ADMIN
+  STAFF
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  DEACTIVATED
+}
+
+enum OrgStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum BranchStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum CardStatus {
+  AVAILABLE
+  ACTIVE
+  BLOCKED
+}
+
+enum SessionStatus {
+  ACTIVE
+  SETTLED
+}
+
+enum TransactionType {
+  RECHARGE_CASH
+  RECHARGE_UPI
+  PURCHASE
+  REFUND_RETURN
+}
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  TRIAL
+  SUSPENDED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  SUCCESS
+  PENDING_PAYMENT
+  FAILED
+}
+
+enum DirectPaymentMethod {
+  DIRECT_BANK_TRANSFER
+  CASH_DEPOSIT
+  CHEQUE
+  GATEWAY_ONLINE
+  OTHER
+}
+
+enum PaymentRecordStatus {
+  SUCCESS
+  PENDING
+  REJECTED
+}
+
+enum PlanRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum PermissionCode {
+  // Cards (5)
+  CARD_VIEW
+  CARD_ISSUE
+  CARD_RETURN
+  CARD_BLOCK
+  CARD_UNBLOCK
+
+  // Sessions / Financials (4)
+  RECHARGE
+  PURCHASE
+  REFUND
+  SESSION_VIEW
+
+  // Products / Inventory (5)
+  PRODUCT_VIEW
+  PRODUCT_MANAGE
+  INVENTORY_VIEW
+  INVENTORY_MANAGE
+  INVENTORY_IMPORT
+
+  // Analytics / Reports (2)
+  VIEW_ANALYTICS
+  VIEW_REPORTS
+
+  // Staff (2)
+  STAFF_VIEW
+  STAFF_MANAGE
+
+  // Branches (2)
+  BRANCH_VIEW
+  BRANCH_MANAGE
+}
+
+// ==========================================
+// MODELS
+// ==========================================
+
+model User {
+  id             String      @id @default(uuid())
+  email          String      @unique
+  passwordHash   String
+  name           String
+  role           Role
+  organizationId String?
+  status         UserStatus  @default(ACTIVE)
+  tokenVersion   Int         @default(1)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  organization       Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignedBranches   UserBranch[]
+  permissions        UserPermission[]
+  recordedTransactions Transaction[]  @relation("StaffTransactions")
+  issuedSessions     CardSession[]    @relation("StaffIssuedSessions")
+  settledSessions    CardSession[]    @relation("StaffSettledSessions")
+
+  @@map("users")
+}
+
+model Organization {
+  id        String    @id @default(uuid())
+  name      String
+  planId    String?
+  status    OrgStatus @default(ACTIVE)
+  logoUrl   String?
+  phone     String?
+  email     String?
+  address   String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  plan                 Plan?                 @relation(fields: [planId], references: [id])
+  users                User[]
+  branches             Branch[]
+  cards                Card[]
+  cardSessions         CardSession[]
+  products             Product[]
+  subscription         Subscription?
+  subscriptionPayments SubscriptionPayment[]
+  planChangeRequests   PlanChangeRequest[]
+
+  @@map("organizations")
+}
+
+model Branch {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  location       String?
+  status         BranchStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staffAssignments UserBranch[]
+  inventoryItems   BranchInventory[]
+  cardSessions     CardSession[]
+  transactions     Transaction[]
+
+  @@map("branches")
+}
+
+model UserBranch {
+  userId     String
+  branchId   String
+  assignedAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@id([userId, branchId])
+  @@map("user_branches")
+}
+
+model UserPermission {
+  userId     String
+  permission PermissionCode
+  assignedAt DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, permission])
+  @@map("user_permissions")
+}
+
+model Plan {
+  id              String          @id @default(uuid())
+  name            String          @unique
+  price           Float
+  billingInterval BillingInterval @default(MONTHLY)
+  branchLimit     Int             @default(1)
+  staffLimit      Int             @default(5)
+  cardLimit       Int             @default(100)
+  description     String?
+  features        String[]
+  isPopular       Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  organizations   Organization[]
+  subscriptions   Subscription[]
+  requestedPlans  PlanChangeRequest[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id                  String             @id @default(uuid())
+  organizationId      String             @unique
+  planId              String
+  status              SubscriptionStatus @default(ACTIVE)
+  startDate           DateTime           @default(now())
+  endDate             DateTime
+  renewalDate         DateTime
+  paymentStatus       PaymentStatus      @default(SUCCESS)
+  branchLimitOverride Int?
+  staffLimitOverride  Int?
+  cardLimitOverride   Int?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         Plan         @relation(fields: [planId], references: [id])
+
+  @@map("subscriptions")
+}
+
+model SubscriptionPayment {
+  id               String              @id @default(uuid())
+  organizationId   String
+  amount           Float
+  paymentMethod    DirectPaymentMethod
+  paymentReference String
+  status           PaymentRecordStatus @default(SUCCESS)
+  notes            String?
+  recordedByUserId String?
+  createdAt        DateTime            @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("subscription_payments")
+}
+
+model PlanChangeRequest {
+  id               String            @id @default(uuid())
+  organizationId   String
+  currentPlanId    String
+  requestedPlanId  String
+  status           PlanRequestStatus @default(PENDING)
+  reason           String?
+  adminNotes       String?
+  requestedAt      DateTime          @default(now())
+  reviewedAt       DateTime?
+  reviewedByUserId String?
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedPlan Plan         @relation(fields: [requestedPlanId], references: [id])
+
+  @@map("plan_change_requests")
+}
+
+model Card {
+  id                 String     @id @default(uuid())
+  organizationId     String
+  physicalCardNumber String
+  qrToken            String     @unique
+  status             CardStatus @default(AVAILABLE)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessions     CardSession[]
+
+  @@unique([organizationId, physicalCardNumber])
+  @@map("cards")
+}
+
+model CardSession {
+  id              String        @id @default(uuid())
+  organizationId  String
+  branchId        String
+  cardId          String
+  sessionToken    String        @unique
+  balance         Float         @default(0.0)
+  status          SessionStatus @default(ACTIVE)
+  issuedByUserId  String?
+  issuedAt        DateTime      @default(now())
+  settledByUserId String?
+  settledAt       DateTime?
+  refundAmount    Float?
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch       Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  card         Card          @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  issuedBy     User?         @relation("StaffIssuedSessions", fields: [issuedByUserId], references: [id])
+  settledBy    User?         @relation("StaffSettledSessions", fields: [settledByUserId], references: [id])
+  transactions Transaction[]
+
+  @@map("card_sessions")
+}
+
+model Transaction {
+  id                String          @id @default(uuid())
+  sessionId         String
+  branchId          String
+  staffUserId       String?
+  type              TransactionType
+  amount            Float
+  balanceBefore     Float
+  balanceAfter      Float
+  paymentMethod     String?
+  externalReference String?
+  items             Json?
+  createdAt         DateTime        @default(now())
+
+  session CardSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  branch  Branch      @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  staff   User?       @relation("StaffTransactions", fields: [staffUserId], references: [id])
+
+  @@map("transactions")
+}
+
+model Product {
+  id             String        @id @default(uuid())
+  organizationId String
+  itemName       String
+  price          Float
+  category       String[]
+  description    String?
+  imageUrl       String?
+  status         ProductStatus @default(ACTIVE)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inventoryItems BranchInventory[]
+
+  @@map("products")
+}
+
+model BranchInventory {
+  id                String   @id @default(uuid())
+  branchId          String
+  productId         String
+  quantity          Int      @default(0)
+  lowStockThreshold Int      @default(10)
+  updatedAt         DateTime @updatedAt
+
+  branch  Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, productId])
+  @@map("branch_inventory")
+}

@@ -1,0 +1,89 @@
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "PLAN_BASIC",
+        "name": "Basic Plan",
+        "status": "ACTIVE",
+        "price": 499,
+        "currency": "INR",
+        "billingInterval": "MONTHLY",
+        "branchLimit": 1,
+        "staffLimit": 10,
+        "cardLimit": 250,
+        "inventoryLevel": "Basic",
+        "reportsLevel": "Yes",
+        "analyticsLevel": "Basic",
+        "multiBranchEnabled": false,
+        "whiteLabelEnabled": true,
+        "supportLevel": "Standard",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "PLAN_STANDARD",
+        "name": "Standard Plan",
+        "status": "ACTIVE",
+        "price": 1499,
+        "currency": "INR",
+        "billingInterval": "MONTHLY",
+        "branchLimit": 3,
+        "staffLimit": 25,
+        "cardLimit": 1000,
+        "inventoryLevel": "Advanced",
+        "reportsLevel": "Yes",
+        "analyticsLevel": "Standard",
+        "multiBranchEnabled": true,
+        "whiteLabelEnabled": true,
+        "supportLevel": "Priority",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "PLAN_PRO",
+        "name": "Pro Plan",
+        "status": "ACTIVE",
+        "price": 2999,
+        "currency": "INR",
+        "billingInterval": "MONTHLY",
+        "branchLimit": 10,
+        "staffLimit": 75,
+        "cardLimit": 5000,
+        "inventoryLevel": "Advanced",
+        "reportsLevel": "Yes",
+        "analyticsLevel": "Advanced",
+        "multiBranchEnabled": true,
+        "whiteLabelEnabled": true,
+        "supportLevel": "Priority",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "PLAN_ENTERPRISE",
+        "name": "Enterprise Plan",
+        "status": "ACTIVE",
+        "price": 9999,
+        "currency": "INR",
+        "billingInterval": "YEARLY",
+        "branchLimit": 999,
+        "staffLimit": 999,
+        "cardLimit": 99999,
+        "inventoryLevel": "Advanced",
+        "reportsLevel": "Yes",
+        "analyticsLevel": "Advanced",
+        "multiBranchEnabled": true,
+        "whiteLabelEnabled": true,
+        "supportLevel": "Dedicated",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 4,
+      "totalPages": 1
+    }
+  }
+}

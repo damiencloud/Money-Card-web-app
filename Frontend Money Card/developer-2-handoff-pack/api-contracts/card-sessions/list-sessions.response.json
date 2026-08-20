@@ -1,0 +1,26 @@
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "SESSION001",
+        "cardId": "CARD001",
+        "physicalCardNumber": "MC-001",
+        "branchId": "branch_001",
+        "branchName": "Main Cafeteria",
+        "balance": 380,
+        "status": "ACTIVE",
+        "startedAt": "2026-02-15T12:00:00.000Z",
+        "settledAt": null,
+        "createdAt": "2026-02-15T12:00:00.000Z",
+        "updatedAt": "2026-02-15T12:15:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 1,
+      "totalPages": 1
+    }
+  }
+}

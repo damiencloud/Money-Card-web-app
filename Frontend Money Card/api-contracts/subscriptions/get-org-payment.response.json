@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "data": {
+    "id": "sub_pay_001",
+    "subscriptionId": "sub_001",
+    "amount": 1499,
+    "currency": "INR",
+    "status": "SUCCESS",
+    "paymentMethod": "DIRECT_BANK_TRANSFER",
+    "paymentReference": "DIRECT_NEFT_982341203",
+    "createdAt": "2026-01-01T00:00:00.000Z"
+  }
+}

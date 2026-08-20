@@ -1,0 +1,19 @@
+{
+  "success": true,
+  "data": {
+    "id": "CARD001",
+    "organizationId": "org_001",
+    "currentBranchId": "branch_001",
+    "physicalCardNumber": "MC-001",
+    "qrToken": "qr_opaque_hash_card_001",
+    "status": "AVAILABLE",
+    "auditSummary": {
+      "totalSessions": 12,
+      "lifetimeRecharge": 6500,
+      "lifetimeSpend": 6500,
+      "currentSessionId": null
+    },
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  }
+}

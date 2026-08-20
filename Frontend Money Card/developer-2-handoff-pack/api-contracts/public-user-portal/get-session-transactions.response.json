@@ -1,0 +1,27 @@
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "TXN001",
+        "type": "RECHARGE",
+        "amount": 500,
+        "status": "SUCCESS",
+        "createdAt": "2026-02-15T12:00:00.000Z"
+      },
+      {
+        "id": "TXN002",
+        "type": "PURCHASE",
+        "amount": 120,
+        "status": "SUCCESS",
+        "createdAt": "2026-02-15T12:15:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 2,
+      "totalPages": 1
+    }
+  }
+}

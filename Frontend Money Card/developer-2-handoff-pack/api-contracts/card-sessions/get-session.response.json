@@ -1,0 +1,47 @@
+{
+  "success": true,
+  "data": {
+    "id": "SESSION001",
+    "cardId": "CARD001",
+    "physicalCardNumber": "MC-001",
+    "branchId": "branch_001",
+    "branchName": "Main Cafeteria",
+    "balance": 380,
+    "status": "ACTIVE",
+    "startedAt": "2026-02-15T12:00:00.000Z",
+    "settledAt": null,
+    "transactions": [
+      {
+        "id": "TXN001",
+        "sessionId": "SESSION001",
+        "branchId": "branch_001",
+        "type": "RECHARGE",
+        "amount": 500,
+        "status": "SUCCESS",
+        "createdAt": "2026-02-15T12:00:00.000Z"
+      },
+      {
+        "id": "TXN002",
+        "sessionId": "SESSION001",
+        "branchId": "branch_001",
+        "type": "PURCHASE",
+        "amount": 120,
+        "status": "SUCCESS",
+        "createdAt": "2026-02-15T12:15:00.000Z"
+      }
+    ],
+    "payments": [
+      {
+        "id": "PAY001",
+        "transactionId": "TXN001",
+        "amount": 500,
+        "status": "SUCCESS",
+        "paymentMethod": "CASH",
+        "externalReference": null,
+        "createdAt": "2026-02-15T12:00:00.000Z"
+      }
+    ],
+    "createdAt": "2026-02-15T12:00:00.000Z",
+    "updatedAt": "2026-02-15T12:15:00.000Z"
+  }
+}

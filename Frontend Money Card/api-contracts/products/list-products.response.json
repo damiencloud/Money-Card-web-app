@@ -1,0 +1,40 @@
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "PRODUCT001",
+        "branchId": "branch_001",
+        "itemName": "Veg Burger",
+        "category": [
+          "Veg",
+          "Fast Food"
+        ],
+        "price": 120,
+        "quantity": 50,
+        "status": "ACTIVE",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "PRODUCT002",
+        "branchId": "branch_001",
+        "itemName": "Cold Coffee",
+        "category": [
+          "Beverage"
+        ],
+        "price": 80,
+        "quantity": 100,
+        "status": "ACTIVE",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 2,
+      "totalPages": 1
+    }
+  }
+}

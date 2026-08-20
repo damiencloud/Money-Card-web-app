@@ -1,0 +1,12 @@
+{
+  "success": true,
+  "data": {
+    "staffId": "staff_001",
+    "permissions": [
+      "CARD_VIEW",
+      "CARD_ISSUE",
+      "RECHARGE",
+      "PURCHASE"
+    ]
+  }
+}

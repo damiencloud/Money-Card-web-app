@@ -1,0 +1,19 @@
+{
+  "success": true,
+  "data": [
+    {
+      "receiptNumber": "REC_SESSION001_TXN002",
+      "transactionId": "TXN002",
+      "amount": 120,
+      "items": [
+        {
+          "itemName": "Veg Burger",
+          "quantity": 1,
+          "price": 120
+        }
+      ],
+      "branchDisplayName": "Main Cafeteria",
+      "issuedAt": "2026-02-15T12:15:00.000Z"
+    }
+  ]
+}

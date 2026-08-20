@@ -1,0 +1,18 @@
+{
+  "success": true,
+  "data": {
+    "id": "PRODUCT001",
+    "branchId": "branch_001",
+    "itemName": "Super Veg Burger",
+    "category": [
+      "Veg",
+      "Fast Food",
+      "Chef Special"
+    ],
+    "price": 140,
+    "quantity": 50,
+    "status": "ACTIVE",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-02-15T12:00:00.000Z"
+  }
+}

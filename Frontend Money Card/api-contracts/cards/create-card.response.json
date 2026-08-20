@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "data": {
+    "id": "CARD003",
+    "organizationId": "org_001",
+    "currentBranchId": "branch_001",
+    "physicalCardNumber": "MC-003",
+    "qrToken": "qr_opaque_hash_card_003",
+    "status": "AVAILABLE",
+    "createdAt": "2026-02-15T12:00:00.000Z",
+    "updatedAt": "2026-02-15T12:00:00.000Z"
+  }
+}

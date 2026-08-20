@@ -1,0 +1,33 @@
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "CARD001",
+        "organizationId": "org_001",
+        "currentBranchId": "branch_001",
+        "physicalCardNumber": "MC-001",
+        "qrToken": "qr_opaque_hash_card_001",
+        "status": "AVAILABLE",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "CARD002",
+        "organizationId": "org_001",
+        "currentBranchId": "branch_001",
+        "physicalCardNumber": "MC-002",
+        "qrToken": "qr_opaque_hash_card_002",
+        "status": "ACTIVE",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "updatedAt": "2026-01-10T10:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 2,
+      "totalPages": 1
+    }
+  }
+}

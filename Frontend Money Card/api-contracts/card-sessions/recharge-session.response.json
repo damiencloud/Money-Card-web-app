@@ -1,0 +1,10 @@
+{
+  "success": true,
+  "data": {
+    "sessionId": "SESSION001",
+    "paymentId": "PAYMENT001",
+    "amount": 500,
+    "balance": 500,
+    "status": "ACTIVE"
+  }
+}

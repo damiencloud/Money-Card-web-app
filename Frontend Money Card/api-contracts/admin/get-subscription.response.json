@@ -1,0 +1,32 @@
+{
+  "success": true,
+  "data": {
+    "id": "sub_001",
+    "organizationId": "org_001",
+    "planId": "PLAN_STANDARD",
+    "status": "ACTIVE",
+    "startDate": "2026-01-01T00:00:00.000Z",
+    "endDate": "2026-12-31T23:59:59.000Z",
+    "renewalDate": "2026-12-31T23:59:59.000Z",
+    "paymentStatus": "SUCCESS",
+    "overrides": {
+      "branchLimit": 4,
+      "staffLimit": 30,
+      "cardLimit": 1500
+    },
+    "payments": [
+      {
+        "id": "sub_pay_001",
+        "subscriptionId": "sub_001",
+        "amount": 1499,
+        "currency": "INR",
+        "status": "SUCCESS",
+        "paymentMethod": "DIRECT_BANK_TRANSFER",
+        "externalReference": "NEFT_982341203",
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      }
+    ],
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  }
+}

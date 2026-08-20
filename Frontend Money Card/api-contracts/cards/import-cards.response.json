@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "data": {
+    "totalRows": 25,
+    "importedCount": 25,
+    "failedCount": 0,
+    "branchId": "branch_001",
+    "createdCards": [
+      {
+        "id": "CARD010",
+        "physicalCardNumber": "MC-010",
+        "status": "AVAILABLE"
+      }
+    ]
+  }
+}
