@@ -129,27 +129,33 @@ export interface RefundResponseData {
 }
 
 // ─── Card Bulk Import Specs (M-Card Import) ────────────────
-export interface CardImportValidationError {
-  rowNumber: number;
-  cardNumber: string;
-  reason: string;
-}
-
-export interface CardImportPreview {
-  totalRows: number;
-  validCards: string[];
-  validEntries?: { cardNumber: string; qrToken?: string }[];
-  duplicateCards: string[];
-  invalidCards: CardImportValidationError[];
-}
+// ── Card Bulk Import Specs (M-Card Import) ──
+export type CardImportMode = 'AUTO_GENERATED_QR' | 'PREPRINTED_QR';
 
 export interface ImportCardEntry {
   cardNumber: string;
   qrToken?: string;
 }
 
+export interface CardImportValidationError {
+  rowNumber: number;
+  cardNumber: string;
+  qrCode?: string;
+  reason: string;
+}
+
+export interface CardImportPreview {
+  mode: CardImportMode;
+  totalRows: number;
+  validCards: string[];
+  validEntries: ImportCardEntry[];
+  duplicateCards: string[];
+  invalidCards: CardImportValidationError[];
+}
+
 export interface ImportCardsRequest {
   branchId?: string;
+  importMode: CardImportMode;
   cardNumbers?: string[];
   cards?: ImportCardEntry[];
 }
@@ -158,4 +164,3 @@ export interface ImportCardsResponseData {
   importedCount: number;
   cards: Card[];
 }
-

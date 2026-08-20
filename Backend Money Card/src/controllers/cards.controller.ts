@@ -137,17 +137,26 @@ export async function createCardBatch(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
   }
 
-  const { prefix = 'MC-', startNumber = 1, count = 10, cardNumbers, cards: rawCards } = req.body;
+  const {
+    importMode = 'AUTO_GENERATED_QR',
+    prefix = 'MC-',
+    startNumber = 1,
+    count = 10,
+    cardNumbers,
+    cards: rawCards,
+  } = req.body;
 
-  // Determine list of card numbers to create (either from CSV list or auto-generated range)
+  // Determine list of card numbers and QR tokens to create
   let targetCardEntries: { cardNumber: string; qrToken?: string }[] = [];
 
   if (Array.isArray(cardNumbers) && cardNumbers.length > 0) {
-    targetCardEntries = cardNumbers.map((num: string) => ({ cardNumber: String(num).trim().toUpperCase() }));
+    targetCardEntries = cardNumbers.map((num: string) => ({
+      cardNumber: String(num).trim().toUpperCase(),
+    }));
   } else if (Array.isArray(rawCards) && rawCards.length > 0) {
     targetCardEntries = rawCards.map((c: any) => ({
       cardNumber: String(c.cardNumber || c.physicalCardNumber || c.number || '').trim().toUpperCase(),
-      qrToken: c.qrToken || c.qrCode || c.token,
+      qrToken: (c.qrToken || c.qrCode || c.token || '').trim(),
     })).filter((c) => !!c.cardNumber);
   } else {
     const numCount = Math.min(Math.max(1, parseInt(count, 10)), 500);
@@ -164,26 +173,71 @@ export async function createCardBatch(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'No card numbers provided');
   }
 
-  const [effectiveLimits, currentCardCount] = await Promise.all([
-    getEffectiveLimits(orgId),
-    prisma.card.count({ where: { organizationId: orgId } }),
-  ]);
+  // Strict Validation based on explicit importMode
+  if (importMode === 'PREPRINTED_QR') {
+    const seenBatchQrs = new Set<string>();
+    for (let idx = 0; idx < targetCardEntries.length; idx++) {
+      const entry = targetCardEntries[idx];
+      if (!entry.qrToken) {
+        return sendError(
+          res,
+          400,
+          'VALIDATION_ERROR',
+          `Pre-printed QR import requires a valid qrCode for all cards. Row ${idx + 1} (${entry.cardNumber}) is missing a QR code.`,
+        );
+      }
+      if (seenBatchQrs.has(entry.qrToken)) {
+        return sendError(
+          res,
+          400,
+          'DUPLICATE_QR_IN_BATCH',
+          `Duplicate QR code '${entry.qrToken}' found within the import file.`,
+        );
+      }
+      seenBatchQrs.add(entry.qrToken);
+    }
 
-  if (currentCardCount + totalToCreate > effectiveLimits.cardLimit) {
-    return sendError(
-      res,
-      409,
-      'CARD_LIMIT_REACHED',
-      `Adding ${totalToCreate} cards exceeds your card pool limit of ${effectiveLimits.cardLimit} (${currentCardCount} current cards). Please upgrade your plan or request a custom limit override.`,
-    );
+    // Check if any QR code already exists in DB
+    const existingQrCards = await prisma.card.findMany({
+      where: { qrToken: { in: Array.from(seenBatchQrs) } },
+      select: { qrToken: true, physicalCardNumber: true },
+    });
+
+    if (existingQrCards.length > 0) {
+      return sendError(
+        res,
+        400,
+        'DUPLICATE_QR',
+        `QR code '${existingQrCards[0].qrToken}' already exists in the system (Card: ${existingQrCards[0].physicalCardNumber}).`,
+      );
+    }
   }
 
-  const createdCards: any[] = [];
+  // Atomically check organization card limits and insert cards
+  const result = await prisma.$transaction(async (tx) => {
+    const [effectiveLimits, currentCardCount] = await Promise.all([
+      getEffectiveLimits(orgId),
+      tx.card.count({ where: { organizationId: orgId } }),
+    ]);
 
-  for (const entry of targetCardEntries) {
-    const token = entry.qrToken || generateQrToken();
-    try {
-      const card = await prisma.card.create({
+    const remainingQuota = Math.max(0, effectiveLimits.cardLimit - currentCardCount);
+
+    if (totalToCreate > remainingQuota) {
+      throw {
+        statusCode: 409,
+        code: 'CARD_LIMIT_REACHED',
+        message: `You can import only ${remainingQuota} more cards based on your current organization card limit of ${effectiveLimits.cardLimit} (${currentCardCount} current cards).`,
+      };
+    }
+
+    const createdCards: any[] = [];
+
+    for (const entry of targetCardEntries) {
+      // In AUTO_GENERATED_QR mode, always generate a fresh unique cryptographic token
+      // In PREPRINTED_QR mode, use the exact provided vendor token
+      const token = importMode === 'PREPRINTED_QR' && entry.qrToken ? entry.qrToken : generateQrToken();
+
+      const card = await tx.card.create({
         data: {
           organizationId: orgId,
           physicalCardNumber: entry.cardNumber,
@@ -192,15 +246,24 @@ export async function createCardBatch(req: Request, res: Response) {
         },
       });
       createdCards.push(card);
-    } catch {
-      // Skip duplicates if already present
     }
+
+    return createdCards;
+  }).catch((err) => {
+    if (err?.statusCode) {
+      return err;
+    }
+    throw err;
+  });
+
+  if (result?.statusCode) {
+    return sendError(res, result.statusCode, result.code, result.message);
   }
 
   return sendSuccess(res, {
-    created: createdCards.length,
-    importedCount: createdCards.length,
-    cards: createdCards,
+    created: result.length,
+    importedCount: result.length,
+    cards: result,
   }, 201);
 }
 

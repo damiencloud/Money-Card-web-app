@@ -41,6 +41,8 @@ export type {
   PurchaseRequest,
   PurchaseResponseData,
   RefundResponseData,
+  CardImportMode,
+  ImportCardEntry,
   CardImportValidationError,
   CardImportPreview,
   ImportCardsRequest,

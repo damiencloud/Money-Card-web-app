@@ -167,6 +167,7 @@ export async function forgotPassword(req: Request, res: Response) {
   const cleanEmail = email.trim().toLowerCase();
   const user = await prisma.user.findUnique({
     where: { email: cleanEmail },
+    include: { organization: true },
   });
 
   // Allow both SUPER_ADMIN and ORG_ADMIN (and any active user) to receive password reset email
@@ -188,7 +189,7 @@ export async function forgotPassword(req: Request, res: Response) {
     const roleName = user.role === Role.SUPER_ADMIN ? 'Super Admin' : user.role === Role.ORG_ADMIN ? 'Organization Admin' : 'Staff';
 
     // Dispatch email via Resend
-    await sendPasswordResetEmail(user.email, user.name, resetLink, roleName);
+    await sendPasswordResetEmail(user.email, user.name, resetLink, user.role, user.organization?.name);
   }
 
   // Anti-user enumeration message (always generic for all users)

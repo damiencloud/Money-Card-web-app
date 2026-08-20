@@ -11,6 +11,9 @@ import type {
   Branch,
   CardSession,
   OrganizationOverview,
+  CardImportMode,
+  ImportCardEntry,
+  CardImportValidationError,
   CardImportPreview,
 } from '@/types';
 import {
@@ -47,6 +50,8 @@ import {
   AlertTriangle,
   XCircle,
   Sparkles,
+  QrCode,
+  ArrowLeft,
 } from 'lucide-react';
 
 export function CardsPage() {
@@ -91,7 +96,8 @@ export function CardsPage() {
   const [modalApiError, setModalApiError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Bulk Card Import State
+  // Bulk Card Import State (Explicit 2-Option Flow)
+  const [selectedImportMode, setSelectedImportMode] = useState<CardImportMode | null>(null);
   const [importBranchId, setImportBranchId] = useState('');
   const [importPreview, setImportPreview] = useState<CardImportPreview | null>(null);
   const [importFileName, setImportFileName] = useState<string | null>(null);
@@ -316,7 +322,7 @@ export function CardsPage() {
       try {
         const text = event.target?.result as string;
         if (!text) {
-          setModalApiError('Uploaded file is empty.');
+          setModalApiError('CSV file is empty');
           return;
         }
 
@@ -326,32 +332,50 @@ export function CardsPage() {
           return;
         }
 
-        // Determine if first line is a header
+        const mode = selectedImportMode || 'AUTO_GENERATED_QR';
         let startIndex = 0;
         const firstLineLower = lines[0].toLowerCase();
+
+        // Check header validation per mode
         if (
           firstLineLower.includes('card') ||
           firstLineLower.includes('number') ||
-          firstLineLower.includes('identifier')
+          firstLineLower.includes('qr')
         ) {
           startIndex = 1;
+          if (mode === 'PREPRINTED_QR' && !firstLineLower.includes('qr')) {
+            setModalApiError(
+              "This CSV does not match the selected import method: missing required 'qrCode' column. Please download the Pre-Printed QR sample CSV.",
+            );
+            return;
+          }
+        } else if (mode === 'PREPRINTED_QR') {
+          const firstLineParts = lines[0].split(',');
+          if (firstLineParts.length < 2 || !firstLineParts[1].trim()) {
+            setModalApiError(
+              "This CSV does not match the selected import method: missing required 'qrCode' column. Please download the Pre-Printed QR sample CSV.",
+            );
+            return;
+          }
         }
 
         const existingCardSet = new Set(cards.map((c) => c.physicalCardNumber.toLowerCase()));
-        const seenInFile = new Set<string>();
+        const existingQrSet = new Set(cards.map((c) => c.qrToken.toLowerCase()));
+        const seenCardsInFile = new Set<string>();
+        const seenQrsInFile = new Set<string>();
 
         const validCards: string[] = [];
-        const validEntries: { cardNumber: string; qrToken?: string }[] = [];
+        const validEntries: ImportCardEntry[] = [];
         const duplicateCards: string[] = [];
-        const invalidCards: { rowNumber: number; cardNumber: string; reason: string }[] = [];
+        const invalidCards: CardImportValidationError[] = [];
 
         for (let i = startIndex; i < lines.length; i++) {
           const rowNum = i + 1;
           const parts = lines[i].split(',').map((s: string) => s.replace(/["']/g, '').trim());
-          const rawVal = parts[0];
-          const rawQr = parts[1] || undefined;
+          const rawCardNum = parts[0];
+          const rawQr = parts[1] || '';
 
-          if (!rawVal) {
+          if (!rawCardNum) {
             invalidCards.push({
               rowNumber: rowNum,
               cardNumber: '(empty)',
@@ -361,45 +385,94 @@ export function CardsPage() {
           }
 
           // Format validation: 2-30 characters alphanumeric / hyphen
-          if (!/^[A-Za-z0-9\-_]{2,30}$/.test(rawVal)) {
+          if (!/^[A-Za-z0-9\-_]{2,30}$/.test(rawCardNum)) {
             invalidCards.push({
               rowNumber: rowNum,
-              cardNumber: rawVal,
-              reason: 'Invalid format (allowed: 2-30 characters, alphanumeric and hyphens)',
+              cardNumber: rawCardNum,
+              reason: 'Invalid card number format (allowed: 2-30 characters, alphanumeric and hyphens)',
             });
             continue;
           }
 
-          const lower = rawVal.toLowerCase();
+          const lowerCard = rawCardNum.toLowerCase();
 
-          // Duplicate in same file
-          if (seenInFile.has(lower)) {
-            duplicateCards.push(rawVal);
+          // Check duplicate card in file
+          if (seenCardsInFile.has(lowerCard)) {
+            duplicateCards.push(rawCardNum);
             invalidCards.push({
               rowNumber: rowNum,
-              cardNumber: rawVal,
-              reason: 'Duplicate card number within the CSV file',
+              cardNumber: rawCardNum,
+              reason: 'Duplicate card number within this CSV file',
             });
             continue;
           }
 
-          // Already exists in organization
-          if (existingCardSet.has(lower)) {
-            duplicateCards.push(rawVal);
+          // Check duplicate card in organization
+          if (existingCardSet.has(lowerCard)) {
+            duplicateCards.push(rawCardNum);
             invalidCards.push({
               rowNumber: rowNum,
-              cardNumber: rawVal,
+              cardNumber: rawCardNum,
               reason: 'Card already exists in your organization registry',
             });
             continue;
           }
 
-          seenInFile.add(lower);
-          validCards.push(rawVal);
-          validEntries.push({ cardNumber: rawVal, qrToken: rawQr });
+          // MODE SPECIFIC VALIDATION
+          if (mode === 'AUTO_GENERATED_QR') {
+            if (rawQr && rawQr.length > 0) {
+              invalidCards.push({
+                rowNumber: rowNum,
+                cardNumber: rawCardNum,
+                reason: 'Auto QR mode accepts card numbers only. Remove QR code or switch to Pre-Printed QR mode.',
+              });
+              continue;
+            }
+
+            seenCardsInFile.add(lowerCard);
+            validCards.push(rawCardNum);
+            validEntries.push({ cardNumber: rawCardNum });
+          } else {
+            if (!rawQr) {
+              invalidCards.push({
+                rowNumber: rowNum,
+                cardNumber: rawCardNum,
+                reason: 'Missing required pre-printed QR code for this card',
+              });
+              continue;
+            }
+
+            const lowerQr = rawQr.toLowerCase();
+
+            if (seenQrsInFile.has(lowerQr)) {
+              invalidCards.push({
+                rowNumber: rowNum,
+                cardNumber: rawCardNum,
+                qrCode: rawQr,
+                reason: `Duplicate QR code '${rawQr}' within this CSV file`,
+              });
+              continue;
+            }
+
+            if (existingQrSet.has(lowerQr)) {
+              invalidCards.push({
+                rowNumber: rowNum,
+                cardNumber: rawCardNum,
+                qrCode: rawQr,
+                reason: `QR code '${rawQr}' is already assigned to another card`,
+              });
+              continue;
+            }
+
+            seenCardsInFile.add(lowerCard);
+            seenQrsInFile.add(lowerQr);
+            validCards.push(rawCardNum);
+            validEntries.push({ cardNumber: rawCardNum, qrToken: rawQr });
+          }
         }
 
         setImportPreview({
+          mode,
           totalRows: lines.length - startIndex,
           validCards,
           validEntries,
@@ -416,7 +489,7 @@ export function CardsPage() {
 
   // ── Confirm Bulk Card Import ──────────────────────────────
   const handleConfirmImport = async () => {
-    if (!importPreview || importPreview.validCards.length === 0) return;
+    if (!importPreview || importPreview.validCards.length === 0 || !selectedImportMode) return;
 
     setIsSubmitting(true);
     setModalApiError(null);
@@ -424,8 +497,9 @@ export function CardsPage() {
     try {
       const res = await apiService.cards.importCards({
         branchId: importBranchId || undefined,
+        importMode: selectedImportMode,
         cardNumbers: importPreview.validCards,
-        cards: importPreview.validEntries || importPreview.validCards.map((num) => ({ cardNumber: num })),
+        cards: importPreview.validEntries,
       });
 
       if (!res.success) {
@@ -990,230 +1064,413 @@ export function CardsPage() {
       {/* ── 2. BULK CARD IMPORT MODAL ── */}
       <Modal
         isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
-        title="Import Physical Cards via CSV"
-        description="Bulk import pre-printed physical card numbers into your organization registry."
-        size="xl"
+        onClose={() => {
+          setShowImportModal(false);
+          setSelectedImportMode(null);
+          setImportPreview(null);
+          setImportFileName(null);
+          setModalApiError(null);
+        }}
+        title={
+          !selectedImportMode
+            ? 'Import Cards'
+            : selectedImportMode === 'AUTO_GENERATED_QR'
+            ? 'Import Cards with Auto-Generated QR'
+            : 'Import Cards with Pre-Printed QR'
+        }
+        description={
+          !selectedImportMode
+            ? 'Choose how your physical cards will be imported into your organization registry.'
+            : selectedImportMode === 'AUTO_GENERATED_QR'
+            ? 'Upload card numbers only. Money Card will automatically generate unique secure QR codes for every card.'
+            : 'Upload card numbers together with the QR codes already printed by your card manufacturer.'
+        }
+        size="lg"
       >
         <div className="space-y-6">
           {modalApiError && (
-            <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+            <div
+              className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3"
+              role="alert"
+              aria-live="assertive"
+            >
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
-              <span>{modalApiError}</span>
+              <p className="text-sm text-rose-300">{modalApiError}</p>
             </div>
           )}
 
-          {/* Download Sample & Branch Selection */}
-          <div className="grid gap-4 sm:grid-cols-2 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-400 block mb-1.5">
-                Default Branch Assignment
-              </label>
-              <Select
-                id="import-card-branch"
-                value={importBranchId}
-                onChange={(e) => setImportBranchId(e.target.value)}
-                options={[
-                  { value: '', label: 'Unassigned / Global Org' },
-                  ...branches.map((b) => ({ value: b.id, label: b.name })),
-                ]}
-              />
-            </div>
-
-            <div className="flex flex-col justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                size="md"
-                onClick={handleDownloadSampleCsv}
-                leftIcon={<Download className="h-4 w-4 text-violet-400" />}
-              >
-                Download Sample CSV
-              </Button>
-            </div>
-          </div>
-
-          {/* Upload Dropzone */}
-          {!importPreview ? (
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-700 bg-slate-950/60 p-8 text-center cursor-pointer transition-colors hover:border-violet-500 hover:bg-violet-950/10"
-            >
-              <FileSpreadsheet className="h-10 w-10 text-violet-400 mb-3" />
-              <p className="font-semibold text-slate-200 text-sm">
-                Click to upload or drag and drop CSV file
-              </p>
-              <p className="text-xs text-slate-400 mt-1">
-                Supports <strong>1-column</strong> (<code className="text-violet-300">cardNumber</code>) or <strong>2-column</strong> (<code className="text-violet-300">cardNumber,qrCode</code>) CSV files
-              </p>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Leave QR column blank for automatic secure QR token generation
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-            </div>
-          ) : (
+          {/* INITIAL SCREEN: Explicit 2-Option Choice */}
+          {!selectedImportMode ? (
             <div className="space-y-4">
-              {/* Import Summary Badges */}
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs text-emerald-300">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>Valid Cards</span>
+              <div className="text-center pb-2">
+                <p className="text-sm text-slate-300 font-medium">
+                  Select your card manufacturing and QR assignment method to proceed:
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* OPTION 1: Auto-Generate QR */}
+                <div
+                  onClick={() => {
+                    setSelectedImportMode('AUTO_GENERATED_QR');
+                    setModalApiError(null);
+                  }}
+                  className="group relative flex flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900/60 p-5 cursor-pointer transition-all hover:border-violet-500 hover:bg-violet-950/20 hover:shadow-lg hover:shadow-violet-500/10"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="rounded-full bg-violet-500/10 border border-violet-500/30 px-2.5 py-0.5 text-[11px] font-bold text-violet-400">
+                        OPTION 1
+                      </span>
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 group-hover:scale-110 transition-transform">
+                        <CreditCard className="h-5 w-5" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="text-base font-bold text-slate-100 group-hover:text-violet-300 transition-colors">
+                        Auto-Generate QR
+                      </h4>
+                      <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                        Upload card numbers only. Money Card will automatically generate a unique, cryptographically secure QR code for every card.
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg bg-slate-950/60 border border-slate-800/80 p-2.5 font-mono text-[11px] text-slate-400">
+                      <span className="text-slate-500 block text-[10px] uppercase font-sans font-semibold mb-1">
+                        CSV Format:
+                      </span>
+                      cardNumber<br />
+                      asd-001<br />
+                      asd-002
+                    </div>
                   </div>
-                  <p className="font-mono text-xl font-bold text-emerald-400">
-                    {importPreview.validCards.length}
-                  </p>
+
+                  <div className="mt-4 pt-3 border-t border-slate-800/80">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      className="w-full justify-center"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedImportMode('AUTO_GENERATED_QR');
+                        setModalApiError(null);
+                      }}
+                    >
+                      Select Auto QR Import
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs text-amber-300">
-                    <AlertTriangle className="h-4 w-4" />
-                    <span>Duplicates</span>
-                  </div>
-                  <p className="font-mono text-xl font-bold text-amber-400">
-                    {importPreview.duplicateCards.length}
-                  </p>
-                </div>
+                {/* OPTION 2: Pre-Printed Vendor QR */}
+                <div
+                  onClick={() => {
+                    setSelectedImportMode('PREPRINTED_QR');
+                    setModalApiError(null);
+                  }}
+                  className="group relative flex flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900/60 p-5 cursor-pointer transition-all hover:border-violet-500 hover:bg-violet-950/20 hover:shadow-lg hover:shadow-violet-500/10"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="rounded-full bg-violet-500/10 border border-violet-500/30 px-2.5 py-0.5 text-[11px] font-bold text-violet-400">
+                        OPTION 2
+                      </span>
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 group-hover:scale-110 transition-transform">
+                        <QrCode className="h-5 w-5" />
+                      </div>
+                    </div>
 
-                <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs text-rose-300">
-                    <XCircle className="h-4 w-4" />
-                    <span>Invalid Format</span>
+                    <div>
+                      <h4 className="text-base font-bold text-slate-100 group-hover:text-violet-300 transition-colors">
+                        Use Pre-Printed QR
+                      </h4>
+                      <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                        Upload card numbers together with the QR codes already printed on the physical cards by your third-party card vendor.
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg bg-slate-950/60 border border-slate-800/80 p-2.5 font-mono text-[11px] text-slate-400">
+                      <span className="text-slate-500 block text-[10px] uppercase font-sans font-semibold mb-1">
+                        CSV Format:
+                      </span>
+                      cardNumber,qrCode<br />
+                      asd-001,VENDOR_QR_001<br />
+                      asd-002,VENDOR_QR_002
+                    </div>
                   </div>
-                  <p className="font-mono text-xl font-bold text-rose-400">
-                    {importPreview.invalidCards.filter((i) => !i.reason.includes('Duplicate') && !i.reason.includes('already exists')).length}
-                  </p>
+
+                  <div className="mt-4 pt-3 border-t border-slate-800/80">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      className="w-full justify-center"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedImportMode('PREPRINTED_QR');
+                        setModalApiError(null);
+                      }}
+                    >
+                      Select Pre-Printed QR Import
+                    </Button>
+                  </div>
                 </div>
               </div>
 
-              {/* Preview Filter Tabs */}
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-slate-400 font-medium">
-                    File: <strong className="text-slate-200">{importFileName || 'cards.csv'}</strong>
-                  </span>
-                  <span className="text-slate-700">|</span>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewFilter('ALL')}
-                    className={`px-2.5 py-1 rounded font-medium ${
-                      previewFilter === 'ALL'
-                        ? 'bg-violet-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    All ({importPreview.totalRows})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewFilter('VALID')}
-                    className={`px-2.5 py-1 rounded font-medium ${
-                      previewFilter === 'VALID'
-                        ? 'bg-violet-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Valid ({importPreview.validCards.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewFilter('ERRORS')}
-                    className={`px-2.5 py-1 rounded font-medium ${
-                      previewFilter === 'ERRORS'
-                        ? 'bg-violet-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Issues ({importPreview.invalidCards.length})
-                  </button>
-                </div>
-
+              <ModalFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setSelectedImportMode(null);
+                    setImportPreview(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </ModalFooter>
+            </div>
+          ) : (
+            /* STEP 2: Selected Import Interface */
+            <div className="space-y-5">
+              {/* Navigation Header with Back Button */}
+              <div className="flex items-center justify-between rounded-xl bg-slate-950/60 border border-slate-800 px-4 py-2.5">
                 <button
                   type="button"
                   onClick={() => {
+                    setSelectedImportMode(null);
+                    setImportPreview(null);
+                    setImportFileName(null);
+                    setModalApiError(null);
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-400 hover:text-violet-300 transition-colors"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Choice
+                </button>
+
+                <Badge variant="info" className="text-xs">
+                  {selectedImportMode === 'AUTO_GENERATED_QR'
+                    ? 'Option 1: Auto-Generate QR Mode'
+                    : 'Option 2: Pre-Printed Vendor QR Mode'}
+                </Badge>
+              </div>
+
+              {/* Branch Assignment & Sample CSV Download */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Select
+                    id="import-branch"
+                    label="Assign to Branch (Optional)"
+                    value={importBranchId}
+                    onChange={(e) => setImportBranchId(e.target.value)}
+                    options={[
+                      { value: '', label: 'Unassigned / Global Org' },
+                      ...branches.map((b) => ({ value: b.id, label: b.name })),
+                    ]}
+                  />
+                </div>
+
+                <div className="flex flex-col justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="md"
+                    onClick={handleDownloadSampleCsv}
+                    leftIcon={<Download className="h-4 w-4 text-violet-400" />}
+                  >
+                    Download {selectedImportMode === 'AUTO_GENERATED_QR' ? 'Auto QR' : 'Pre-Printed QR'} Sample CSV
+                  </Button>
+                </div>
+              </div>
+
+              {/* Upload Dropzone */}
+              {!importPreview ? (
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-700 bg-slate-950/60 p-8 text-center cursor-pointer transition-colors hover:border-violet-500 hover:bg-violet-950/10"
+                >
+                  <FileSpreadsheet className="h-10 w-10 text-violet-400 mb-3" />
+                  <p className="font-semibold text-slate-200 text-sm">
+                    Click to upload or drag and drop CSV file
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {selectedImportMode === 'AUTO_GENERATED_QR' ? (
+                      <>Accepts .csv with a single <code className="text-violet-300">cardNumber</code> column</>
+                    ) : (
+                      <>Accepts .csv with both <code className="text-violet-300">cardNumber</code> and <code className="text-violet-300">qrCode</code> columns</>
+                    )}
+                  </p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Import Summary Badges */}
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 space-y-1">
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-300">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span>Valid Cards</span>
+                      </div>
+                      <p className="font-mono text-xl font-bold text-emerald-400">
+                        {importPreview.validCards.length}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 space-y-1">
+                      <div className="flex items-center gap-1.5 text-xs text-amber-300">
+                        <AlertTriangle className="h-4 w-4" />
+                        <span>Duplicates</span>
+                      </div>
+                      <p className="font-mono text-xl font-bold text-amber-400">
+                        {importPreview.duplicateCards.length}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 space-y-1">
+                      <div className="flex items-center gap-1.5 text-xs text-rose-300">
+                        <XCircle className="h-4 w-4" />
+                        <span>Invalid Format</span>
+                      </div>
+                      <p className="font-mono text-xl font-bold text-rose-400">
+                        {importPreview.invalidCards.filter((i) => !i.reason.includes('Duplicate') && !i.reason.includes('already exists')).length}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Preview Filter Tabs */}
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-slate-400 font-medium">
+                        File: <strong className="text-slate-200">{importFileName || 'cards.csv'}</strong>
+                      </span>
+                      <span className="text-slate-700">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewFilter('ALL')}
+                        className={`px-2.5 py-1 rounded font-medium ${
+                          previewFilter === 'ALL'
+                            ? 'bg-violet-600 text-white'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        All ({importPreview.totalRows})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewFilter('VALID')}
+                        className={`px-2.5 py-1 rounded font-medium ${
+                          previewFilter === 'VALID'
+                            ? 'bg-violet-600 text-white'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Valid ({importPreview.validCards.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewFilter('ERRORS')}
+                        className={`px-2.5 py-1 rounded font-medium ${
+                          previewFilter === 'ERRORS'
+                            ? 'bg-violet-600 text-white'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Issues ({importPreview.invalidCards.length})
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImportPreview(null);
+                        setImportFileName(null);
+                      }}
+                      className="text-xs text-slate-400 hover:text-slate-200"
+                    >
+                      Choose Different File
+                    </button>
+                  </div>
+
+                  {/* Preview Cards List */}
+                  <div className="max-h-56 overflow-y-auto space-y-2 pr-1 rounded-xl border border-slate-800 bg-slate-950 p-3">
+                    {/* Valid Rows */}
+                    {(previewFilter === 'ALL' || previewFilter === 'VALID') &&
+                      importPreview.validEntries.map((entry) => (
+                        <div
+                          key={entry.cardNumber}
+                          className="flex items-center justify-between rounded-lg border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-xs"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <CreditCard className="h-3.5 w-3.5 text-violet-400" />
+                            <span className="font-mono font-bold text-slate-200">{entry.cardNumber}</span>
+                            {selectedImportMode === 'PREPRINTED_QR' && entry.qrToken ? (
+                              <span className="font-mono text-[11px] text-violet-300 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">
+                                QR: {entry.qrToken}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-violet-400/90 font-medium">
+                                QR: Auto-Generated
+                              </span>
+                            )}
+                          </div>
+                          <Badge variant="success" className="text-[10px]">
+                            Ready to Import
+                          </Badge>
+                        </div>
+                      ))}
+
+                    {/* Error Rows */}
+                    {(previewFilter === 'ALL' || previewFilter === 'ERRORS') &&
+                      importPreview.invalidCards.map((err, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono font-bold">{err.cardNumber}</span>
+                            {err.qrCode && <span className="font-mono text-[11px]">({err.qrCode})</span>}
+                            <span className="text-[11px] text-rose-400">(Row {err.rowNumber})</span>
+                          </div>
+                          <span className="text-[11px] text-rose-300 truncate max-w-[240px]">
+                            {err.reason}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              <ModalFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedImportMode(null);
                     setImportPreview(null);
                     setImportFileName(null);
                   }}
-                  className="text-xs text-slate-400 hover:text-slate-200"
+                  disabled={isSubmitting}
                 >
-                  Choose Different File
-                </button>
-              </div>
-
-              {/* Preview Cards List (Natural scroll with bounded height) */}
-              <div className="max-h-56 overflow-y-auto space-y-2 pr-1 rounded-xl border border-slate-800 bg-slate-950 p-3">
-                {/* Valid Rows */}
-                {(previewFilter === 'ALL' || previewFilter === 'VALID') &&
-                  (importPreview.validEntries || importPreview.validCards.map((num): { cardNumber: string; qrToken?: string } => ({ cardNumber: num }))).map((entry) => (
-                    <div
-                      key={entry.cardNumber}
-                      className="flex items-center justify-between rounded-lg border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-xs"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <CreditCard className="h-3.5 w-3.5 text-violet-400" />
-                        <span className="font-mono font-bold text-slate-200">{entry.cardNumber}</span>
-                        {entry.qrToken ? (
-                          <span className="font-mono text-[11px] text-violet-300 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">
-                            QR: {entry.qrToken}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-slate-400 italic">
-                            (Auto QR)
-                          </span>
-                        )}
-                      </div>
-                      <Badge variant="success" className="text-[10px]">
-                        READY TO IMPORT
-                      </Badge>
-                    </div>
-                  ))}
-
-                {/* Error Rows */}
-                {(previewFilter === 'ALL' || previewFilter === 'ERRORS') &&
-                  importPreview.invalidCards.map((err, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono font-bold">{err.cardNumber}</span>
-                        <span className="text-[11px] text-rose-400">(Row {err.rowNumber})</span>
-                      </div>
-                      <span className="text-[11px] text-rose-300 truncate max-w-[220px]">
-                        {err.reason}
-                      </span>
-                    </div>
-                  ))}
-              </div>
+                  Back
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={handleConfirmImport}
+                  isLoading={isSubmitting}
+                  disabled={isSubmitting || !importPreview || importPreview.validCards.length === 0}
+                >
+                  Confirm Import ({importPreview?.validCards.length || 0} Cards)
+                </Button>
+              </ModalFooter>
             </div>
           )}
-
-          <ModalFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowImportModal(false);
-                setImportPreview(null);
-              }}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleConfirmImport}
-              isLoading={isSubmitting}
-              disabled={isSubmitting || !importPreview || importPreview.validCards.length === 0}
-            >
-              Confirm Import ({importPreview?.validCards.length || 0} Cards)
-            </Button>
-          </ModalFooter>
         </div>
       </Modal>
 
