@@ -82,6 +82,12 @@ export async function createProduct(req: Request, res: Response) {
     ? category.split(',').map((s) => s.trim()).filter(Boolean)
     : ['General'];
 
+  const stockQty = Math.max(
+    0,
+    parseInt(String(req.body.initialQuantity ?? initialStock ?? 0), 10) || 0,
+  );
+  const targetBranchId = req.body.branchId;
+
   const product = await prisma.$transaction(async (tx) => {
     const p = await tx.product.create({
       data: {
@@ -95,17 +101,48 @@ export async function createProduct(req: Request, res: Response) {
       },
     });
 
-    // Auto-create inventory record for all active branches in the organization
-    const branches = await tx.branch.findMany({ where: { organizationId: orgId } });
-    for (const b of branches) {
-      await tx.branchInventory.create({
-        data: {
-          branchId: b.id,
-          productId: p.id,
-          quantity: Math.max(0, parseInt(initialStock, 10) || 0),
-          lowStockThreshold: 10,
-        },
+    // If a specific branchId is provided, initialize inventory for that branch only
+    if (targetBranchId && targetBranchId !== 'ALL') {
+      const branchExists = await tx.branch.findFirst({
+        where: { id: targetBranchId, organizationId: orgId },
       });
+      if (branchExists) {
+        await tx.branchInventory.upsert({
+          where: {
+            branchId_productId: {
+              branchId: branchExists.id,
+              productId: p.id,
+            },
+          },
+          update: { quantity: stockQty },
+          create: {
+            branchId: branchExists.id,
+            productId: p.id,
+            quantity: stockQty,
+            lowStockThreshold: 10,
+          },
+        });
+      }
+    } else {
+      // If no branchId is specified or 'ALL', auto-create inventory record for active branches
+      const branches = await tx.branch.findMany({ where: { organizationId: orgId } });
+      for (const b of branches) {
+        await tx.branchInventory.upsert({
+          where: {
+            branchId_productId: {
+              branchId: b.id,
+              productId: p.id,
+            },
+          },
+          update: { quantity: stockQty },
+          create: {
+            branchId: b.id,
+            productId: p.id,
+            quantity: stockQty,
+            lowStockThreshold: 10,
+          },
+        });
+      }
     }
 
     return p;
@@ -173,9 +210,13 @@ export async function getInventory(req: Request, res: Response) {
 
   const inventory = await prisma.branchInventory.findMany({
     where: {
+      product: {
+        organizationId: orgId,
+        status: ProductStatus.ACTIVE,
+      },
       branch: {
         organizationId: orgId,
-        id: branchId || undefined,
+        id: branchId && branchId !== 'ALL' ? branchId : undefined,
       },
     },
     include: {
