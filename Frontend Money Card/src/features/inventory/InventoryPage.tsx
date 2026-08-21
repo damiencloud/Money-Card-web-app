@@ -249,7 +249,6 @@ export function InventoryPage() {
           </div>
           <div>
             <p className="font-semibold text-slate-100">{item.productName}</p>
-            <p className="text-xs text-slate-500">ID: {item.productId}</p>
           </div>
         </div>
       ),
