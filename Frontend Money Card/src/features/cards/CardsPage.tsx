@@ -11,6 +11,7 @@ import type {
   CardStatus,
   Branch,
   CardSession,
+  Transaction,
   OrganizationOverview,
   CardImportMode,
   ImportCardEntry,
@@ -43,6 +44,11 @@ import {
   RefreshCw,
   AlertCircle,
   Building2,
+  Activity,
+  Receipt,
+  ArrowDownLeft,
+  ArrowUpRight,
+  RotateCcw,
   History,
   Upload,
   Download,
@@ -89,6 +95,8 @@ export function CardsPage() {
   // Selected State for Details & History
   const [selectedCard, setSelectedCard] = useState<CardEntity | null>(null);
   const [cardHistorySessions, setCardHistorySessions] = useState<CardSession[]>([]);
+  const [cardTransactions, setCardTransactions] = useState<Transaction[]>([]);
+  const [detailsTab, setDetailsTab] = useState<'ACTIVE' | 'SETTLED' | 'TRANSACTIONS'>('ACTIVE');
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   // Issue Form State (Supports Selection from Available vs Manual Entry)
@@ -630,11 +638,33 @@ export function CardsPage() {
     setShowDetailsModal(true);
     setIsLoadingHistory(true);
     setCardHistorySessions([]);
+    setCardTransactions([]);
+    setDetailsTab('ACTIVE');
 
     try {
       const res = await apiService.sessions.getSessions({ cardId: card.id });
-      if (res.success) {
-        setCardHistorySessions(res.data.items);
+      if (res.success && res.data?.items) {
+        const sessions: CardSession[] = res.data.items;
+        setCardHistorySessions(sessions);
+
+        // Fetch / aggregate transactions across all sessions
+        const allTx: Transaction[] = [];
+        for (const s of sessions) {
+          if (s.transactions && s.transactions.length > 0) {
+            allTx.push(...s.transactions);
+          } else {
+            try {
+              const txRes = await apiService.sessions.getSessionTransactions(s.id);
+              if (txRes.success && txRes.data) {
+                allTx.push(...txRes.data);
+              }
+            } catch {
+              // ignore single session error
+            }
+          }
+        }
+        allTx.sort((a, b) => new Date(b.timestamp || b.createdAt).getTime() - new Date(a.timestamp || a.createdAt).getTime());
+        setCardTransactions(allTx);
       }
     } catch {
       // Keep empty history array on error
@@ -1712,62 +1742,263 @@ export function CardsPage() {
               qrToken={selectedCard.qrToken}
             />
 
-            {/* Session & Card History */}
+            {/* Session History & Ledger Tabs */}
             <div className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-                <History className="h-4 w-4 text-violet-400" />
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                  Session History
-                </h4>
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div className="flex items-center gap-2">
+                  <History className="h-4 w-4 text-violet-400" />
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                    Session & Transaction History
+                  </h4>
+                </div>
+              </div>
+
+              {/* Sub-tab Switcher: Active Session | Settled Sessions | Transaction History */}
+              <div className="flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-950 p-1">
+                <button
+                  type="button"
+                  onClick={() => setDetailsTab('ACTIVE')}
+                  className={cn(
+                    'flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all',
+                    detailsTab === 'ACTIVE'
+                      ? 'bg-violet-600/30 text-violet-200 border border-violet-500/40 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/50'
+                  )}
+                >
+                  <Activity className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Active Session</span>
+                  {cardHistorySessions.some((s) => s.status === 'ACTIVE') && (
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDetailsTab('SETTLED')}
+                  className={cn(
+                    'flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all',
+                    detailsTab === 'SETTLED'
+                      ? 'bg-violet-600/30 text-violet-200 border border-violet-500/40 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/50'
+                  )}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5 text-slate-400" />
+                  <span>Settled ({cardHistorySessions.filter((s) => s.status === 'SETTLED').length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDetailsTab('TRANSACTIONS')}
+                  className={cn(
+                    'flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all',
+                    detailsTab === 'TRANSACTIONS'
+                      ? 'bg-violet-600/30 text-violet-200 border border-violet-500/40 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/50'
+                  )}
+                >
+                  <Receipt className="h-3.5 w-3.5 text-violet-400" />
+                  <span>Transactions ({cardTransactions.length})</span>
+                </button>
               </div>
 
               {isLoadingHistory ? (
-                <LoadingState message="Loading session history..." />
-              ) : cardHistorySessions.length === 0 ? (
-                <div className="rounded-lg border border-slate-800/80 bg-slate-950 p-4 text-center text-xs text-slate-500">
-                  No sessions recorded for this card yet.
-                </div>
+                <LoadingState message="Loading card history & transactions..." />
               ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {cardHistorySessions.map((session) => {
-                    const sessionBranch = branches.find((b) => b.id === session.branchId);
+                <>
+                  {/* TAB 1: ACTIVE SESSION */}
+                  {detailsTab === 'ACTIVE' && (
+                    <div className="space-y-3">
+                      {cardHistorySessions.find((s) => s.status === 'ACTIVE') ? (
+                        (() => {
+                          const activeSession = cardHistorySessions.find((s) => s.status === 'ACTIVE')!;
+                          const sessionBranch = branches.find((b) => b.id === activeSession.branchId);
 
-                    return (
-                      <div
-                        key={session.id}
-                        className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-xs"
-                      >
-                        <div className="space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge
-                              variant={session.status === 'ACTIVE' ? 'success' : 'outline'}
-                              className="text-[10px]"
+                          return (
+                            <div className="rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-4 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="success" className="text-[11px]">ACTIVE SESSION</Badge>
+                                  <span className="text-xs text-slate-300 font-medium">
+                                    {sessionBranch?.name || 'Main Branch'}
+                                  </span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-[10px] text-slate-400">Live Balance</span>
+                                  <p className="text-lg font-bold text-emerald-400 font-mono">
+                                    {formatCurrency(activeSession.balance)}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2 text-xs border-t border-emerald-900/30 pt-3">
+                                <div>
+                                  <span className="text-slate-500">Customer:</span>
+                                  <p className="font-medium text-slate-200">
+                                    {activeSession.customerName || 'Guest User'}
+                                    {activeSession.customerPhone ? ` (${activeSession.customerPhone})` : ''}
+                                  </p>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500">Session Started:</span>
+                                  <p className="font-medium text-slate-300">{formatDate(activeSession.startedAt)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()
+                      ) : (
+                        <div className="rounded-lg border border-slate-800/80 bg-slate-950 p-6 text-center text-xs text-slate-500 space-y-1">
+                          <CreditCard className="h-8 w-8 mx-auto text-slate-600 mb-2" />
+                          <p className="font-semibold text-slate-400 text-sm">No Active Session</p>
+                          <p>This physical card currently has no active session and is ready for issuance.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* TAB 2: SETTLED SESSIONS */}
+                  {detailsTab === 'SETTLED' && (
+                    <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                      {cardHistorySessions.filter((s) => s.status === 'SETTLED').length === 0 ? (
+                        <div className="rounded-lg border border-slate-800/80 bg-slate-950 p-6 text-center text-xs text-slate-500">
+                          No settled sessions recorded for this card yet.
+                        </div>
+                      ) : (
+                        cardHistorySessions
+                          .filter((s) => s.status === 'SETTLED')
+                          .map((session) => {
+                            const sessionBranch = branches.find((b) => b.id === session.branchId);
+
+                            return (
+                              <div
+                                key={session.id}
+                                className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-xs"
+                              >
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Badge variant="outline" className="text-[10px] text-slate-400 border-slate-700">
+                                      SETTLED
+                                    </Badge>
+                                    <span className="text-[11px] font-medium text-slate-300">
+                                      {sessionBranch?.name || 'Main Branch'}
+                                    </span>
+                                  </div>
+                                  {session.customerName && (
+                                    <p className="text-[11px] text-slate-400">
+                                      Customer: {session.customerName} {session.customerPhone ? `(${session.customerPhone})` : ''}
+                                    </p>
+                                  )}
+                                  <p className="text-[10px] text-slate-500">
+                                    Opened: {formatDate(session.startedAt)}
+                                    {session.settledAt ? ` • Settled: ${formatDate(session.settledAt)}` : ''}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-[10px] text-slate-500">Closing Balance</span>
+                                  <p className="font-bold text-slate-300 font-mono">
+                                    {formatCurrency(session.balance)}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })
+                      )}
+                    </div>
+                  )}
+
+                  {/* TAB 3: TRANSACTION HISTORY */}
+                  {detailsTab === 'TRANSACTIONS' && (
+                    <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                      {cardTransactions.length === 0 ? (
+                        <div className="rounded-lg border border-slate-800/80 bg-slate-950 p-6 text-center text-xs text-slate-500">
+                          No transactions recorded for this card yet.
+                        </div>
+                      ) : (
+                        cardTransactions.map((tx) => {
+                          const isRecharge = tx.type === 'RECHARGE' || tx.type === 'ISSUANCE';
+                          const isPurchase = tx.type === 'PURCHASE';
+                          const isRefund = tx.type === 'REFUND';
+
+                          return (
+                            <div
+                              key={tx.id}
+                              className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-xs"
                             >
-                              {session.status}
-                            </Badge>
-                            <span className="text-[11px] font-medium text-slate-300">
-                              {sessionBranch?.name || 'Main Branch'}
-                            </span>
-                          </div>
-                          {(session.customerName || session.customerPhone) && (
-                            <p className="text-[11px] text-slate-400">
-                              Customer: {session.customerName || 'Guest'} {session.customerPhone ? `(${session.customerPhone})` : ''}
-                            </p>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-violet-300">
-                            {formatCurrency(session.balance)}
-                          </p>
-                          <p className="text-[10px] text-slate-500">
-                            {session.status === 'ACTIVE' ? 'Started: ' : 'Settled: '}
-                            {formatDate(session.startedAt)}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className={cn(
+                                    'p-2 rounded-full',
+                                    isRecharge
+                                      ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/50'
+                                      : isPurchase
+                                        ? 'bg-rose-950/80 text-rose-400 border border-rose-800/50'
+                                        : 'bg-amber-950/80 text-amber-400 border border-amber-800/50'
+                                  )}
+                                >
+                                  {isRecharge ? (
+                                    <ArrowDownLeft className="h-4 w-4" />
+                                  ) : isPurchase ? (
+                                    <ArrowUpRight className="h-4 w-4" />
+                                  ) : (
+                                    <RotateCcw className="h-4 w-4" />
+                                  )}
+                                </div>
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-slate-200">
+                                      {tx.type === 'ISSUANCE'
+                                        ? 'Initial Card Issuance'
+                                        : tx.type === 'RECHARGE'
+                                          ? 'Card Recharge Top-up'
+                                          : tx.type === 'PURCHASE'
+                                            ? 'POS Purchase'
+                                            : 'Card Settlement & Refund'}
+                                    </span>
+                                    {tx.paymentMethod && (
+                                      <Badge variant="outline" className="text-[9px] px-1 py-0 border-slate-700 text-slate-400">
+                                        {tx.paymentMethod}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {tx.items && tx.items.length > 0 ? (
+                                    <p className="text-[11px] text-slate-400">
+                                      {tx.items.map((i) => `${i.quantity}x ${i.itemName}`).join(', ')}
+                                    </p>
+                                  ) : tx.notes ? (
+                                    <p className="text-[11px] text-slate-400">{tx.notes}</p>
+                                  ) : null}
+                                  <p className="text-[10px] text-slate-500">
+                                    {formatDate(tx.timestamp || tx.createdAt)}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p
+                                  className={cn(
+                                    'font-bold font-mono text-sm',
+                                    isRecharge
+                                      ? 'text-emerald-400'
+                                      : isPurchase
+                                        ? 'text-rose-400'
+                                        : 'text-amber-400'
+                                  )}
+                                >
+                                  {isRecharge ? '+' : isPurchase ? '-' : ''}
+                                  {formatCurrency(tx.amount)}
+                                </p>
+                                {tx.balanceAfter !== undefined && (
+                                  <p className="text-[10px] text-slate-500">
+                                    Bal: {formatCurrency(tx.balanceAfter)}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
