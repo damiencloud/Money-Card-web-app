@@ -224,7 +224,7 @@ function OrgAdminSettingsView() {
           <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
             <span className="text-sm font-medium text-slate-400">Organization ID</span>
             <code className="rounded bg-slate-950 px-2 py-0.5 text-xs text-violet-400 border border-slate-800">
-              {orgData?.id}
+              ORG-#{orgData?.id?.slice(0, 8).toUpperCase()}
             </code>
           </div>
           <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">

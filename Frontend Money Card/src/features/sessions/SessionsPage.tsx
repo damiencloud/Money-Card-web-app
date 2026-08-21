@@ -331,7 +331,7 @@ export function SessionsPage() {
           <div>
             <p className="font-mono text-sm font-bold text-slate-100">{item.physicalCardNumber}</p>
             {item.session ? (
-              <p className="font-mono text-[11px] text-slate-500">Session: {item.session.id}</p>
+              <p className="text-[11px] text-slate-400">Started: {formatDate(item.session.startedAt)}</p>
             ) : (
               <p className="text-[11px] text-amber-400/80 font-medium">Ready for Session</p>
             )}
@@ -792,7 +792,7 @@ export function SessionsPage() {
                     <div className="flex items-start gap-2.5 rounded-lg border border-slate-800 bg-slate-950 p-3 text-slate-400">
                       <SlidersHorizontal className="h-4 w-4 shrink-0 text-violet-400 mt-0.5" />
                       <span>
-                        Card Session balance belongs exclusively to session ID <code className="font-mono text-violet-300">{selectedItem.session.id}</code>. Physical card numbers represent reusable NFC card tokens.
+                        Card Session balance is live and belongs to physical card <code className="font-mono text-violet-300">{selectedItem.physicalCardNumber}</code>. Physical card numbers represent reusable NFC card tokens.
                       </span>
                     </div>
                   </div>
@@ -826,7 +826,7 @@ export function SessionsPage() {
                               )}
                               <div>
                                 <span className="font-semibold text-slate-200 uppercase tracking-wider">{txn.type}</span>
-                                <p className="text-[11px] text-slate-500 font-mono">{txn.id}</p>
+                                <p className="text-[11px] text-slate-500 font-mono">TXN-#{txn.id.slice(0, 8).toUpperCase()}</p>
                               </div>
                             </div>
 

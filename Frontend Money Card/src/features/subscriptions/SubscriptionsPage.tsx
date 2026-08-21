@@ -271,7 +271,7 @@ function OrgAdminSubscriptionsView() {
       key: 'id',
       header: 'Invoice ID',
       render: (pay: SubscriptionPayment) => (
-        <span className="font-mono text-xs font-bold text-slate-200">{pay.id}</span>
+        <span className="font-mono text-xs font-bold text-slate-200">PAY-#{pay.id.slice(0, 8).toUpperCase()}</span>
       ),
     },
     {

@@ -752,7 +752,7 @@ export function StaffPage() {
                   <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t border-slate-800 text-xs">
                     <div>
                       <span className="text-slate-400">Staff ID:</span>
-                      <p className="font-mono font-semibold text-slate-300">{selectedStaff?.id}</p>
+                      <p className="font-mono font-semibold text-slate-300">STAFF-#{selectedStaff?.id.slice(0, 8).toUpperCase()}</p>
                     </div>
                     <div>
                       <span className="text-slate-400">Created Date:</span>
@@ -912,7 +912,7 @@ export function StaffPage() {
                           </div>
                           <div>
                             <p className="font-semibold text-slate-200">{b.name}</p>
-                            <span className="text-[11px] text-slate-500">ID: {b.id}</span>
+                            <span className="text-[11px] text-slate-400">{b.name}</span>
                           </div>
                         </div>
 
@@ -1141,7 +1141,7 @@ export function StaffPage() {
                           </div>
                           <div>
                             <p className="font-semibold text-slate-200">{b.name}</p>
-                            <span className="text-[11px] text-slate-500">ID: {b.id}</span>
+                            <span className="text-[11px] text-slate-400">{b.name}</span>
                           </div>
                         </div>
 

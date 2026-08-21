@@ -229,7 +229,7 @@ export function ReportsPage() {
           </div>
           <div>
             <p className="font-semibold text-slate-100">{report.title}</p>
-            <p className="text-xs text-slate-500">Document ID: {report.id}</p>
+            <p className="text-xs text-slate-500">Document ID: DOC-#{report.id.slice(0, 8).toUpperCase()}</p>
           </div>
         </div>
       ),
@@ -433,7 +433,7 @@ export function ReportsPage() {
                       <div className="divide-y divide-slate-800/80 text-xs">
                         {previewData.transactions.slice(0, 5).map((t) => (
                           <div key={t.id} className="flex justify-between py-1.5 text-slate-400">
-                            <span className="font-mono text-slate-300">{t.id}</span>
+                            <span className="font-mono text-slate-300">TXN-#{t.id.slice(0, 8).toUpperCase()}</span>
                             <Badge variant={t.type === 'PURCHASE' ? 'success' : 'outline'}>{t.type}</Badge>
                             <span className="font-mono font-medium text-slate-200">{formatCurrency(t.amount)}</span>
                             <span className="text-[11px]">{new Date(t.createdAt).toLocaleDateString()}</span>
@@ -497,7 +497,7 @@ export function ReportsPage() {
                       <div className="divide-y divide-slate-800/80 text-xs">
                         {previewData.sessions.slice(0, 5).map((s) => (
                           <div key={s.id} className="flex justify-between py-1.5 text-slate-400">
-                            <span className="font-mono text-slate-300">{s.id}</span>
+                            <span className="font-mono text-slate-300">SESSION-#{s.id.slice(0, 8).toUpperCase()}</span>
                             <Badge variant={s.status === 'ACTIVE' ? 'success' : 'outline'}>{s.status}</Badge>
                             <span className="font-mono font-medium text-slate-200">
                               {formatCurrency(s.balance)}
