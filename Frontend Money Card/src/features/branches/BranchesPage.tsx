@@ -214,10 +214,17 @@ export function BranchesPage() {
     setShowStatusModal(true);
   };
 
+  const activeBranchesCount = branches.filter((b) => b.status === 'ACTIVE').length;
+
   const handleStatusSubmit = async () => {
     if (!selectedBranch) return;
 
     const newStatus = selectedBranch.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    if (selectedBranch.status === 'ACTIVE' && activeBranchesCount <= 1) {
+      setModalApiError('Cannot disable this branch. An organization must have at least one active branch.');
+      return;
+    }
+
     setIsSubmitting(true);
     setModalApiError(null);
 
@@ -517,11 +524,18 @@ export function BranchesPage() {
             the branch <span className="text-violet-400 font-semibold">{selectedBranch?.name}</span>?
           </p>
 
-          {selectedBranch?.status === 'ACTIVE' && (
+          {selectedBranch?.status === 'ACTIVE' && activeBranchesCount <= 1 ? (
+            <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3.5 text-sm text-rose-300">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
+              <span>
+                Cannot deactivate this branch. Your organization must have at least one active branch at all times.
+              </span>
+            </div>
+          ) : selectedBranch?.status === 'ACTIVE' ? (
             <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 p-3 rounded-lg">
               Deactivating a branch will prevent staff from operating in this branch until it is reactivated.
             </p>
-          )}
+          ) : null}
 
           <ModalFooter>
             <Button variant="outline" onClick={() => setShowStatusModal(false)} disabled={isSubmitting}>
@@ -531,7 +545,7 @@ export function BranchesPage() {
               variant={selectedBranch?.status === 'ACTIVE' ? 'danger' : 'primary'}
               onClick={handleStatusSubmit}
               isLoading={isSubmitting}
-              disabled={isSubmitting}
+              disabled={isSubmitting || (selectedBranch?.status === 'ACTIVE' && activeBranchesCount <= 1)}
             >
               Confirm {selectedBranch?.status === 'ACTIVE' ? 'Deactivation' : 'Activation'}
             </Button>

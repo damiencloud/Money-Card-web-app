@@ -109,6 +109,19 @@ export const mockBranchesHandlers = {
     }
 
     const existing = mockStore.branches[branchIndex];
+
+    if (data.status && data.status !== 'ACTIVE' && existing.status === 'ACTIVE') {
+      const activeCount = mockStore.branches.filter(
+        (b) => b.organizationId === existing.organizationId && b.status === 'ACTIVE',
+      ).length;
+      if (activeCount <= 1) {
+        return createMockError(
+          'MIN_ACTIVE_BRANCH_REQUIRED',
+          'Cannot disable this branch. An organization must have at least one active branch.',
+        );
+      }
+    }
+
     const updated: Branch = {
       ...existing,
       ...(data.name ? { name: data.name } : {}),

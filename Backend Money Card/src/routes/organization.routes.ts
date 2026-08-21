@@ -22,3 +22,4 @@ branchesRouter.get('/', getBranches);
 branchesRouter.post('/', requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN), createBranch);
 branchesRouter.get('/:id', getBranchById);
 branchesRouter.patch('/:id', requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN), updateBranch);
+branchesRouter.put('/:id', requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN), updateBranch);

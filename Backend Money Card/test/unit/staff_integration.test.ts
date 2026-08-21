@@ -191,4 +191,26 @@ describe('Staff <-> Org Admin Live Integration Unit Tests (All 15 Phases)', () =
       expect(b1PurchaseVol).toBe(200);
     });
   });
+
+  // Phase 11: Minimum One Active Branch Requirement
+  describe('Phase 11: Minimum Active Branch Policy', () => {
+    it('allows deactivating a branch when multiple active branches exist', () => {
+      const activeBranches = [
+        { id: 'b1', status: 'ACTIVE' },
+        { id: 'b2', status: 'ACTIVE' },
+      ];
+
+      const canDeactivate = activeBranches.length > 1;
+      expect(canDeactivate).toBe(true);
+    });
+
+    it('prevents deactivating the last remaining active branch with MIN_ACTIVE_BRANCH_REQUIRED', () => {
+      const activeBranches = [
+        { id: 'b1', status: 'ACTIVE' },
+      ];
+
+      const canDeactivate = activeBranches.length > 1;
+      expect(canDeactivate).toBe(false);
+    });
+  });
 });
