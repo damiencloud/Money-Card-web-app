@@ -4,6 +4,83 @@ import { sendError, sendSuccess } from '../utils/response.js';
 import { generateSessionToken } from '../utils/crypto.js';
 import { CardStatus, SessionStatus, TransactionType } from '@prisma/client';
 
+export async function listSessions(req: Request, res: Response) {
+  const orgId = req.user?.organizationId;
+  if (!orgId) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
+  }
+
+  const { status, branchId, cardId, limit = 50, page = 1, offset } = req.query;
+
+  const validStatuses = Object.values(SessionStatus);
+  if (status && status !== 'ALL' && !validStatuses.includes(status as SessionStatus)) {
+    return sendError(res, 400, 'VALIDATION_ERROR', `Invalid status filter. Allowed values: ${validStatuses.join(', ')}`);
+  }
+
+  const where: any = {
+    organizationId: orgId,
+  };
+
+  if (status && status !== 'ALL') {
+    where.status = status as SessionStatus;
+  }
+
+  if (branchId) {
+    where.branchId = String(branchId);
+  } else if (req.user?.role === 'STAFF' && req.user.assignedBranchIds && req.user.assignedBranchIds.length > 0) {
+    where.branchId = { in: req.user.assignedBranchIds };
+  }
+
+  if (cardId) {
+    where.cardId = String(cardId);
+  }
+
+  const take = Math.min(100, Math.max(1, parseInt(String(limit), 10) || 50));
+  const skip = offset ? parseInt(String(offset), 10) || 0 : (Math.max(1, parseInt(String(page), 10) || 1) - 1) * take;
+
+  try {
+    const [sessions, total] = await Promise.all([
+      prisma.cardSession.findMany({
+        where,
+        include: {
+          card: true,
+          branch: true,
+          issuedBy: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: { issuedAt: 'desc' },
+        take,
+        skip,
+      }),
+      prisma.cardSession.count({ where }),
+    ]);
+
+    const formattedSessions = sessions.map((s) => ({
+      id: s.id,
+      cardId: s.cardId,
+      physicalCardNumber: s.card?.physicalCardNumber || null,
+      branchId: s.branchId,
+      branchName: s.branch?.name || null,
+      status: s.status,
+      balance: s.balance,
+      startedAt: s.issuedAt.toISOString(),
+      settledAt: s.settledAt ? s.settledAt.toISOString() : null,
+      createdAt: s.issuedAt.toISOString(),
+      updatedAt: s.settledAt ? s.settledAt.toISOString() : s.issuedAt.toISOString(),
+      issuedBy: s.issuedBy,
+    }));
+
+    const pageNum = Math.floor(skip / take) + 1;
+    return sendSuccess(res, formattedSessions, 200, {
+      total,
+      page: pageNum,
+      limit: take,
+      totalPages: Math.ceil(total / take) || 1,
+    });
+  } catch (err: any) {
+    return sendError(res, 500, 'INTERNAL_ERROR', err?.message || 'Failed to list card sessions');
+  }
+}
+
 export async function createSession(req: Request, res: Response) {
   const orgId = req.user?.organizationId;
   if (!orgId) {

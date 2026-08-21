@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   createSession,
+  listSessions,
   getSessionById,
   getActiveSessionByQr,
   rechargeSession,
@@ -13,6 +14,7 @@ import { PermissionCode } from '@prisma/client';
 
 export const sessionsRouter = Router();
 sessionsRouter.use(requireAuth);
+sessionsRouter.get('/', requirePermission(PermissionCode.SESSION_VIEW), listSessions);
 sessionsRouter.post('/', requirePermission(PermissionCode.CARD_ISSUE), createSession);
 sessionsRouter.get('/:id', requirePermission(PermissionCode.SESSION_VIEW), getSessionById);
 sessionsRouter.get('/active/by-qr/:qrToken', requirePermission(PermissionCode.SESSION_VIEW), getActiveSessionByQr);

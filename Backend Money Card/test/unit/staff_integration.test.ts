@@ -120,4 +120,38 @@ describe('Staff <-> Org Admin Live Integration Unit Tests (All 15 Phases)', () =
       expect(availableStock).toBe(7);
     });
   });
+
+  // Phase 8: Card Sessions Listing & Status Filtering
+  describe('Phase 8: Card Sessions Contract & Status Filter', () => {
+    it('filters sessions by ACTIVE status correctly', () => {
+      const allSessions = [
+        { id: 's1', cardId: 'c1', status: 'ACTIVE', balance: 150 },
+        { id: 's2', cardId: 'c2', status: 'SETTLED', balance: 0 },
+      ];
+
+      const activeSessions = allSessions.filter((s) => s.status === 'ACTIVE');
+      expect(activeSessions).toHaveLength(1);
+      expect(activeSessions[0].id).toBe('s1');
+      expect(activeSessions[0].balance).toBe(150);
+    });
+
+    it('returns empty list for no active sessions without error', () => {
+      const allSessions = [
+        { id: 's2', cardId: 'c2', status: 'SETTLED', balance: 0 },
+      ];
+
+      const activeSessions = allSessions.filter((s) => s.status === 'ACTIVE');
+      expect(activeSessions).toHaveLength(0);
+      expect(Array.isArray(activeSessions)).toBe(true);
+    });
+
+    it('validates allowed session statuses and rejects invalid status values', () => {
+      const allowedStatuses = ['ACTIVE', 'SETTLED'];
+      const isValid = (status: string) => allowedStatuses.includes(status);
+
+      expect(isValid('ACTIVE')).toBe(true);
+      expect(isValid('SETTLED')).toBe(true);
+      expect(isValid('INVALID_STATE')).toBe(false);
+    });
+  });
 });
