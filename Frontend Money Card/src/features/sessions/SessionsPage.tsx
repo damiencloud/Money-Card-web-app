@@ -657,8 +657,8 @@ export function SessionsPage() {
                   </Badge>
                 </div>
                 {selectedItem.session ? (
-                  <p className="text-xs text-slate-400 font-mono mt-1">
-                    Session ID: {selectedItem.session.id}
+                  <p className="text-xs text-slate-400 mt-1">
+                    Status: <span className="text-emerald-400 font-medium">{selectedItem.session.status}</span> • Started {formatDate(selectedItem.session.startedAt)}
                   </p>
                 ) : (
                   <p className="text-xs text-amber-400 font-medium mt-1">
