@@ -112,6 +112,18 @@ export async function createSession(req: Request, res: Response) {
     return sendError(res, 403, 'BRANCH_ACCESS_DENIED', 'You are not assigned to this branch location');
   }
 
+  const branch = await prisma.branch.findFirst({
+    where: { id: branchId, organizationId: orgId },
+  });
+
+  if (!branch) {
+    return sendError(res, 404, 'NOT_FOUND', 'Branch not found in your organization');
+  }
+
+  if (branch.status !== 'ACTIVE') {
+    return sendError(res, 403, 'BRANCH_INACTIVE', 'This branch location is currently disabled or inactive');
+  }
+
   const initAmount = Math.max(0, parseFloat(initialAmount) || 0);
   const sessionToken = generateSessionToken();
 
@@ -234,7 +246,7 @@ export async function rechargeSession(req: Request, res: Response) {
 
   const session = await prisma.cardSession.findFirst({
     where: { id, organizationId: orgId || undefined },
-    include: { card: true },
+    include: { card: true, branch: true },
   });
 
   if (!session) {
@@ -243,6 +255,10 @@ export async function rechargeSession(req: Request, res: Response) {
 
   if (session.status !== SessionStatus.ACTIVE) {
     return sendError(res, 400, 'INVALID_STATE', 'Cannot recharge an inactive or settled session');
+  }
+
+  if (session.branch && session.branch.status !== 'ACTIVE') {
+    return sendError(res, 403, 'BRANCH_INACTIVE', 'This branch location is currently disabled or inactive');
   }
 
   if (req.user?.role === 'STAFF' && !req.user.assignedBranchIds.includes(session.branchId)) {
@@ -295,7 +311,7 @@ export async function purchaseSession(req: Request, res: Response) {
 
   const session = await prisma.cardSession.findFirst({
     where: { id, organizationId: orgId || undefined },
-    include: { card: true },
+    include: { card: true, branch: true },
   });
 
   if (!session) {
@@ -405,7 +421,7 @@ export async function returnSession(req: Request, res: Response) {
 
   const session = await prisma.cardSession.findFirst({
     where: { id, organizationId: orgId || undefined },
-    include: { card: true },
+    include: { card: true, branch: true },
   });
 
   if (!session) {

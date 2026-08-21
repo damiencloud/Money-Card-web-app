@@ -93,6 +93,14 @@ export async function getBranches(req: Request, res: Response) {
     where.organizationId = orgId;
   }
 
+  // Staff only see their assigned active branches
+  if (req.user?.role === Role.STAFF) {
+    where.status = 'ACTIVE';
+    if (req.user.assignedBranchIds && req.user.assignedBranchIds.length > 0) {
+      where.id = { in: req.user.assignedBranchIds };
+    }
+  }
+
   const branches = await prisma.branch.findMany({
     where,
     include: {

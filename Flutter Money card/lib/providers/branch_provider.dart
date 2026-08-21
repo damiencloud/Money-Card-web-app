@@ -40,20 +40,30 @@ class BranchNotifier extends StateNotifier<BranchState> {
 
   /// Immediately sync with user assigned branches (instant 0ms resolution)
   void syncWithUser(AuthUser user) {
-    if (user.assignedBranches.isNotEmpty) {
+    final activeBranches = user.assignedBranches
+        .where((b) => b.status.toUpperCase() == 'ACTIVE')
+        .toList();
+
+    if (activeBranches.isNotEmpty) {
       Branch? active = state.currentBranch;
-      if (active == null || !user.assignedBranches.any((b) => b.id == active!.id)) {
-        active = user.assignedBranches.first;
+      if (active == null || !activeBranches.any((b) => b.id == active!.id)) {
+        active = activeBranches.first;
       }
       state = state.copyWith(
-        assignedBranches: user.assignedBranches,
+        assignedBranches: activeBranches,
         currentBranch: active,
         isLoading: false,
+        error: null,
       );
     } else if (user.assignedBranchIds.isNotEmpty) {
       loadAssignedBranches(user.assignedBranchIds);
     } else {
-      state = const BranchState();
+      state = state.copyWith(
+        assignedBranches: [],
+        currentBranch: null,
+        isLoading: false,
+        error: 'Your assigned branch is currently inactive. Please contact your Organization Administrator.',
+      );
     }
   }
 

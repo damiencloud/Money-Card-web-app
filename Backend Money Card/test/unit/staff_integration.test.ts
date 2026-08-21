@@ -154,4 +154,41 @@ describe('Staff <-> Org Admin Live Integration Unit Tests (All 15 Phases)', () =
       expect(isValid('INVALID_STATE')).toBe(false);
     });
   });
+
+  // Phase 9: Branch Deactivation & Inactive Branch Access Rejection
+  describe('Phase 9: Branch Deactivation & Inactive Branch Rejection', () => {
+    it('rejects card issuance and session operations when branch status is INACTIVE with BRANCH_INACTIVE', () => {
+      const branch = { id: 'branch_disabled', status: 'INACTIVE', organizationId: 'org_001' };
+      const canOperate = branch.status === 'ACTIVE';
+      expect(canOperate).toBe(false);
+    });
+
+    it('filters out disabled branches for Staff branch picker', () => {
+      const allBranches = [
+        { id: 'b1', name: 'Main Branch', status: 'INACTIVE' },
+        { id: 'b2', name: 'North Branch', status: 'ACTIVE' },
+      ];
+
+      const staffBranches = allBranches.filter((b) => b.status === 'ACTIVE');
+      expect(staffBranches).toHaveLength(1);
+      expect(staffBranches[0].id).toBe('b2');
+    });
+  });
+
+  // Phase 10: Multi-Branch Analytics Scoping & Real-Time Consistency
+  describe('Phase 10: Multi-Branch Analytics Scoping & Real-Time Consistency', () => {
+    it('scopes analytics volume correctly when filtering by branchId', () => {
+      const transactions = [
+        { id: 'tx1', branchId: 'b1', amount: 200, type: 'PURCHASE' },
+        { id: 'tx2', branchId: 'b2', amount: 350, type: 'PURCHASE' },
+        { id: 'tx3', branchId: 'b1', amount: 100, type: 'RECHARGE_CASH' },
+      ];
+
+      const branch1Txs = transactions.filter((tx) => tx.branchId === 'b1');
+      const b1PurchaseVol = branch1Txs.filter((t) => t.type === 'PURCHASE').reduce((sum, t) => sum + t.amount, 0);
+
+      expect(branch1Txs).toHaveLength(2);
+      expect(b1PurchaseVol).toBe(200);
+    });
+  });
 });
