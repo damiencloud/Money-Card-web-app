@@ -251,8 +251,8 @@ class _BillReceiptScreenState extends State<BillReceiptScreen> {
                     const SizedBox(height: 10),
 
                     // Bill Metadata
-                    _buildReceiptRow('Bill No:', bill.transactionId),
-                    _buildReceiptRow('Card:', bill.cardIdentifier),
+                    _buildReceiptRow('Bill No:', bill.displayBillNo),
+                    _buildReceiptRow('Card:', bill.displayCardId),
                     _buildReceiptRow('Date:', '$dateStr  $timeStr'),
                     if (bill.staffName != null && bill.staffName!.isNotEmpty)
                       _buildReceiptRow('Cashier:', bill.staffName!),

@@ -93,10 +93,10 @@ class DigitalReceiptService {
                 pw.SizedBox(height: 5),
 
                 // Metadata
-                _buildMetaRow('Receipt:', bill.transactionId),
+                _buildMetaRow('Receipt:', bill.displayBillNo),
                 _buildMetaRow('Date:', dateStr),
                 _buildMetaRow('Time:', timeStr),
-                _buildMetaRow('Card:', bill.cardIdentifier),
+                _buildMetaRow('Card:', bill.displayCardId),
                 if (bill.staffName != null && bill.staffName!.isNotEmpty)
                   _buildMetaRow('Cashier:', bill.staffName!),
 
@@ -215,10 +215,10 @@ class DigitalReceiptService {
               pw.SizedBox(height: 5),
 
               // Metadata
-              _buildMetaRow('Bill No:', bill.transactionId),
+              _buildMetaRow('Bill No:', bill.displayBillNo),
               _buildMetaRow('Date:', dateStr),
               _buildMetaRow('Time:', timeStr),
-              _buildMetaRow('Card:', bill.cardIdentifier),
+              _buildMetaRow('Card:', bill.displayCardId),
               if (bill.staffName != null && bill.staffName!.isNotEmpty)
                 _buildMetaRow('Cashier:', bill.staffName!),
 

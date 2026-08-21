@@ -76,7 +76,35 @@ class ReceiptBill {
     this.sessionStatus = 'ACTIVE',
   });
 
+  
   bool get isRecharge => receiptTitle.toUpperCase().contains('RECHARGE');
+
+  String get displayCardId {
+    final raw = cardIdentifier.trim();
+    if (raw.isEmpty) return 'MC-CARD';
+    if (raw.toUpperCase().startsWith('MC-')) return raw.toUpperCase();
+    if (raw.contains('-') && raw.length > 20) {
+      final clean = raw.replaceAll('-', '');
+      return 'MC-${clean.length > 6 ? clean.substring(0, 6).toUpperCase() : clean.toUpperCase()}';
+    }
+    return raw.toUpperCase().startsWith('MC-') ? raw.toUpperCase() : 'MC-$raw';
+  }
+
+  String get displayBillNo {
+    final raw = transactionId.trim();
+    if (raw.isEmpty) return 'BILL-#001';
+    if (raw.contains('-') && raw.length > 20) {
+      final prefix = isRecharge
+          ? 'RCH'
+          : (receiptTitle.toUpperCase().contains('SETTLE') || receiptTitle.toUpperCase().contains('RETURN')
+              ? 'RET'
+              : 'BILL');
+      final clean = raw.replaceAll('-', '');
+      return '$prefix-#${clean.length > 8 ? clean.substring(0, 8).toUpperCase() : clean.toUpperCase()}';
+    }
+    return raw;
+  }
+
 
   /// Factory constructor to create a standard mock purchase bill for offline development and testing
   factory ReceiptBill.mockPurchase() {

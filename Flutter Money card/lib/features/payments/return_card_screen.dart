@@ -70,7 +70,15 @@ class _ReturnCardScreenState extends ConsumerState<ReturnCardScreen> {
     final branch = ref.read(currentBranchProvider);
     final user = ref.read(currentUserProvider);
     final session = ref.read(sessionDetailsNotifierProvider).session;
-    final cardNum = widget.physicalCardNumber ?? session?.physicalCardNumber ?? widget.sessionId;
+
+    final rawCard = widget.physicalCardNumber ?? session?.physicalCardNumber ?? session?.cardId ?? session?.id ?? widget.sessionId;
+    final cleanCard = rawCard.replaceAll('-', '');
+    final cardNum = rawCard.toUpperCase().startsWith('MC-')
+        ? rawCard
+        : (cleanCard.length > 6 ? 'MC-${cleanCard.substring(0, 6).toUpperCase()}' : 'MC-$cleanCard');
+
+    final rawTx = (session?.id ?? widget.sessionId).replaceAll('-', '');
+    final shortTxId = rawTx.length > 8 ? rawTx.substring(0, 8).toUpperCase() : rawTx.toUpperCase();
 
     final itemsList = [
       {
@@ -84,7 +92,7 @@ class _ReturnCardScreenState extends ConsumerState<ReturnCardScreen> {
     DigitalReceiptDialog.show(
       context,
       branchName: branch?.name ?? 'Main Cafeteria',
-      transactionId: 'SETTLE-${session?.id ?? widget.sessionId}',
+      transactionId: 'RET-$shortTxId',
       timestamp: DateTime.now(),
       cardIdentifier: cardNum,
       items: itemsList,

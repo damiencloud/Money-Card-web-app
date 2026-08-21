@@ -341,7 +341,7 @@ class _PosScanPurchaseScreenState extends ConsumerState<PosScanPurchaseScreen> {
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  'Card: ${_resolvedCard!.physicalCardNumber}',
+                  'Card: ${_resolvedCard!.physicalCardNumber.toUpperCase().startsWith("MC-") ? _resolvedCard!.physicalCardNumber : "MC-${_resolvedCard!.physicalCardNumber}"}',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: AppSpacing.sm),

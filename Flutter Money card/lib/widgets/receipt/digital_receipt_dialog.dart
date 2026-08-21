@@ -332,8 +332,8 @@ class _DigitalReceiptDialogState extends State<DigitalReceiptDialog> {
             const SizedBox(height: AppSpacing.md),
 
             // Metadata summary
-            _buildInfoRow('Card ID:', widget.bill.cardIdentifier),
-            _buildInfoRow(isRecharge ? 'Receipt No:' : 'Bill No:', widget.bill.transactionId),
+            _buildInfoRow('Card ID:', widget.bill.displayCardId),
+            _buildInfoRow(isRecharge ? 'Receipt No:' : 'Bill No:', widget.bill.displayBillNo),
             _buildInfoRow('Date:', dateStr),
             _buildInfoRow('Payment:', widget.bill.paymentMethod),
             if (widget.bill.paymentReference != null && widget.bill.paymentReference!.isNotEmpty)
