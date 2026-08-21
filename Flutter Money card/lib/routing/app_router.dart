@@ -134,7 +134,16 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
 
-      // Return Card Screen
+      // Return Card Screen (Supports both /app/return-card/:sessionId and /app/return/:sessionId)
+      GoRoute(
+        path: '/app/return-card/:sessionId',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          final sessionId = state.pathParameters['sessionId'] ?? '';
+          final card = state.uri.queryParameters['card'];
+          return ReturnCardScreen(sessionId: sessionId, physicalCardNumber: card);
+        },
+      ),
       GoRoute(
         path: '/app/return/:sessionId',
         parentNavigatorKey: rootNavigatorKey,

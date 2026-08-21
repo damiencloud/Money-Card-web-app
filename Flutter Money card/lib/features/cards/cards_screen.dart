@@ -183,11 +183,10 @@ class CardsScreen extends ConsumerWidget {
                       ),
                     ),
                     Text(
-                      'QR: ${card.qrToken}',
+                      card.status == CardStatus.active ? 'Active Session' : 'Ready for Issuance',
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.textSecondaryLight,
-                        fontFamily: 'monospace',
                       ),
                     ),
                   ],

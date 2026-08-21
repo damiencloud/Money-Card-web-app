@@ -202,21 +202,7 @@ class _CardDetailsScreenState extends ConsumerState<CardDetailsScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                Row(
-                  children: [
-                    const Icon(Icons.qr_code, size: 16, color: AppColors.textSecondaryLight),
-                    const SizedBox(width: AppSpacing.xs),
-                    Text(
-                      'QR: ${card.qrToken}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondaryLight,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                  ],
-                ),
+
               ],
             ),
           ),
