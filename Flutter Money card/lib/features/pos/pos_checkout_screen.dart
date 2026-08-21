@@ -518,18 +518,30 @@ class _PosCheckoutScreenState extends ConsumerState<PosCheckoutScreen> {
     }
 
     if (catalogState.filteredProducts.isEmpty) {
-      return const AppEmptyState(
-        title: 'No products found',
-        description: 'No food items match your search or filter.',
-        icon: Icons.search_off,
+      return RefreshIndicator(
+        onRefresh: () => ref.read(posCatalogNotifierProvider.notifier).loadCatalog(),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 80),
+            AppEmptyState(
+              title: 'No products found',
+              description: 'No food items match your search or filter.',
+              icon: Icons.search_off,
+            ),
+          ],
+        ),
       );
     }
 
-    return ListView.separated(
-      padding: AppSpacing.paddingMd,
-      itemCount: catalogState.filteredProducts.length,
-      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-      itemBuilder: (context, index) {
+    return RefreshIndicator(
+      onRefresh: () => ref.read(posCatalogNotifierProvider.notifier).loadCatalog(),
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: AppSpacing.paddingMd,
+        itemCount: catalogState.filteredProducts.length,
+        separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+        itemBuilder: (context, index) {
         final product = catalogState.filteredProducts[index];
         final cartItem = cartState.items[product.id];
         final quantityInCart = cartItem?.quantity ?? 0;
@@ -641,6 +653,7 @@ class _PosCheckoutScreenState extends ConsumerState<PosCheckoutScreen> {
           ),
         );
       },
+      ),
     );
   }
 }

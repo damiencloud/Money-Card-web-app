@@ -6,8 +6,10 @@ import '../../core/constants/app_spacing.dart';
 import '../../models/branch.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/branch_provider.dart';
+import '../../providers/card_operations_provider.dart';
+import '../../providers/session_operations_provider.dart';
 
-class StaffAppShell extends ConsumerWidget {
+class StaffAppShell extends ConsumerStatefulWidget {
   final Widget child;
   final String currentPath;
 
@@ -17,10 +19,37 @@ class StaffAppShell extends ConsumerWidget {
     required this.currentPath,
   });
 
+  @override
+  ConsumerState<StaffAppShell> createState() => _StaffAppShellState();
+}
+
+class _StaffAppShellState extends ConsumerState<StaffAppShell> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Programmatic refresh on app resume
+      ref.read(branchNotifierProvider.notifier).refreshBranchesSilently();
+      ref.read(sessionListNotifierProvider.notifier).loadSessions();
+      ref.read(cardListNotifierProvider.notifier).loadCards();
+    }
+  }
+
   int _calculateSelectedIndex() {
-    if (currentPath.startsWith('/app/cards')) return 1;
-    if (currentPath.startsWith('/app/sessions')) return 2;
-    if (currentPath.startsWith('/app/more')) return 3;
+    if (widget.currentPath.startsWith('/app/cards')) return 1;
+    if (widget.currentPath.startsWith('/app/sessions')) return 2;
+    if (widget.currentPath.startsWith('/app/more')) return 3;
     return 0; // Home
   }
 
@@ -30,9 +59,11 @@ class StaffAppShell extends ConsumerWidget {
         context.go('/app/home');
         break;
       case 1:
+        ref.read(cardListNotifierProvider.notifier).loadCards();
         context.go('/app/cards');
         break;
       case 2:
+        ref.read(sessionListNotifierProvider.notifier).loadSessions();
         context.go('/app/sessions');
         break;
       case 3:
@@ -42,7 +73,7 @@ class StaffAppShell extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final branchState = ref.watch(branchNotifierProvider);
     final currentBranch = branchState.currentBranch;
@@ -78,7 +109,7 @@ class StaffAppShell extends ConsumerWidget {
           _buildUserProfileMenu(context, ref, user?.name ?? 'Staff'),
         ],
       ),
-      body: SafeArea(child: child),
+      body: SafeArea(child: widget.child),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _calculateSelectedIndex(),
         onDestinationSelected: (idx) => _onItemTapped(idx, context),

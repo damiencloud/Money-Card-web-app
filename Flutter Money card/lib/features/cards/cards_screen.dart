@@ -144,18 +144,30 @@ class CardsScreen extends ConsumerWidget {
     }
 
     if (state.cards.isEmpty) {
-      return const AppEmptyState(
-        title: 'No Cards Found',
-        description: 'No cards match the selected filter.',
-        icon: Icons.credit_card_off_outlined,
+      return RefreshIndicator(
+        onRefresh: () => notifier.loadCards(),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 100),
+            AppEmptyState(
+              title: 'No Cards Found',
+              description: 'No cards match the selected filter.',
+              icon: Icons.credit_card_off_outlined,
+            ),
+          ],
+        ),
       );
     }
 
-    return ListView.separated(
-      padding: AppSpacing.paddingMd,
-      itemCount: state.cards.length,
-      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-      itemBuilder: (context, index) {
+    return RefreshIndicator(
+      onRefresh: () => notifier.loadCards(),
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: AppSpacing.paddingMd,
+        itemCount: state.cards.length,
+        separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+        itemBuilder: (context, index) {
         final card = state.cards[index];
         return AppCard(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 12),
@@ -202,6 +214,7 @@ class CardsScreen extends ConsumerWidget {
           ),
         );
       },
+      ),
     );
   }
 }

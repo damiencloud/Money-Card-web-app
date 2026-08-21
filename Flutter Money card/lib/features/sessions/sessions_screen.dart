@@ -216,27 +216,38 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
     final sessions = state.filteredSessions;
 
     if (sessions.isEmpty) {
-      if (state.searchQuery.isNotEmpty) {
-        return AppEmptyState(
-          title: 'No Matching Sessions',
-          description: 'No sessions match "${state.searchQuery}".',
-          icon: Icons.search_off,
-        );
-      }
-      return AppEmptyState(
-        title: state.statusFilter == 'ACTIVE' ? 'No Active Sessions' : 'No Sessions Found',
-        description: state.statusFilter == 'ACTIVE'
-            ? 'There are currently no active cafeteria card sessions in ${branchName ?? "this branch"}.'
-            : 'No card sessions found for the selected filter in ${branchName ?? "this branch"}.',
-        icon: Icons.account_balance_wallet_outlined,
+      return RefreshIndicator(
+        onRefresh: () => ref.read(sessionListNotifierProvider.notifier).loadSessions(),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            const SizedBox(height: 80),
+            state.searchQuery.isNotEmpty
+                ? AppEmptyState(
+                    title: 'No Matching Sessions',
+                    description: 'No sessions match "${state.searchQuery}".',
+                    icon: Icons.search_off,
+                  )
+                : AppEmptyState(
+                    title: state.statusFilter == 'ACTIVE' ? 'No Active Sessions' : 'No Sessions Found',
+                    description: state.statusFilter == 'ACTIVE'
+                        ? 'There are currently no active cafeteria card sessions in ${branchName ?? "this branch"}.'
+                        : 'No card sessions found for the selected filter in ${branchName ?? "this branch"}.',
+                    icon: Icons.account_balance_wallet_outlined,
+                  ),
+          ],
+        ),
       );
     }
 
-    return ListView.separated(
-      padding: AppSpacing.paddingMd,
-      itemCount: sessions.length,
-      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-      itemBuilder: (context, index) {
+    return RefreshIndicator(
+      onRefresh: () => ref.read(sessionListNotifierProvider.notifier).loadSessions(),
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: AppSpacing.paddingMd,
+        itemCount: sessions.length,
+        separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+        itemBuilder: (context, index) {
         final session = sessions[index];
         final isActive = session.status == SessionStatus.active;
         final cardIdentifier = session.physicalCardNumber ?? session.cardId;
@@ -408,6 +419,7 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
           ),
         );
       },
+      ),
     );
   }
 }

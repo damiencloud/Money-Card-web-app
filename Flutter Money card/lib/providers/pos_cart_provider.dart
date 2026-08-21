@@ -81,6 +81,8 @@ class PosCatalogNotifier extends StateNotifier<PosCatalogState> {
     loadProducts();
   }
 
+  Future<void> loadCatalog() => loadProducts();
+
   Future<void> loadProducts() async {
     final branchId = _currentBranchId;
     if (branchId == null) return;
