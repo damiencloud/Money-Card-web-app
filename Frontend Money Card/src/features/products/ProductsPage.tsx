@@ -1069,7 +1069,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
       <Modal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
-        title="Edit Product & Stock Level"
+        title="Edit Product"
         size="lg"
       >
         <form onSubmit={handleEditProductSubmit} className="space-y-4">
