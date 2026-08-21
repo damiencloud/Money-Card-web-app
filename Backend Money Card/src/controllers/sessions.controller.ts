@@ -215,83 +215,88 @@ export async function purchaseSession(req: Request, res: Response) {
   }
 
   // Calculate total and validate stock inside atomic transaction
-  const result = await prisma.$transaction(async (tx) => {
-    let totalCost = 0;
-    const detailedItems: any[] = [];
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      let totalCost = 0;
+      const detailedItems: any[] = [];
 
-    for (const it of items) {
-      const product = await tx.product.findUnique({
-        where: { id: it.productId },
-      });
+      for (const it of items) {
+        const product = await tx.product.findUnique({
+          where: { id: it.productId },
+        });
 
-      if (!product) {
-        throw new Error(`Product '${it.productId}' not found`);
-      }
+        if (!product) {
+          throw new Error(`Product '${it.productId}' not found`);
+        }
 
-      const qty = Math.max(1, parseInt(it.quantity, 10) || 1);
-      const itemSubtotal = product.price * qty;
-      totalCost += itemSubtotal;
+        const qty = Math.max(1, parseInt(it.quantity, 10) || 1);
+        const itemSubtotal = product.price * qty;
+        totalCost += itemSubtotal;
 
-      // Check & decrement inventory
-      const inventory = await tx.branchInventory.findUnique({
-        where: {
-          branchId_productId: {
-            branchId: session.branchId,
-            productId: product.id,
+        // Check & decrement inventory
+        const inventory = await tx.branchInventory.findUnique({
+          where: {
+            branchId_productId: {
+              branchId: session.branchId,
+              productId: product.id,
+            },
           },
-        },
-      });
+        });
 
-      if (inventory && inventory.quantity < qty) {
-        throw new Error(`Insufficient stock for '${product.itemName}'. Available: ${inventory.quantity}`);
-      }
+        if (inventory && inventory.quantity < qty) {
+          throw new Error(`Insufficient stock for '${product.itemName}'. Available: ${inventory.quantity}`);
+        }
 
-      if (inventory) {
-        await tx.branchInventory.update({
-          where: { id: inventory.id },
-          data: { quantity: { decrement: qty } },
+        if (inventory) {
+          await tx.branchInventory.update({
+            where: { id: inventory.id },
+            data: { quantity: { decrement: qty } },
+          });
+        }
+
+        detailedItems.push({
+          productId: product.id,
+          itemName: product.itemName,
+          unitPrice: product.price,
+          quantity: qty,
+          subtotal: itemSubtotal,
         });
       }
 
-      detailedItems.push({
-        productId: product.id,
-        itemName: product.itemName,
-        unitPrice: product.price,
-        quantity: qty,
-        subtotal: itemSubtotal,
+      if (session.balance < totalCost) {
+        throw new Error(`INSUFFICIENT_BALANCE: Current balance is ₹${session.balance.toFixed(2)}, required ₹${totalCost.toFixed(2)}`);
+      }
+
+      const balanceBefore = session.balance;
+      const balanceAfter = balanceBefore - totalCost;
+
+      const updatedSession = await tx.cardSession.update({
+        where: { id },
+        data: { balance: balanceAfter },
       });
-    }
 
-    if (session.balance < totalCost) {
-      throw new Error(`INSUFFICIENT_BALANCE: Current balance is ₹${session.balance.toFixed(2)}, required ₹${totalCost.toFixed(2)}`);
-    }
+      const txRecord = await tx.transaction.create({
+        data: {
+          sessionId: session.id,
+          branchId: session.branchId,
+          staffUserId: req.user?.id,
+          type: TransactionType.PURCHASE,
+          amount: totalCost,
+          balanceBefore,
+          balanceAfter,
+          paymentMethod: 'CARD_BALANCE',
+          items: detailedItems,
+        },
+      });
 
-    const balanceBefore = session.balance;
-    const balanceAfter = balanceBefore - totalCost;
-
-    const updatedSession = await tx.cardSession.update({
-      where: { id },
-      data: { balance: balanceAfter },
+      return { session: updatedSession, transaction: txRecord };
     });
 
-    const txRecord = await tx.transaction.create({
-      data: {
-        sessionId: session.id,
-        branchId: session.branchId,
-        staffUserId: req.user?.id,
-        type: TransactionType.PURCHASE,
-        amount: totalCost,
-        balanceBefore,
-        balanceAfter,
-        paymentMethod: 'CARD_BALANCE',
-        items: detailedItems,
-      },
-    });
-
-    return { session: updatedSession, transaction: txRecord };
-  });
-
-  return sendSuccess(res, result);
+    return sendSuccess(res, result);
+  } catch (err: any) {
+    const isNotFound = err.message?.includes('not found');
+    return sendError(res, isNotFound ? 404 : 400, isNotFound ? 'NOT_FOUND' : 'PURCHASE_FAILED', err.message || 'Purchase failed');
+  }
 }
 
 export async function returnSession(req: Request, res: Response) {

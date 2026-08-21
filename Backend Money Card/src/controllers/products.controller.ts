@@ -203,26 +203,44 @@ export async function getInventory(req: Request, res: Response) {
 }
 
 export async function updateInventoryStock(req: Request, res: Response) {
-  const { branchId, productId } = req.params;
+  const { branchId, productId, id } = req.params;
   const { quantity, lowStockThreshold } = req.body;
 
-  const updated = await prisma.branchInventory.upsert({
-    where: {
-      branchId_productId: { branchId, productId },
-    },
-    create: {
-      branchId,
-      productId,
-      quantity: Math.max(0, parseInt(quantity, 10) || 0),
-      lowStockThreshold: lowStockThreshold !== undefined ? parseInt(lowStockThreshold, 10) : 10,
-    },
-    update: {
-      ...(quantity !== undefined ? { quantity: Math.max(0, parseInt(quantity, 10)) } : {}),
-      ...(lowStockThreshold !== undefined ? { lowStockThreshold: parseInt(lowStockThreshold, 10) } : {}),
-    },
-  });
+  try {
+    if (id) {
+      const updated = await prisma.branchInventory.update({
+        where: { id },
+        data: {
+          ...(quantity !== undefined ? { quantity: Math.max(0, parseInt(quantity, 10)) } : {}),
+          ...(lowStockThreshold !== undefined ? { lowStockThreshold: parseInt(lowStockThreshold, 10) } : {}),
+        },
+      });
+      return sendSuccess(res, updated);
+    }
 
-  return sendSuccess(res, updated);
+    if (branchId && productId) {
+      const updated = await prisma.branchInventory.upsert({
+        where: {
+          branchId_productId: { branchId, productId },
+        },
+        create: {
+          branchId,
+          productId,
+          quantity: Math.max(0, parseInt(quantity, 10) || 0),
+          lowStockThreshold: lowStockThreshold !== undefined ? parseInt(lowStockThreshold, 10) : 10,
+        },
+        update: {
+          ...(quantity !== undefined ? { quantity: Math.max(0, parseInt(quantity, 10)) } : {}),
+          ...(lowStockThreshold !== undefined ? { lowStockThreshold: parseInt(lowStockThreshold, 10) } : {}),
+        },
+      });
+      return sendSuccess(res, updated);
+    }
+
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Missing inventory identifier');
+  } catch (err: any) {
+    return sendError(res, 404, 'INVENTORY_NOT_FOUND', err.message || 'Inventory item not found');
+  }
 }
 
 export async function getCsvTemplate(_req: Request, res: Response) {

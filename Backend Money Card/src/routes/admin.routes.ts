@@ -7,6 +7,7 @@ import {
   getOrganizationSubscription,
   updateOrganizationSubscription,
   getPlans,
+  getPlanById,
   createPlan,
   updatePlan,
   getSubscriptions,
@@ -34,6 +35,7 @@ router.get('/organizations/:id/subscription', getOrganizationSubscription);
 router.patch('/organizations/:id/subscription', updateOrganizationSubscription);
 
 router.get('/plans', getPlans);
+router.get('/plans/:id', getPlanById);
 router.post('/plans', createPlan);
 router.patch('/plans/:id', updatePlan);
 

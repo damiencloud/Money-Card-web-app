@@ -4,6 +4,7 @@ import {
   createCard,
   createCardBatch,
   getCardById,
+  resolveCard,
   blockCard,
   unblockCard,
 } from '../controllers/cards.controller.js';
@@ -15,6 +16,7 @@ export const cardsRouter = Router();
 cardsRouter.use(requireAuth);
 cardsRouter.get('/', requirePermission(PermissionCode.CARD_VIEW), getCards);
 cardsRouter.post('/', requirePermission(PermissionCode.CARD_ISSUE), createCard);
+cardsRouter.post('/resolve', requirePermission(PermissionCode.CARD_VIEW), resolveCard);
 cardsRouter.post('/batch', requirePermission(PermissionCode.CARD_ISSUE), createCardBatch);
 cardsRouter.get('/:id', requirePermission(PermissionCode.CARD_VIEW), getCardById);
 cardsRouter.post('/:id/block', requirePermission(PermissionCode.CARD_BLOCK), blockCard);

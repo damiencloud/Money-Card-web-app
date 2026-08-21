@@ -292,6 +292,45 @@ export async function getCardById(req: Request, res: Response) {
   return sendSuccess(res, card);
 }
 
+export async function resolveCard(req: Request, res: Response) {
+  const { qrToken, physicalCardNumber } = req.body;
+  const orgId = req.user?.organizationId;
+
+  if (!qrToken && !physicalCardNumber) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'qrToken or physicalCardNumber is required');
+  }
+
+  try {
+    const card = await prisma.card.findFirst({
+      where: {
+        organizationId: orgId || undefined,
+        OR: [
+          ...(qrToken ? [{ qrToken }] : []),
+          ...(physicalCardNumber ? [{ physicalCardNumber: String(physicalCardNumber).trim().toUpperCase() }] : []),
+        ],
+      },
+      include: {
+        sessions: {
+          where: { status: 'ACTIVE' },
+          orderBy: { issuedAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    if (!card) {
+      return sendError(res, 404, 'CARD_NOT_FOUND', 'Card not found');
+    }
+
+    return sendSuccess(res, {
+      card,
+      activeSession: card.sessions[0] || null,
+    });
+  } catch (err: any) {
+    return sendError(res, 400, 'RESOLVE_ERROR', err?.message || 'Failed to resolve card');
+  }
+}
+
 export async function blockCard(req: Request, res: Response) {
   const { id } = req.params;
   const orgId = req.user?.organizationId;

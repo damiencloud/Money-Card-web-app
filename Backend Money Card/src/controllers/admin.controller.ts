@@ -389,27 +389,45 @@ export async function getPlans(_req: Request, res: Response) {
   return sendSuccess(res, plans);
 }
 
+export async function getPlanById(req: Request, res: Response) {
+  const { id } = req.params;
+  const plan = await prisma.plan.findUnique({
+    where: { id },
+  });
+  if (!plan) {
+    return sendError(res, 404, 'NOT_FOUND', 'Plan not found');
+  }
+  return sendSuccess(res, plan);
+}
+
 export async function createPlan(req: Request, res: Response) {
   const { name, price, billingInterval, branchLimit, staffLimit, cardLimit, description, features, isPopular } = req.body;
   if (!name || price === undefined) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'Plan name and price are required');
   }
 
-  const plan = await prisma.plan.create({
-    data: {
-      name,
-      price: Number(price),
-      billingInterval: billingInterval || 'MONTHLY',
-      branchLimit: Number(branchLimit) || 1,
-      staffLimit: Number(staffLimit) || 5,
-      cardLimit: Number(cardLimit) || 100,
-      description,
-      features: features || [],
-      isPopular: !!isPopular,
-    },
-  });
+  try {
+    const plan = await prisma.plan.create({
+      data: {
+        name,
+        price: Number(price),
+        billingInterval: billingInterval || 'MONTHLY',
+        branchLimit: Number(branchLimit) || 1,
+        staffLimit: Number(staffLimit) || 5,
+        cardLimit: Number(cardLimit) || 100,
+        description,
+        features: features || [],
+        isPopular: !!isPopular,
+      },
+    });
 
-  return sendSuccess(res, plan, 201);
+    return sendSuccess(res, plan, 201);
+  } catch (err: any) {
+    if (err?.code === 'P2002') {
+      return sendError(res, 409, 'DUPLICATE_PLAN_NAME', `A plan with the name '${name}' already exists.`);
+    }
+    return sendError(res, 400, 'PLAN_CREATION_FAILED', err?.message || 'Failed to create plan');
+  }
 }
 
 export async function updatePlan(req: Request, res: Response) {
