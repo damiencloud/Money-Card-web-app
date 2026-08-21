@@ -238,23 +238,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: AppSpacing.lg),
 
-                    // Test Accounts Quick-Fill (Mock Development Mode only)
-                    if (AppConfig.useMockApi) ...[
-                      Container(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceVariantLight,
-                          borderRadius: AppSpacing.roundedMd,
-                          border: Border.all(color: AppColors.borderLight),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'TEST ACCOUNTS',
+                    // Live Staff Quick-Fill Helper
+                    Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceVariantLight,
+                        borderRadius: AppSpacing.roundedMd,
+                        border: Border.all(color: AppColors.borderLight),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'STAFF ACCOUNT',
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
@@ -262,64 +262,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     color: AppColors.textSecondaryLight,
                                   ),
                                 ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primaryLight,
-                                    borderRadius: BorderRadius.circular(4),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.success.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: AppColors.success.withOpacity(0.3)),
+                                ),
+                                child: const Text(
+                                  'LIVE API',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.success,
                                   ),
-                                  child: const Text(
-                                    'MOCK API',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.primaryDark,
-                                    ),
-                                  ),
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: AppSpacing.sm),
-                            Wrap(
-                              spacing: AppSpacing.xs,
-                              runSpacing: AppSpacing.xs,
-                              children: [
-                                ActionChip(
-                                  label: const Text('Staff A (Full)', style: TextStyle(fontSize: 12)),
-                                  avatar: const Icon(Icons.person, size: 14),
-                                  onPressed: () {
-                                    setState(() {
-                                      _emailController.text = 'staffa@demo.local';
-                                      _passwordController.text = 'password123';
-                                    });
-                                  },
-                                ),
-                                ActionChip(
-                                  label: const Text('Staff B (Restricted)', style: TextStyle(fontSize: 12)),
-                                  avatar: const Icon(Icons.lock_person, size: 14),
-                                  onPressed: () {
-                                    setState(() {
-                                      _emailController.text = 'staffb@demo.local';
-                                      _passwordController.text = 'password123';
-                                    });
-                                  },
-                                ),
-                                ActionChip(
-                                  label: const Text('Staff C (Other Org)', style: TextStyle(fontSize: 12)),
-                                  avatar: const Icon(Icons.business, size: 14),
-                                  onPressed: () {
-                                    setState(() {
-                                      _emailController.text = 'staffc@other.local';
-                                      _passwordController.text = 'password123';
-                                    });
-                                  },
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          ActionChip(
+                            label: const Text('staff@maincafe.com (Rahul Counter)', style: TextStyle(fontSize: 12)),
+                            avatar: const Icon(Icons.badge, size: 14, color: AppColors.primaryLight),
+                            onPressed: () {
+                              setState(() {
+                                _emailController.text = 'staff@maincafe.com';
+                                _passwordController.text = 'Staff@123';
+                              });
+                            },
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ),
