@@ -463,93 +463,112 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     }
 
     if (state.movements.isEmpty) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 80),
-          AppEmptyState(
-            title: 'No Stock Movements',
-            description: 'Stock additions, sales, and corrections will appear here.',
-            icon: Icons.history,
-          ),
-        ],
+      return RefreshIndicator(
+        onRefresh: () async {
+          await notifier.loadMovements();
+        },
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 80),
+            AppEmptyState(
+              title: 'No Stock Movements',
+              description: 'Stock additions, sales, and corrections will appear here.',
+              icon: Icons.history,
+            ),
+          ],
+        ),
       );
     }
 
-    return ListView.separated(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: AppSpacing.paddingMd,
-      itemCount: state.movements.length,
-      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-      itemBuilder: (context, index) {
-        final movement = state.movements[index];
-        final isPositive = movement.changeQuantity > 0;
+    return RefreshIndicator(
+      onRefresh: () async {
+        await notifier.loadMovements();
+      },
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: AppSpacing.paddingMd,
+        itemCount: state.movements.length,
+        separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+        itemBuilder: (context, index) {
+          final movement = state.movements[index];
+          final isPositive = movement.changeQuantity > 0;
 
-        return AppCard(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                decoration: BoxDecoration(
-                  color: isPositive ? AppColors.successLight : AppColors.errorLight,
-                  shape: BoxShape.circle,
+          return AppCard(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: isPositive ? AppColors.successLight : AppColors.errorLight,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isPositive ? Icons.add : Icons.remove,
+                    color: isPositive ? AppColors.success : AppColors.error,
+                    size: 18,
+                  ),
                 ),
-                child: Icon(
-                  isPositive ? Icons.add : Icons.remove,
-                  color: isPositive ? AppColors.success : AppColors.error,
-                  size: 18,
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        movement.productName.isNotEmpty ? movement.productName : 'Product Item',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        movement.reason != null && movement.reason!.isNotEmpty
+                            ? movement.reason!
+                            : (isPositive ? 'Stock Addition' : 'Stock Consumption'),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                          color: AppColors.textSecondaryLight,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        movement.createdAt,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textTertiaryLight,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      movement.reason != null && movement.reason!.isNotEmpty
-                          ? movement.reason!
-                          : (isPositive ? 'Stock Addition' : 'Stock Consumption'),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
+                      '${isPositive ? "+" : ""}${movement.changeQuantity}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isPositive ? AppColors.success : AppColors.error,
                       ),
                     ),
-                    const SizedBox(height: 2),
                     Text(
-                      movement.createdAt,
+                      'Balance: ${movement.balanceAfter}',
                       style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textTertiaryLight,
+                        fontSize: 12,
+                        color: AppColors.textSecondaryLight,
                       ),
                     ),
                   ],
                 ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '${isPositive ? "+" : ""}${movement.changeQuantity}',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: isPositive ? AppColors.success : AppColors.error,
-                    ),
-                  ),
-                  Text(
-                    'Balance: ${movement.balanceAfter}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondaryLight,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

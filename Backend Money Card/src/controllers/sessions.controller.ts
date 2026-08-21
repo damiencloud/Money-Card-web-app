@@ -1,3 +1,4 @@
+import { recordInventoryMovement } from './products.controller.js';
 import { Request, Response } from 'express';
 import { prisma } from '../config/database.js';
 import { sendError, sendSuccess } from '../utils/response.js';
@@ -364,9 +365,21 @@ export async function purchaseSession(req: Request, res: Response) {
         }
 
         if (inventory) {
-          await tx.branchInventory.update({
+          const updatedInv = await tx.branchInventory.update({
             where: { id: inventory.id },
             data: { quantity: { decrement: qty } },
+          });
+
+          recordInventoryMovement({
+            inventoryId: inventory.id,
+            productId: product.id,
+            productName: product.itemName,
+            branchId: session.branchId,
+            changeQuantity: -qty,
+            balanceAfter: updatedInv.quantity,
+            type: 'PURCHASE',
+            reason: `POS Sale (Card #${session.physicalCardNumber || session.id.substring(0, 8)})`,
+            staffName: (req as any).user?.name || 'Cashier Staff',
           });
         }
 

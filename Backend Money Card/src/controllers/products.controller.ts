@@ -3,6 +3,45 @@ import { prisma } from '../config/database.js';
 import { sendError, sendSuccess } from '../utils/response.js';
 import { ProductStatus } from '@prisma/client';
 
+export interface InventoryMovementRecord {
+  id: string;
+  inventoryId: string;
+  productId: string;
+  productName: string;
+  branchId: string;
+  changeQuantity: number;
+  balanceAfter: number;
+  type: 'RESTOCK' | 'MANUAL_ADJUSTMENT' | 'PURCHASE' | 'DAMAGE';
+  reason: string;
+  createdAt: string;
+  staffName: string;
+}
+
+export const inventoryMovementsStore: InventoryMovementRecord[] = [];
+
+export function recordInventoryMovement(movement: Omit<InventoryMovementRecord, 'id' | 'createdAt'> & { id?: string; createdAt?: string }) {
+  const entry: InventoryMovementRecord = {
+    id: movement.id || `mov-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    inventoryId: movement.inventoryId,
+    productId: movement.productId,
+    productName: movement.productName,
+    branchId: movement.branchId,
+    changeQuantity: movement.changeQuantity,
+    balanceAfter: movement.balanceAfter,
+    type: movement.type,
+    reason: movement.reason,
+    createdAt: movement.createdAt || new Date().toISOString(),
+    staffName: movement.staffName,
+  };
+  inventoryMovementsStore.unshift(entry); // newest first
+  if (inventoryMovementsStore.length > 1000) {
+    inventoryMovementsStore.pop();
+  }
+  return entry;
+}
+
+
+
 export async function getProducts(req: Request, res: Response) {
   const orgId = req.user?.organizationId;
   if (!orgId) {
@@ -127,21 +166,36 @@ export async function createProduct(req: Request, res: Response) {
     const allBranches = await tx.branch.findMany({ where: { organizationId: orgId } });
     for (const b of allBranches) {
       const isTarget = targetBranchId && targetBranchId !== 'ALL' ? b.id === targetBranchId : true;
-      await tx.branchInventory.upsert({
+      const initialQty = isTarget ? stockQty : 0;
+      const inv = await tx.branchInventory.upsert({
         where: {
           branchId_productId: {
             branchId: b.id,
             productId: p.id,
           },
         },
-        update: { quantity: isTarget ? stockQty : 0 },
+        update: { quantity: initialQty },
         create: {
           branchId: b.id,
           productId: p.id,
-          quantity: isTarget ? stockQty : 0,
+          quantity: initialQty,
           lowStockThreshold: 10,
         },
       });
+
+      if (initialQty > 0) {
+        recordInventoryMovement({
+          inventoryId: inv.id,
+          productId: p.id,
+          productName: p.itemName,
+          branchId: b.id,
+          changeQuantity: initialQty,
+          balanceAfter: initialQty,
+          type: 'RESTOCK',
+          reason: 'Initial Product Stock Allocation',
+          staffName: (req as any).user?.name || 'Org Admin',
+        });
+      }
     }
 
     return p;
@@ -420,6 +474,19 @@ export async function adjustInventoryStock(req: Request, res: Response) {
       include: { product: true, branch: true },
     });
 
+    const changeQty = newQty - targetInventory.quantity;
+    recordInventoryMovement({
+      inventoryId: updated.id,
+      productId: updated.productId,
+      productName: updated.product.itemName,
+      branchId: updated.branchId,
+      changeQuantity: changeQty,
+      balanceAfter: newQty,
+      type: changeQty >= 0 ? 'RESTOCK' : (reason?.toLowerCase().includes('damage') || reason?.toLowerCase().includes('waste') ? 'DAMAGE' : 'MANUAL_ADJUSTMENT'),
+      reason: reason || (changeQty >= 0 ? 'Restock / Fresh Batch' : 'Stock Adjustment'),
+      staffName: (req as any).user?.name || 'Staff',
+    });
+
     const threshold = updated.lowStockThreshold;
     const formatted = {
       id: updated.id,
@@ -461,7 +528,54 @@ export async function updateInventoryStock(req: Request, res: Response) {
 }
 
 export async function getInventoryMovements(req: Request, res: Response) {
-  return sendSuccess(res, []);
+  const orgId = req.user?.organizationId;
+  if (!orgId) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
+  }
+
+  const { branchId, inventoryId, limit = '50' } = req.query as Record<string, string>;
+
+  if (!branchId) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Branch ID is required');
+  }
+
+  let branchMovements = inventoryMovementsStore.filter((m) => m.branchId === branchId);
+
+  if (inventoryId) {
+    branchMovements = branchMovements.filter((m) => m.inventoryId === inventoryId);
+  }
+
+  // If no movements recorded yet for this branch, auto-synthesize from active inventory items
+  if (branchMovements.length === 0) {
+    const invRecords = await prisma.branchInventory.findMany({
+      where: {
+        branchId,
+        branch: { organizationId: orgId },
+        quantity: { gt: 0 },
+      },
+      include: { product: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    for (const inv of invRecords) {
+      const initialEntry = recordInventoryMovement({
+        inventoryId: inv.id,
+        productId: inv.productId,
+        productName: inv.product.itemName,
+        branchId: inv.branchId,
+        changeQuantity: inv.quantity,
+        balanceAfter: inv.quantity,
+        type: 'RESTOCK',
+        reason: 'Initial Product Stock Allocation',
+        createdAt: inv.updatedAt.toISOString(),
+        staffName: 'Org Admin',
+      });
+      branchMovements.push(initialEntry);
+    }
+  }
+
+  const numLimit = parseInt(limit, 10) || 50;
+  return sendSuccess(res, branchMovements.slice(0, numLimit));
 }
 
 export async function getCsvTemplate(_req: Request, res: Response) {
