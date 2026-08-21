@@ -114,12 +114,12 @@ export async function login(req: Request, res: Response) {
 export async function refresh(req: Request, res: Response) {
   const token = req.body?.refreshToken || req.cookies?.refreshToken;
   if (!token) {
-    return sendError(res, 401, 'UNAUTHORIZED', 'Refresh token required');
+    return sendError(res, 401, 'UNAUTHORIZED', 'Session expired. Please log in.');
   }
 
   const payload = verifyRefreshToken(token);
   if (!payload) {
-    return sendError(res, 401, 'UNAUTHORIZED', 'Invalid or expired refresh token');
+    return sendError(res, 401, 'UNAUTHORIZED', 'Session expired. Please log in.');
   }
 
   const user = await prisma.user.findUnique({

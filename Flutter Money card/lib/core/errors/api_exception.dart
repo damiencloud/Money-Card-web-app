@@ -87,7 +87,7 @@ class ApiException implements Exception {
       case 401:
         return ApiException(
           code: ApiErrorCode.unauthorized,
-          message: customMessage ?? 'Unauthorized. Please login again.',
+          message: customMessage ?? 'Session expired. Please log in.',
           statusCode: 401,
         );
       case 403:

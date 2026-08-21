@@ -65,7 +65,7 @@ enum ApiErrorCode {
       case ApiErrorCode.csvValidationError:
         return 'CSV file validation error.';
       case ApiErrorCode.unauthorized:
-        return 'Authentication required or session expired.';
+        return 'Session expired. Please log in.';
       case ApiErrorCode.forbidden:
         return 'You do not have permission to perform this action.';
       case ApiErrorCode.permissionDenied:

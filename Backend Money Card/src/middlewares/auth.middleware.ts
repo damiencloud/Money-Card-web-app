@@ -15,12 +15,12 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 
   if (!token) {
-    return sendError(res, 401, 'UNAUTHORIZED', 'Authentication token required');
+    return sendError(res, 401, 'UNAUTHORIZED', 'Session expired. Please log in.');
   }
 
   const payload = verifyAccessToken(token);
   if (!payload) {
-    return sendError(res, 401, 'UNAUTHORIZED', 'Invalid or expired authentication token');
+    return sendError(res, 401, 'UNAUTHORIZED', 'Session expired. Please log in.');
   }
 
   try {
