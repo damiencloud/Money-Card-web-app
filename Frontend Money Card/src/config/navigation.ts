@@ -70,19 +70,11 @@ export const NAVIGATION_ITEMS: NavItemConfig[] = [
   },
   {
     id: 'products',
-    label: 'Products',
+    label: 'Products & Inventory',
     path: '/products',
     iconName: 'Package',
     roles: ['ORG_ADMIN'],
     permission: 'PRODUCT_VIEW',
-  },
-  {
-    id: 'inventory',
-    label: 'Inventory',
-    path: '/inventory',
-    iconName: 'Warehouse',
-    roles: ['ORG_ADMIN'],
-    permission: 'INVENTORY_VIEW',
   },
   {
     id: 'analytics',
