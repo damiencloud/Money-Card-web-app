@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 // ─── Cards Management Page (M7) ────────────────────────────
 // Web Card Administration for ORG_ADMIN & SUPER_ADMIN.
 // Uses apiService abstraction strictly — does NOT import mock handlers directly.
@@ -52,7 +53,11 @@ import {
   Sparkles,
   QrCode,
   ArrowLeft,
+  Printer,
+  Copy,
+  Check,
 } from 'lucide-react';
+import { QRCodeCanvas } from 'qrcode.react';
 
 export function CardsPage() {
   const { hasPermission } = usePermissions();
@@ -102,7 +107,12 @@ export function CardsPage() {
   const [importPreview, setImportPreview] = useState<CardImportPreview | null>(null);
   const [importFileName, setImportFileName] = useState<string | null>(null);
   const [previewFilter, setPreviewFilter] = useState<'ALL' | 'VALID' | 'ERRORS'>('ALL');
+  const [importedCardsSuccess, setImportedCardsSuccess] = useState<CardEntity[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Single Card QR View Modal State
+  const [selectedQrCard, setSelectedQrCard] = useState<CardEntity | null>(null);
+  const [isCopiedToken, setIsCopiedToken] = useState(false);
 
   // ── Fetch Cards Data ──────────────────────────────────────
   const fetchCardsData = useCallback(async () => {
@@ -488,6 +498,94 @@ export function CardsPage() {
   };
 
   // ── Confirm Bulk Card Import ──────────────────────────────
+  // Helper to export CSV
+  const exportCardsToCsv = (cardsToExport: CardEntity[], filename: string) => {
+    const headers = 'cardNumber,qrCode,status,branchName,createdAt\n';
+    const rows = cardsToExport.map((c) => {
+      const branchName = branches.find((b) => b.id === c.currentBranchId)?.name || 'Unassigned';
+      const created = new Date(c.createdAt).toLocaleDateString();
+      return `"${c.physicalCardNumber}","${c.qrToken}","${c.status}","${branchName}","${created}"`;
+    }).join('\n');
+
+    const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Exported ${cardsToExport.length} cards to ${filename}`);
+  };
+
+  // Helper to print QR codes sheet
+  const printQrSheet = (cardsToPrint: CardEntity[], sheetTitle: string) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Unable to open print window. Please allow popups.');
+      return;
+    }
+
+    const cardsHtml = cardsToPrint.map((c) => {
+      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(c.qrToken)}`;
+      return `
+        <div style="border: 1.5px solid #334155; border-radius: 10px; padding: 12px; text-align: center; background: #ffffff; break-inside: avoid; display: flex; flex-direction: column; align-items: center;">
+          <div style="font-family: sans-serif; font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 0.5px; margin-bottom: 6px;">MONEY CARD</div>
+          <img src="${qrApiUrl}" alt="${c.physicalCardNumber}" style="width: 130px; height: 130px; margin-bottom: 8px; border: 1px solid #e2e8f0; padding: 4px; border-radius: 6px;" />
+          <div style="font-family: monospace; font-size: 13px; font-weight: 700; color: #0f172a;">${c.physicalCardNumber}</div>
+          <div style="font-family: monospace; font-size: 9px; color: #64748b; margin-top: 2px; word-break: break-all; max-width: 130px;">${c.qrToken.length > 18 ? c.qrToken.substring(0, 16) + '...' : c.qrToken}</div>
+        </div>
+      `;
+    }).join('');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${sheetTitle}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 20px; background: #f8fafc; color: #0f172a; }
+          .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #cbd5e1; padding-bottom: 12px; }
+          .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; }
+          @media print {
+            body { background: #ffffff; margin: 0; }
+            .no-print { display: none; }
+            .grid { grid-template-columns: repeat(3, 1fr); gap: 12px; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h2 style="margin: 0 0 4px;">Money Card — Physical Cards QR Sheet</h2>
+          <p style="margin: 0; font-size: 13px; color: #64748b;">Batch Total: <strong>${cardsToPrint.length} Cards</strong> | Generated on ${new Date().toLocaleString()}</p>
+          <button class="no-print" onclick="window.print()" style="margin-top: 10px; padding: 8px 18px; background: #7c3aed; color: #fff; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Print QR Sheet</button>
+        </div>
+        <div class="grid">
+          ${cardsHtml}
+        </div>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  // Helper to download single card QR as PNG
+  const downloadSingleCardQrPng = (cardNumber: string) => {
+    const canvas = document.getElementById(`qr-canvas-${cardNumber}`) as HTMLCanvasElement;
+    if (!canvas) {
+      toast.error('Could not find QR canvas');
+      return;
+    }
+    const pngUrl = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.href = pngUrl;
+    link.download = `QR_${cardNumber}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Downloaded QR for ${cardNumber}`);
+  };
+
   const handleConfirmImport = async () => {
     if (!importPreview || importPreview.validCards.length === 0 || !selectedImportMode) return;
 
@@ -661,6 +759,19 @@ export function CardsPage() {
       className: 'text-right',
       render: (card: CardEntity) => (
         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSelectedQrCard(card);
+              setIsCopiedToken(false);
+            }}
+            className="text-violet-400 hover:text-violet-300 hover:bg-violet-500/10"
+            leftIcon={<QrCode className="h-3.5 w-3.5" />}
+          >
+            QR
+          </Button>
+
           <Button
             variant="ghost"
             size="sm"
@@ -1099,8 +1210,98 @@ export function CardsPage() {
             </div>
           )}
 
-          {/* INITIAL SCREEN: Explicit 2-Option Choice */}
-          {!selectedImportMode ? (
+                    {/* SUCCESS & EXPORT SCREEN: Shown immediately after successful import */}
+          {importedCardsSuccess ? (
+            <div className="space-y-6 py-2">
+              <div className="flex flex-col items-center text-center space-y-2">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                  <CheckCircle2 className="h-8 w-8" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-100">
+                  {importedCardsSuccess.length} Cards Imported Successfully!
+                </h3>
+                <p className="text-xs text-slate-400 max-w-md">
+                  {selectedImportMode === 'AUTO_GENERATED_QR'
+                    ? 'Unique cryptographic QR codes have been generated for all cards. Download the QR mapping file or print sheet to imprint on your physical cards.'
+                    : 'Your pre-printed card numbers and vendor QR codes have been registered into the organization.'}
+                </p>
+              </div>
+
+              {/* Action Cards for Export */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-xl border border-violet-500/30 bg-violet-950/20 p-4 flex flex-col justify-between space-y-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-violet-400 font-semibold text-sm">
+                      <Download className="h-4 w-4" />
+                      <span>Download QR Mapping CSV</span>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Export CSV containing <code>cardNumber</code> and <code>qrCode</code> to send to your card printing manufacturer.
+                    </p>
+                  </div>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="w-full justify-center"
+                    onClick={() => exportCardsToCsv(importedCardsSuccess, `imported_cards_qr_${new Date().toISOString().slice(0, 10)}.csv`)}
+                    leftIcon={<Download className="h-4 w-4" />}
+                  >
+                    Export QR Mapping CSV
+                  </Button>
+                </div>
+
+                <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 flex flex-col justify-between space-y-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-slate-200 font-semibold text-sm">
+                      <Printer className="h-4 w-4 text-violet-400" />
+                      <span>Print QR Code Sheet</span>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Open a formatted, print-ready grid sheet of QR codes and card numbers for sticker or card imprinting.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-center"
+                    onClick={() => printQrSheet(importedCardsSuccess, `Money Card QR Batch (${importedCardsSuccess.length} Cards)`)}
+                    leftIcon={<Printer className="h-4 w-4 text-violet-400" />}
+                  >
+                    Open Printable QR Sheet
+                  </Button>
+                </div>
+              </div>
+
+              {/* Preview of Imported Cards */}
+              <div className="space-y-2">
+                <span className="text-xs font-semibold text-slate-400">Imported Cards Summary:</span>
+                <div className="max-h-40 overflow-y-auto space-y-1.5 rounded-xl border border-slate-800 bg-slate-950 p-2.5">
+                  {importedCardsSuccess.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between rounded-lg bg-slate-900/60 px-3 py-1.5 text-xs">
+                      <span className="font-mono font-bold text-slate-200">{c.physicalCardNumber}</span>
+                      <span className="font-mono text-[11px] text-violet-400 truncate max-w-[200px]">QR: {c.qrToken}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <ModalFooter>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setSelectedImportMode(null);
+                    setImportPreview(null);
+                    setImportFileName(null);
+                    setImportedCardsSuccess(null);
+                  }}
+                >
+                  Done
+                </Button>
+              </ModalFooter>
+            </div>
+          ) : !selectedImportMode ? (
+            /* INITIAL SCREEN: Explicit 2-Option Choice */
             <div className="space-y-4">
               <div className="text-center pb-2">
                 <p className="text-sm text-slate-300 font-medium">
@@ -1646,6 +1847,80 @@ export function CardsPage() {
           </ModalFooter>
         </div>
       </Modal>
+          {/* ── Modal: Single Card QR View & Download ── */}
+      {selectedQrCard && (
+        <Modal
+          isOpen={!!selectedQrCard}
+          onClose={() => setSelectedQrCard(null)}
+          title={`Card QR Code: ${selectedQrCard.physicalCardNumber}`}
+          description="High-resolution QR code for physical card printing and scanning."
+          size="sm"
+        >
+          <div className="flex flex-col items-center space-y-5 py-3">
+            {/* White card container for high QR scanner contrast */}
+            <div className="flex flex-col items-center rounded-2xl bg-white p-6 shadow-xl border border-slate-200">
+              <QRCodeCanvas
+                id={`qr-canvas-${selectedQrCard.physicalCardNumber}`}
+                value={selectedQrCard.qrToken}
+                size={200}
+                level="H"
+                includeMargin={true}
+              />
+              <div className="mt-3 font-mono text-base font-bold text-slate-900">
+                {selectedQrCard.physicalCardNumber}
+              </div>
+              <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">
+                {branches.find((b) => b.id === selectedQrCard.currentBranchId)?.name || 'MONEY CARD'}
+              </div>
+            </div>
+
+            {/* Token payload with copy button */}
+            <div className="w-full space-y-1.5">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span>QR Token Payload</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(selectedQrCard.qrToken);
+                    setIsCopiedToken(true);
+                    toast.success('QR Token copied to clipboard');
+                    setTimeout(() => setIsCopiedToken(false), 2000);
+                  }}
+                  className="inline-flex items-center gap-1 text-violet-400 hover:text-violet-300"
+                >
+                  {isCopiedToken ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                  <span>{isCopiedToken ? 'Copied!' : 'Copy Token'}</span>
+                </button>
+              </div>
+              <div className="rounded-lg bg-slate-950 border border-slate-800 p-2.5 font-mono text-xs text-slate-300 break-all select-all">
+                {selectedQrCard.qrToken}
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex w-full gap-3 pt-2">
+              <Button
+                variant="outline"
+                size="md"
+                className="flex-1 justify-center"
+                onClick={() => printQrSheet([selectedQrCard], `QR Card - ${selectedQrCard.physicalCardNumber}`)}
+                leftIcon={<Printer className="h-4 w-4 text-violet-400" />}
+              >
+                Print Label
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                className="flex-1 justify-center"
+                onClick={() => downloadSingleCardQrPng(selectedQrCard.physicalCardNumber)}
+                leftIcon={<Download className="h-4 w-4" />}
+              >
+                Download PNG
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
