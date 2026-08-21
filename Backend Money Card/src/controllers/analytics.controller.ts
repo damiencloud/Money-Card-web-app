@@ -174,10 +174,14 @@ export async function getOrgAnalytics(req: Request, res: Response) {
     });
   });
 
+  let cashRechargeVolume = 0;
+  let upiRechargeVolume = 0;
+
   transactions.forEach((tx) => {
     const bm = branchMetricsMap.get(tx.branchId);
+    const txType = String(tx.type || '');
 
-    if (tx.type === 'PURCHASE') {
+    if (txType === 'PURCHASE') {
       totalPurchaseVolume += tx.amount;
       if (bm) {
         bm.transactionCount++;
@@ -198,14 +202,35 @@ export async function getOrgAnalytics(req: Request, res: Response) {
           bm.peakPeriods[2].purchaseVolume += tx.amount;
         }
       }
-    } else if (tx.type === 'RECHARGE_CASH' || tx.type === 'RECHARGE_UPI') {
+    } else if (txType === 'RECHARGE_CASH' || (tx as any).paymentMethod === 'CASH' || txType === 'CASH') {
       totalRechargeVolume += tx.amount;
+      cashRechargeVolume += tx.amount;
       if (bm) {
         bm.transactionCount++;
         bm.rechargeCount++;
         bm.rechargeVolume += tx.amount;
       }
-    } else if (tx.type === 'REFUND_RETURN') {
+    } else if (txType === 'RECHARGE_UPI' || (tx as any).paymentMethod === 'UPI' || txType === 'UPI') {
+      totalRechargeVolume += tx.amount;
+      upiRechargeVolume += tx.amount;
+      if (bm) {
+        bm.transactionCount++;
+        bm.rechargeCount++;
+        bm.rechargeVolume += tx.amount;
+      }
+    } else if (txType.includes('RECHARGE') || txType === 'ISSUANCE') {
+      totalRechargeVolume += tx.amount;
+      if ((tx as any).paymentMethod === 'UPI') {
+        upiRechargeVolume += tx.amount;
+      } else {
+        cashRechargeVolume += tx.amount;
+      }
+      if (bm) {
+        bm.transactionCount++;
+        bm.rechargeCount++;
+        bm.rechargeVolume += tx.amount;
+      }
+    } else if (txType.includes('REFUND') || txType.includes('RETURN') || txType.includes('SETTLE')) {
       totalRefundVolume += tx.amount;
       if (bm) {
         bm.transactionCount++;
@@ -227,6 +252,8 @@ export async function getOrgAnalytics(req: Request, res: Response) {
   return sendSuccess(res, {
     totalTransactions: transactions.length,
     totalRechargeVolume: Number(totalRechargeVolume.toFixed(2)),
+    cashRechargeVolume: Number(cashRechargeVolume.toFixed(2)),
+    upiRechargeVolume: Number(upiRechargeVolume.toFixed(2)),
     totalPurchaseVolume: Number(totalPurchaseVolume.toFixed(2)),
     totalRefundVolume: Number(totalRefundVolume.toFixed(2)),
     activeSessionsCount,

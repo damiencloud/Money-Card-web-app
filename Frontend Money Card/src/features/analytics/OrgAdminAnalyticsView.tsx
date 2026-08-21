@@ -492,7 +492,7 @@ export function OrgAdminAnalyticsView() {
               <p className="font-mono text-2xl font-bold text-slate-100">
                 {formatCurrency(cashRechargeEstimate)}
               </p>
-              <p className="text-xs text-slate-500">~60% of total deposit volume</p>
+              
             </Card>
 
             <Card padding="md" className="space-y-3">
@@ -505,7 +505,7 @@ export function OrgAdminAnalyticsView() {
               <p className="font-mono text-2xl font-bold text-slate-100">
                 {formatCurrency(upiRechargeEstimate)}
               </p>
-              <p className="text-xs text-slate-500">~40% of total deposit volume</p>
+              
             </Card>
 
             <Card padding="md" className="space-y-3">
@@ -518,7 +518,7 @@ export function OrgAdminAnalyticsView() {
               <p className="font-mono text-2xl font-bold text-slate-100">
                 {formatCurrency(analytics.totalRefundVolume ?? 0)}
               </p>
-              <p className="text-xs text-slate-500">Settled customer refunds</p>
+              
             </Card>
           </div>
 
