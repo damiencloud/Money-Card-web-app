@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/constants/permission_constants.dart';
+import '../../models/branch.dart';
 import '../../models/inventory.dart';
 import '../../providers/branch_provider.dart';
 import '../../providers/inventory_provider.dart';
@@ -66,19 +67,30 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
   Widget build(BuildContext context) {
     final inventoryState = ref.watch(inventoryNotifierProvider);
     final notifier = ref.read(inventoryNotifierProvider.notifier);
-    final branch = ref.watch(currentBranchProvider);
+    final branchState = ref.watch(branchNotifierProvider);
+    final currentBranch = branchState.currentBranch;
+    final assignedBranches = branchState.assignedBranches;
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            const Text('Branch Inventory'),
-            if (branch != null)
-              Text(
-                'Branch: ${branch.name}',
-                style: const TextStyle(fontSize: 12, color: AppColors.primary),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Branch Inventory'),
+                  if (currentBranch != null)
+                    Text(
+                      currentBranch.name,
+                      style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
               ),
+            ),
+            if (assignedBranches.length > 1 && currentBranch != null)
+              _buildBranchSwitcher(context, ref, currentBranch, assignedBranches),
           ],
         ),
         bottom: TabBar(
@@ -98,6 +110,69 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           // Tab 2: Movement History
           _buildMovementsTab(inventoryState, notifier),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBranchSwitcher(
+    BuildContext context,
+    WidgetRef ref,
+    Branch currentBranch,
+    List<Branch> assignedBranches,
+  ) {
+    return PopupMenuButton<Branch>(
+      initialValue: currentBranch,
+      onSelected: (branch) {
+        ref.read(branchNotifierProvider.notifier).selectBranch(branch);
+      },
+      itemBuilder: (context) {
+        return assignedBranches.map((branch) {
+          final isSelected = branch.id == currentBranch.id;
+          return PopupMenuItem<Branch>(
+            value: branch,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.storefront,
+                  size: 18,
+                  color: isSelected ? AppColors.primary : AppColors.textSecondaryLight,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  branch.name,
+                  style: TextStyle(
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    color: isSelected ? AppColors.primaryDark : AppColors.textPrimaryLight,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.primaryLight,
+          borderRadius: AppSpacing.roundedSm,
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.swap_horiz, size: 16, color: AppColors.primaryDark),
+            const SizedBox(width: 4),
+            const Text(
+              'Switch Branch',
+              style: TextStyle(
+                color: AppColors.primaryDark,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Icon(Icons.arrow_drop_down, size: 16, color: AppColors.primaryDark),
+          ],
+        ),
       ),
     );
   }
@@ -162,7 +237,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         // Stock List
         Expanded(
           child: RefreshIndicator(
-            onRefresh: notifier.loadInventory,
+            onRefresh: () async {
+              await notifier.loadInventory();
+              await notifier.loadMovements();
+            },
             child: _buildStockList(context, state, notifier),
           ),
         ),
@@ -199,37 +277,50 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     }
 
     if (state.errorMessage != null) {
-      return Center(
-        child: Padding(
-          padding: AppSpacing.paddingLg,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                state.errorMessage!,
-                style: const TextStyle(color: AppColors.error),
-                textAlign: TextAlign.center,
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          const SizedBox(height: 80),
+          Center(
+            child: Padding(
+              padding: AppSpacing.paddingLg,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    state.errorMessage!,
+                    style: const TextStyle(color: AppColors.error),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  ElevatedButton(
+                    onPressed: notifier.loadInventory,
+                    child: const Text('Retry'),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppSpacing.md),
-              ElevatedButton(
-                onPressed: notifier.loadInventory,
-                child: const Text('Retry'),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       );
     }
 
     if (state.filteredItems.isEmpty) {
-      return const AppEmptyState(
-        title: 'No Stock Records Found',
-        description: 'No inventory items match the current search or status filter.',
-        icon: Icons.inventory_2_outlined,
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 80),
+          AppEmptyState(
+            title: 'No Stock Records Found',
+            description: 'No inventory items match the current search or status filter.',
+            icon: Icons.inventory_2_outlined,
+          ),
+        ],
       );
     }
 
     return ListView.separated(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: AppSpacing.paddingMd,
       itemCount: state.filteredItems.length,
       separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
@@ -294,9 +385,13 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
               // Stock Adjustment Button (INVENTORY_MANAGE guarded)
               PermissionGuard.single(
                 permission: AppPermission.inventoryManage,
-                child: IconButton(
-                  icon: const Icon(Icons.edit_note, color: AppColors.primary),
-                  tooltip: 'Adjust Stock',
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.add_shopping_cart, size: 16, color: AppColors.primary),
+                  label: const Text('Restock', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    visualDensity: VisualDensity.compact,
+                  ),
                   onPressed: () => _showAdjustStockSheet(item),
                 ),
               ),
@@ -311,15 +406,26 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     InventoryListState state,
     InventoryNotifier notifier,
   ) {
+    if (state.movements.isEmpty && state.isLoading) {
+      return const AppLoadingView(message: 'Loading movement history...');
+    }
+
     if (state.movements.isEmpty) {
-      return const AppEmptyState(
-        title: 'No Movement History',
-        description: 'Stock adjustments and purchases will appear here.',
-        icon: Icons.history,
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 80),
+          AppEmptyState(
+            title: 'No Stock Movements',
+            description: 'Stock additions, sales, and corrections will appear here.',
+            icon: Icons.history,
+          ),
+        ],
       );
     }
 
     return ListView.separated(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: AppSpacing.paddingMd,
       itemCount: state.movements.length,
       separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
@@ -334,13 +440,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
               Container(
                 padding: const EdgeInsets.all(AppSpacing.sm),
                 decoration: BoxDecoration(
-                  color: isPositive
-                      ? AppColors.successLight.withValues(alpha: 0.3)
-                      : AppColors.errorLight.withValues(alpha: 0.3),
+                  color: isPositive ? AppColors.successLight : AppColors.errorLight,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  isPositive ? Icons.arrow_upward : Icons.arrow_downward,
+                  isPositive ? Icons.add : Icons.remove,
                   color: isPositive ? AppColors.success : AppColors.error,
                   size: 18,
                 ),
@@ -351,21 +455,17 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      movement.productName,
+                      movement.reason != null && movement.reason!.isNotEmpty
+                          ? movement.reason!
+                          : (isPositive ? 'Stock Addition' : 'Stock Consumption'),
                       style: const TextStyle(
+                        fontWeight: FontWeight.w600,
                         fontSize: 14,
-                        fontWeight: FontWeight.bold,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
-                      '${movement.type.value.replaceAll("_", " ")}${movement.reason != null ? " • ${movement.reason}" : ""}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondaryLight,
-                      ),
-                    ),
-                    Text(
-                      'Time: ${movement.createdAt}',
+                      movement.createdAt,
                       style: const TextStyle(
                         fontSize: 11,
                         color: AppColors.textTertiaryLight,
@@ -412,8 +512,8 @@ class _AdjustStockBottomSheet extends ConsumerStatefulWidget {
 }
 
 class _AdjustStockBottomSheetState extends ConsumerState<_AdjustStockBottomSheet> {
-  int _adjustment = 0;
-  final _reasonController = TextEditingController(text: 'Restock');
+  int _adjustment = 10;
+  final _reasonController = TextEditingController(text: 'Restock / Fresh Batch');
 
   @override
   void dispose() {
@@ -423,7 +523,13 @@ class _AdjustStockBottomSheetState extends ConsumerState<_AdjustStockBottomSheet
 
   void _stepAdjustment(int delta) {
     setState(() {
-      _adjustment += delta;
+      _adjustment = (_adjustment + delta).clamp(-widget.item.currentStock, 99999);
+    });
+  }
+
+  void _setDirectAdjustment(int val) {
+    setState(() {
+      _adjustment = val;
     });
   }
 
@@ -446,111 +552,153 @@ class _AdjustStockBottomSheetState extends ConsumerState<_AdjustStockBottomSheet
     final inventoryState = ref.watch(inventoryNotifierProvider);
     final newStock = (widget.item.currentStock + _adjustment).clamp(0, 99999);
 
+    final quickIncrements = [5, 10, 25, 50, 100];
+    final quickReasons = ['Restock', 'Fresh Kitchen Batch', 'Vendor Delivery', 'Count Correction', 'Waste / Damaged'];
+
     return AppBottomSheet(
-      title: 'Adjust Stock',
+      title: 'Restock & Adjust Stock',
       child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            widget.item.productName,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Current Stock:'),
-              Text(
-                '${widget.item.currentStock} units',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          const Divider(height: AppSpacing.lg),
-
-          // Adjustment Steppers
-          const Text('Stock Adjustment', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              OutlinedButton(
-                onPressed: () => _stepAdjustment(-5),
-                child: const Text('-5'),
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              OutlinedButton(
-                onPressed: () => _stepAdjustment(-1),
-                child: const Text('-1'),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                child: Text(
-                  '${_adjustment >= 0 ? "+" : ""}$_adjustment',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: _adjustment >= 0 ? AppColors.primary : AppColors.error,
-                  ),
-                ),
-              ),
-              OutlinedButton(
-                onPressed: () => _stepAdjustment(1),
-                child: const Text('+1'),
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              OutlinedButton(
-                onPressed: () => _stepAdjustment(5),
-                child: const Text('+5'),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-
-          // Preview
-          Container(
-            padding: AppSpacing.paddingMd,
-            decoration: BoxDecoration(
-              color: AppColors.primaryLight,
-              borderRadius: AppSpacing.roundedSm,
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.item.productName,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            child: Row(
+            const SizedBox(height: AppSpacing.xs),
+            Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('New Stock Level:'),
+                const Text('Current Stock on Hand:', style: TextStyle(color: AppColors.textSecondaryLight)),
                 Text(
-                  '$newStock units',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: AppColors.primaryDark,
-                  ),
+                  '${widget.item.currentStock} units',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: AppSpacing.md),
+            const Divider(height: AppSpacing.lg),
 
-          // Reason Input
-          AppTextField(
-            controller: _reasonController,
-            label: 'Adjustment Reason',
-            hintText: 'e.g. Supplier delivery, damage write-off',
-          ),
-          const SizedBox(height: AppSpacing.lg),
+            // Quick Restock Presets
+            const Text('Quick Restock Quantity (+Units)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            const SizedBox(height: AppSpacing.xs),
+            Wrap(
+              spacing: 6,
+              children: quickIncrements.map((qty) {
+                final isSelected = _adjustment == qty;
+                return ActionChip(
+                  label: Text('+$qty'),
+                  backgroundColor: isSelected ? AppColors.primaryLight : AppColors.surfaceLight,
+                  labelStyle: TextStyle(
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    color: isSelected ? AppColors.primaryDark : AppColors.textPrimaryLight,
+                  ),
+                  onPressed: () => _setDirectAdjustment(qty),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: AppSpacing.sm),
 
-          // Confirm Button
-          AppButton(
-            label: 'Confirm Adjustment',
-            icon: Icons.check,
-            isLoading: inventoryState.isSubmitting,
-            onPressed: _adjustment == 0 || inventoryState.isSubmitting
-                ? null
-                : _handleConfirmAdjustment,
-          ),
-        ],
-      ),
+            // Adjustment Steppers
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                OutlinedButton(
+                  onPressed: () => _stepAdjustment(-5),
+                  child: const Text('-5'),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                OutlinedButton(
+                  onPressed: () => _stepAdjustment(-1),
+                  child: const Text('-1'),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                  child: Text(
+                    '${_adjustment >= 0 ? "+" : ""}$_adjustment',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: _adjustment >= 0 ? AppColors.primary : AppColors.error,
+                    ),
+                  ),
+                ),
+                OutlinedButton(
+                  onPressed: () => _stepAdjustment(1),
+                  child: const Text('+1'),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                OutlinedButton(
+                  onPressed: () => _stepAdjustment(5),
+                  child: const Text('+5'),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+
+            // Preview
+            Container(
+              padding: AppSpacing.paddingMd,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: AppSpacing.roundedSm,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Updated Stock After Restock:'),
+                  Text(
+                    '$newStock units',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: AppColors.primaryDark,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+
+            // Reason Quick Chips
+            const Text('Reason / Note', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            const SizedBox(height: AppSpacing.xs),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: quickReasons.map((reason) {
+                final isSelected = _reasonController.text == reason;
+                return ActionChip(
+                  label: Text(reason, style: const TextStyle(fontSize: 11)),
+                  backgroundColor: isSelected ? AppColors.primaryLight : AppColors.surfaceLight,
+                  onPressed: () {
+                    setState(() {
+                      _reasonController.text = reason;
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+
+            // Reason Custom Input
+            AppTextField(
+              controller: _reasonController,
+              label: 'Custom Note / Audit Reason',
+              hintText: 'e.g. Morning kitchen batch, fresh patties prepared',
+            ),
+            const SizedBox(height: AppSpacing.lg),
+
+            // Confirm Button
+            AppButton(
+              label: 'Confirm Restock',
+              icon: Icons.check,
+              isLoading: inventoryState.isSubmitting,
+              onPressed: _adjustment == 0 || inventoryState.isSubmitting
+                  ? null
+                  : _handleConfirmAdjustment,
+            ),
+          ],
+        ),
     );
   }
 }

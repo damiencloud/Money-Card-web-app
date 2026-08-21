@@ -9,7 +9,16 @@ import 'package:money_card_staff/models/inventory.dart';
 import 'package:money_card_staff/providers/auth_provider.dart';
 import 'package:money_card_staff/providers/branch_provider.dart';
 import 'package:money_card_staff/providers/inventory_provider.dart';
+import 'package:money_card_staff/repositories/branch_repository.dart';
 import 'package:money_card_staff/repositories/inventory_repository.dart';
+
+class FakeBranchRepository implements BranchRepository {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
+  Future<List<Branch>> getBranches({bool forceRefresh = false}) async => const [];
+}
 
 class FakeInventoryRepository implements InventoryRepository {
   List<InventoryItem> items = [
@@ -87,7 +96,7 @@ class FakeInventoryRepository implements InventoryRepository {
     movements.insert(
       0,
       InventoryMovement(
-        id: 'mov-${movements.length + 1}',
+        id: 'mov-',
         inventoryId: inventoryId,
         productId: current.productId,
         productName: current.productName,
@@ -185,25 +194,74 @@ void main() {
       expect(find.text('Stock: 42 units'), findsOneWidget);
       expect(find.text('LOW STOCK'), findsOneWidget);
 
-      // Tap Adjust Stock icon button on first item
-      await tester.tap(find.byTooltip('Adjust Stock').first);
+      // Tap Restock button on first item
+      await tester.tap(find.text('Restock').first);
       await tester.pumpAndSettle();
 
       // Bottom sheet renders
-      expect(find.text('Adjust Stock'), findsOneWidget);
-      expect(find.text('+5'), findsOneWidget);
+      expect(find.text('Restock & Adjust Stock'), findsOneWidget);
+      expect(find.text('+5'), findsWidgets);
 
-      // Tap +5
-      await tester.tap(find.text('+5'));
+      // Tap +5 stepper
+      await tester.tap(find.widgetWithText(OutlinedButton, '+5'));
       await tester.pumpAndSettle();
 
-      expect(find.text('47 units'), findsOneWidget);
+      expect(find.text('57 units'), findsOneWidget);
 
-      // Confirm Adjustment
-      await tester.tap(find.text('Confirm Adjustment'));
+      // Ensure Visible & Confirm Restock
+      await tester.ensureVisible(find.text('Confirm Restock'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirm Restock'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Stock updated to 47 units.'), findsOneWidget);
+      expect(find.text('Stock updated to 57 units.'), findsOneWidget);
+    });
+
+    testWidgets('InventoryScreen allows switching between assigned branches seamlessly', (tester) async {
+      const authorizedUser = AuthUser(
+        id: 'staff-1',
+        email: 'staff@moneycard.io',
+        name: 'Alex Morgan',
+        role: 'STAFF',
+        organizationId: 'org-1',
+        permissions: [AppPermission.inventoryView, AppPermission.inventoryManage],
+        assignedBranchIds: ['b-1', 'b-2'],
+        assignedBranches: [
+          Branch(id: 'b-1', organizationId: 'org-1', name: 'Main Central 1', status: 'ACTIVE'),
+          Branch(id: 'b-2', organizationId: 'org-1', name: 'Main Central 2', status: 'ACTIVE'),
+        ],
+      );
+
+      final inventoryNotifier = InventoryNotifier(fakeRepo, 'b-1');
+      await inventoryNotifier.loadInventory();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            currentUserProvider.overrideWithValue(authorizedUser),
+            branchNotifierProvider.overrideWith((ref) {
+              final notifier = BranchNotifier(FakeBranchRepository());
+              notifier.syncWithUser(authorizedUser);
+              return notifier;
+            }),
+            inventoryNotifierProvider.overrideWith((ref) => inventoryNotifier),
+          ],
+          child: const MaterialApp(
+            home: InventoryScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Main Central 1'), findsOneWidget);
+      expect(find.text('Switch Branch'), findsOneWidget);
+
+      // Tap Switch Branch button
+      await tester.tap(find.text('Switch Branch'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Main Central 2'), findsOneWidget);
     });
   });
 }
