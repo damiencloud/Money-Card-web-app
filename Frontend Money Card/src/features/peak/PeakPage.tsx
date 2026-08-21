@@ -192,27 +192,7 @@ export function PeakPage() {
         </span>
       ),
     },
-    {
-      key: 'peakDemandSplit',
-      header: 'Peak vs Off-Peak',
-      render: (p: ProductDemandMetric) => {
-        const peakPct = Math.round((p.peakHourQuantity / (p.quantitySold || 1)) * 100);
-        return (
-          <div className="space-y-1 w-36">
-            <div className="flex justify-between text-[11px] font-mono">
-              <span className="text-amber-400 font-semibold">{p.peakHourQuantity} peak</span>
-              <span className="text-slate-400">{p.offPeakQuantity} off</span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-              <div
-                className="h-full bg-gradient-to-r from-amber-500 to-violet-500"
-                style={{ width: `${peakPct}%` }}
-              />
-            </div>
-          </div>
-        );
-      },
-    },
+
     {
       key: 'revenue',
       header: 'Gross Revenue',
@@ -377,70 +357,42 @@ export function PeakPage() {
             />
           </div>
 
-          {/* ── Peak Period vs Off-Peak Comparison Banner ── */}
-          <div className="rounded-xl border border-violet-500/30 bg-gradient-to-r from-violet-950/40 via-slate-900 to-indigo-950/40 p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <Flame className="h-5 w-5 text-amber-400" />
-                <span className="font-bold text-slate-100 text-base">
-                  Designated Peak Window: {data.comparison.peakHoursRange}
-                </span>
-              </div>
-              <p className="text-xs text-slate-300">
-                Peak hours account for <strong className="text-amber-300">{Math.round((data.comparison.peakVolume / (data.comparison.peakVolume + data.comparison.offPeakVolume || 1)) * 100)}%</strong> of total cafeteria transaction volume.
-              </p>
-            </div>
 
-            <div className="flex items-center gap-6 text-xs">
-              <div className="border-l border-slate-800 pl-4">
-                <span className="text-slate-400">Peak Volume:</span>
-                <p className="font-mono text-sm font-bold text-amber-400">
-                  {formatCurrency(data.comparison.peakVolume)}
-                </p>
-              </div>
-              <div className="border-l border-slate-800 pl-4">
-                <span className="text-slate-400">Off-Peak Volume:</span>
-                <p className="font-mono text-sm font-bold text-slate-300">
-                  {formatCurrency(data.comparison.offPeakVolume)}
-                </p>
-              </div>
-            </div>
-          </div>
 
           {/* ── Section 1: 24-Hour Activity Heatmap / Bar Distribution ── */}
           <Card>
             <CardHeader
               title="24-Hour Traffic & Demand Distribution"
-              description="Visual activity levels per hour from 00:00 to 23:00. Highlights lunch and dinner peak operational windows."
+              description="Live transaction volume and throughput per hour from 00:00 to 23:00."
             />
             <CardContent className="space-y-6">
               {/* Hour Bars */}
-              <div className="grid grid-cols-12 sm:grid-cols-24 gap-1 items-end h-40 pt-6">
+              <div className="grid grid-cols-12 sm:grid-cols-24 gap-1.5 items-end h-44 pt-6 px-1">
                 {data.hourlyDistribution.map((hour) => {
                   const maxVol = Math.max(...data.hourlyDistribution.map((h) => h.totalVolume), 1);
-                  const heightPct = Math.max(10, Math.round((hour.totalVolume / maxVol) * 100));
+                  const hasActivity = hour.totalVolume > 0 || hour.transactionCount > 0;
+                  const heightPct = hasActivity
+                    ? Math.max(8, Math.round((hour.totalVolume / maxVol) * 100))
+                    : 3;
 
                   return (
                     <div
                       key={hour.hour}
-                      className="group relative flex flex-col items-center h-full justify-end"
+                      className="group relative flex flex-col items-center h-full justify-end cursor-pointer"
                     >
                       {/* Tooltip */}
-                      <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col rounded-lg bg-slate-900 border border-slate-700 p-2 shadow-2xl z-30 text-[10px] w-32 pointer-events-none">
-                        <span className="font-bold text-slate-100">{hour.hourLabel}</span>
-                        <span className="text-violet-300">{formatCurrency(hour.totalVolume)}</span>
-                        <span className="text-slate-400">{hour.transactionCount} transactions</span>
-                        {hour.isPeak && (
-                          <span className="text-amber-400 font-semibold mt-0.5">🔥 Peak Window</span>
-                        )}
+                      <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col rounded-lg bg-slate-900/95 backdrop-blur-md border border-slate-700 p-2.5 shadow-2xl z-30 text-[11px] w-36 pointer-events-none">
+                        <span className="font-bold text-slate-100">{hour.hourLabel} - {String((hour.hour + 1) % 24).padStart(2, '0')}:00</span>
+                        <span className="text-emerald-400 font-mono font-bold mt-0.5">{formatCurrency(hour.totalVolume)}</span>
+                        <span className="text-slate-400 text-[10px]">{hour.transactionCount} transactions</span>
                       </div>
 
                       {/* Visual Bar */}
                       <div
                         className={`w-full rounded-t transition-all duration-300 ${
-                          hour.isPeak
-                            ? 'bg-gradient-to-t from-amber-500 to-rose-500 shadow-md shadow-amber-500/20'
-                            : 'bg-violet-600/50 hover:bg-violet-500'
+                          hasActivity
+                            ? 'bg-gradient-to-t from-violet-600 to-indigo-400 hover:from-violet-500 hover:to-indigo-300 shadow-sm shadow-indigo-500/20'
+                            : 'bg-slate-800/40 hover:bg-slate-700/50'
                         }`}
                         style={{ height: `${heightPct}%` }}
                       />
@@ -454,21 +406,23 @@ export function PeakPage() {
                 })}
               </div>
 
-              {/* Legend */}
+              {/* Legend & Summary */}
               <div className="flex flex-wrap items-center justify-between border-t border-slate-800 pt-4 text-xs">
                 <div className="flex items-center gap-4 text-slate-400">
                   <span className="flex items-center gap-1.5">
-                    <span className="h-3 w-3 rounded bg-gradient-to-r from-amber-500 to-rose-500 inline-block" />
-                    Peak Operational Hours (Lunch / Dinner)
+                    <span className="h-3 w-3 rounded bg-gradient-to-t from-violet-600 to-indigo-400 inline-block" />
+                    Hourly Transaction Volume
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="h-3 w-3 rounded bg-violet-600/50 inline-block" />
-                    Standard / Off-Peak Hours
+                    <span className="h-3 w-3 rounded bg-slate-800/40 inline-block" />
+                    Zero Activity Window
                   </span>
                 </div>
-                <span className="text-slate-400 font-mono text-[11px]">
-                  Busiest Day: <strong className="text-slate-200">{data.busiestDay || 'Friday'}</strong>
-                </span>
+                <div className="flex items-center gap-3 text-slate-400 font-mono text-[11px]">
+                  <span>Busiest Hour: <strong className="text-violet-300">{data.comparison.busiestHour}</strong></span>
+                  <span>•</span>
+                  <span>Busiest Day: <strong className="text-slate-200">{data.busiestDay || 'Friday'}</strong></span>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -477,9 +431,9 @@ export function PeakPage() {
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
-                <h2 className="text-lg font-bold text-slate-100">Top Food & Item Demand During Peak</h2>
+                <h2 className="text-lg font-bold text-slate-100">Top Food & Item Demand</h2>
                 <p className="text-xs text-slate-400">
-                  Quantities sold and revenue contribution during high-volume rush periods.
+                  Item sales volume, gross revenue, and current stock status.
                 </p>
               </div>
 
