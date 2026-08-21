@@ -155,6 +155,7 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
   }
 
   Future<void> _handleQrScanned(String qrToken) async {
+    debugPrint('SCANNED QR RAW VALUE: $qrToken');
     if (_isResolvingQr || qrToken == _scannedQrToken) return;
 
     setState(() {

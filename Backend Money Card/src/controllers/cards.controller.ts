@@ -293,20 +293,34 @@ export async function getCardById(req: Request, res: Response) {
 }
 
 export async function resolveCard(req: Request, res: Response) {
-  const { qrToken, physicalCardNumber } = req.body;
+  const { qrToken, qrCode, physicalCardNumber, cardNumber } = req.body;
+  const rawInput = String(qrToken || qrCode || physicalCardNumber || cardNumber || '').trim();
   const orgId = req.user?.organizationId;
 
-  if (!qrToken && !physicalCardNumber) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'qrToken or physicalCardNumber is required');
+  if (!rawInput) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'qrToken, qrCode, or cardNumber is required');
   }
+
+  // Extract raw token if a URL or URI was scanned
+  let tokenStr = rawInput;
+  if (tokenStr.includes('/')) {
+    tokenStr = tokenStr.split('/').pop()?.split('?')[0] || tokenStr;
+  }
+  const cleanNum = rawInput.toUpperCase().replace(/\s+/g, '');
+  const prefixNum = cleanNum.startsWith('MC-') ? cleanNum : `MC-${cleanNum}`;
 
   try {
     const card = await prisma.card.findFirst({
       where: {
         organizationId: orgId || undefined,
         OR: [
-          ...(qrToken ? [{ qrToken }] : []),
-          ...(physicalCardNumber ? [{ physicalCardNumber: String(physicalCardNumber).trim().toUpperCase() }] : []),
+          { qrToken: rawInput },
+          { qrToken: tokenStr },
+          { qrToken: rawInput.toLowerCase() },
+          { physicalCardNumber: cleanNum },
+          { physicalCardNumber: prefixNum },
+          { id: rawInput },
+          { id: tokenStr },
         ],
       },
       include: {
@@ -319,7 +333,7 @@ export async function resolveCard(req: Request, res: Response) {
     });
 
     if (!card) {
-      return sendError(res, 404, 'CARD_NOT_FOUND', 'Card not found');
+      return sendError(res, 404, 'QR_NOT_REGISTERED', 'No matching card found in your organization inventory.');
     }
 
     return sendSuccess(res, {

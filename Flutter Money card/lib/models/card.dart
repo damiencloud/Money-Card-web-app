@@ -99,10 +99,11 @@ class ResolveQrResponseData {
 
   factory ResolveQrResponseData.fromJson(Map<String, dynamic> json) {
     if (json.containsKey('card') && json['card'] is Map<String, dynamic>) {
+      final sessionData = json['activeSession'] ?? json['session'];
       return ResolveQrResponseData(
         card: Card.fromJson(json['card'] as Map<String, dynamic>),
-        session: json['session'] != null && json['session'] is Map<String, dynamic>
-            ? CardSession.fromJson(json['session'] as Map<String, dynamic>)
+        session: sessionData != null && sessionData is Map<String, dynamic>
+            ? CardSession.fromJson(sessionData as Map<String, dynamic>)
             : null,
       );
     }

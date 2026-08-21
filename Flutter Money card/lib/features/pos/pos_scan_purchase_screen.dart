@@ -56,6 +56,7 @@ class _PosScanPurchaseScreenState extends ConsumerState<PosScanPurchaseScreen> {
   }
 
   Future<void> _handleQrScanned(String qrToken) async {
+    debugPrint('SCANNED QR RAW VALUE: $qrToken');
     if (_isResolving || qrToken == _scannedQrToken) return;
 
     setState(() {
