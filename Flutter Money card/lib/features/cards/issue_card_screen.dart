@@ -47,10 +47,18 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
   }
 
   Future<void> _handleConfirmIssue(Card card) async {
-    final branch = ref.read(currentBranchProvider);
+    var branch = ref.read(currentBranchProvider);
+    if (branch == null) {
+      final branchState = ref.read(branchNotifierProvider);
+      if (branchState.assignedBranches.isNotEmpty) {
+        branch = branchState.assignedBranches.first;
+        ref.read(branchNotifierProvider.notifier).selectBranch(branch);
+      }
+    }
+
     if (branch == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No active branch selected.')),
+        const SnackBar(content: Text('Please select an active branch before issuing a card.')),
       );
       return;
     }
@@ -86,7 +94,7 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Branch:'),
-                Text(branch.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(branch!.name, style: const TextStyle(fontWeight: FontWeight.w600)),
               ],
             ),
             const SizedBox(height: AppSpacing.xs),
@@ -124,7 +132,7 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
 
     final session = await ref.read(cardDetailsNotifierProvider.notifier).issueCardSession(
           cardId: card.id,
-          branchId: branch.id,
+          branchId: branch!.id,
         );
 
     if (session != null && mounted) {
@@ -144,7 +152,7 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
         context.pushReplacement(
           '/app/cards/${card.id}',
           extra: {
-            'initialCard': card.copyWith(status: CardStatus.active, currentBranchId: branch.id),
+            'initialCard': card.copyWith(status: CardStatus.active, currentBranchId: branch!.id),
             'initialSession': session,
           },
         );

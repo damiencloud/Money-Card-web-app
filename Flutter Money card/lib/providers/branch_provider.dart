@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/auth_user.dart';
 import '../models/branch.dart';
 import '../repositories/branch_repository.dart';
 import 'api_providers.dart';
@@ -36,6 +37,25 @@ class BranchNotifier extends StateNotifier<BranchState> {
   final BranchRepository _branchRepository;
 
   BranchNotifier(this._branchRepository) : super(const BranchState());
+
+  /// Immediately sync with user assigned branches (instant 0ms resolution)
+  void syncWithUser(AuthUser user) {
+    if (user.assignedBranches.isNotEmpty) {
+      Branch? active = state.currentBranch;
+      if (active == null || !user.assignedBranches.any((b) => b.id == active!.id)) {
+        active = user.assignedBranches.first;
+      }
+      state = state.copyWith(
+        assignedBranches: user.assignedBranches,
+        currentBranch: active,
+        isLoading: false,
+      );
+    } else if (user.assignedBranchIds.isNotEmpty) {
+      loadAssignedBranches(user.assignedBranchIds);
+    } else {
+      state = const BranchState();
+    }
+  }
 
   Future<void> loadAssignedBranches(List<String> assignedBranchIds) async {
     if (assignedBranchIds.isEmpty) {
@@ -84,10 +104,10 @@ final branchNotifierProvider =
   final branchRepo = ref.watch(branchRepositoryProvider);
   final notifier = BranchNotifier(branchRepo);
 
-  // Listen to auth changes and update assigned branches automatically
+  // Synchronize assigned branches immediately when user logs in or profile revalidates
   ref.listen(currentUserProvider, (previous, next) {
     if (next != null) {
-      notifier.loadAssignedBranches(next.assignedBranchIds);
+      notifier.syncWithUser(next);
     } else {
       notifier.clear();
     }

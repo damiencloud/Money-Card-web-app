@@ -1,6 +1,8 @@
 import '../core/constants/permission_constants.dart';
 
 /// Staff User representation conforming to M0 V10 Shared System Contract.
+import 'branch.dart';
+
 class AuthUser {
   final String id;
   final String email;
@@ -9,6 +11,7 @@ class AuthUser {
   final String? organizationId;
   final List<AppPermission> permissions;
   final List<String> assignedBranchIds;
+  final List<Branch> assignedBranches;
   final String? createdAt;
   final String? updatedAt;
 
@@ -20,11 +23,23 @@ class AuthUser {
     this.organizationId,
     required this.permissions,
     required this.assignedBranchIds,
+    this.assignedBranches = const [],
     this.createdAt,
     this.updatedAt,
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
+    final rawBranches = json['assignedBranches'] as List<dynamic>? ?? [];
+    final branches = rawBranches
+        .whereType<Map<String, dynamic>>()
+        .map((b) => Branch.fromJson(b))
+        .toList();
+
+    final branchIds = (json['assignedBranchIds'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        branches.map((b) => b.id).toList();
+
     return AuthUser(
       id: json['id'] as String? ?? '',
       email: json['email'] as String? ?? '',
@@ -32,10 +47,8 @@ class AuthUser {
       role: json['role'] as String? ?? 'STAFF',
       organizationId: json['organizationId'] as String?,
       permissions: AppPermission.fromStringList(json['permissions'] as List<dynamic>?),
-      assignedBranchIds: (json['assignedBranchIds'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          [],
+      assignedBranchIds: branchIds,
+      assignedBranches: branches,
       createdAt: json['createdAt'] as String?,
       updatedAt: json['updatedAt'] as String?,
     );
@@ -49,6 +62,7 @@ class AuthUser {
         'organizationId': organizationId,
         'permissions': permissions.map((p) => p.value).toList(),
         'assignedBranchIds': assignedBranchIds,
+        'assignedBranches': assignedBranches.map((b) => b.toJson()).toList(),
         if (createdAt != null) 'createdAt': createdAt,
         if (updatedAt != null) 'updatedAt': updatedAt,
       };

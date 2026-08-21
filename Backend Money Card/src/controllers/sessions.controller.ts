@@ -151,7 +151,18 @@ export async function createSession(req: Request, res: Response) {
     return createdSession;
   });
 
-  return sendSuccess(res, session, 201);
+  return sendSuccess(
+    res,
+    {
+      ...session,
+      cardId: card.id,
+      physicalCardNumber: card.physicalCardNumber,
+      startedAt: session.issuedAt.toISOString(),
+      createdAt: session.issuedAt.toISOString(),
+      updatedAt: session.issuedAt.toISOString(),
+    },
+    201,
+  );
 }
 
 export async function getSessionById(req: Request, res: Response) {
