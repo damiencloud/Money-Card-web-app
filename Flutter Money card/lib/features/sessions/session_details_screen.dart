@@ -62,7 +62,7 @@ class _SessionDetailsScreenState extends ConsumerState<SessionDetailsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Session ${session.id}'),
+        title: Text('Card ${session.physicalCardNumber ?? session.cardId}'),
       ),
       body: ListView(
         padding: AppSpacing.paddingMd,
@@ -104,7 +104,7 @@ class _SessionDetailsScreenState extends ConsumerState<SessionDetailsScreen> {
                     const Icon(Icons.credit_card, size: 16, color: AppColors.textSecondaryLight),
                     const SizedBox(width: AppSpacing.xs),
                     Text(
-                      'Card ID: ${session.cardId}',
+                      'Card: ${session.physicalCardNumber ?? session.cardId}',
                       style: const TextStyle(fontSize: 13, color: AppColors.textSecondaryLight),
                     ),
                   ],

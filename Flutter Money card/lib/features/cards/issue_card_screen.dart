@@ -81,14 +81,7 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.xs),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Card ID:'),
-                Text(card.id, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-              ],
-            ),
+
             const SizedBox(height: AppSpacing.xs),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -408,15 +401,7 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'ID: ${card.id}',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.textSecondaryLight,
-                                      fontFamily: 'monospace',
-                                    ),
-                                  ),
+
                                 ],
                               ),
                             ),
@@ -554,23 +539,7 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    'Card ID: ${resolvedCard.id}',
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      color: AppColors.textSecondaryLight,
-                    ),
-                  ),
-                  Text(
-                    'QR Token: ${resolvedCard.qrToken}',
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      color: AppColors.textSecondaryLight,
-                    ),
-                  ),
+
                   if (isAvailable) ...[
                     const SizedBox(height: AppSpacing.xs),
                     Row(

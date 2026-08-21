@@ -124,7 +124,7 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
                 controller: _searchController,
                 onChanged: notifier.setSearchQuery,
                 decoration: InputDecoration(
-                  hintText: 'Search active sessions by card or session ID...',
+                  hintText: 'Search active sessions by card number...',
                   prefixIcon: const Icon(Icons.search, size: 20),
                   isDense: true,
                   suffixIcon: _searchController.text.isNotEmpty
@@ -277,14 +277,6 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          'Session: ${session.id}',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondaryLight,
-                            fontFamily: 'monospace',
                           ),
                         ),
                       ],

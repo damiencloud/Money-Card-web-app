@@ -147,7 +147,7 @@ class _ReturnCardScreenState extends ConsumerState<ReturnCardScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        widget.physicalCardNumber ?? 'Session ${session.id}',
+                        widget.physicalCardNumber ?? 'Active Session',
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,

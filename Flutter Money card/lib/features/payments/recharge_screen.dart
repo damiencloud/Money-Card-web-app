@@ -86,7 +86,7 @@ class _RechargeScreenState extends ConsumerState<RechargeScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Session ID: ${session.id}'),
+            Text('Card: ${session.physicalCardNumber ?? widget.sessionId}'),
             if (widget.physicalCardNumber != null)
               Text('Card: ${widget.physicalCardNumber}'),
             const SizedBox(height: AppSpacing.sm),
@@ -256,7 +256,7 @@ class _RechargeScreenState extends ConsumerState<RechargeScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          widget.physicalCardNumber ?? 'Session ${session.id}',
+                          widget.physicalCardNumber ?? 'Active Session',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
