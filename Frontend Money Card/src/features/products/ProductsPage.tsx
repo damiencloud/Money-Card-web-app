@@ -1,7 +1,7 @@
 // ─── Products & Inventory Unified Hub (Org Admin) ──────────────────────────
 // Clean Separation of Responsibilities:
 // 1. PRODUCT CATALOG: View products, Add product, View details, Activate/Deactivate.
-// 2. INVENTORY & STOCK CONTROL: View inventory, Adjust stock, CSV Import, Asset Valuation.
+// 2. INVENTORY & STOCK CONTROL: View real-time stock levels, Adjust stock, Valuation.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -22,7 +22,6 @@ import {
 } from '@/components/ui';
 import { DataTable } from '@/components/tables';
 import { notify, formatCurrency } from '@/utils';
-import { CsvImportModal } from '@/features/inventory/CsvImportModal';
 import { UnauthorizedPage } from '@/features/auth';
 import { CategorySelector } from './CategorySelector';
 import {
@@ -30,10 +29,8 @@ import {
   Warehouse,
   Plus,
   Search,
-  FileSpreadsheet,
   AlertCircle,
   Power,
-  Download,
   Building2,
   Sliders,
   TrendingUp,
@@ -61,7 +58,6 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
   const canManageProducts = hasPermission('PRODUCT_MANAGE');
   const canViewInventory = hasPermission('INVENTORY_VIEW');
   const canManageInventory = hasPermission('INVENTORY_MANAGE');
-  const canImport = hasPermission('INVENTORY_IMPORT');
 
   // Tab state (syncs with query param ?tab=products | ?tab=inventory)
   const initialTab = defaultTab || (searchParams.get('tab') === 'inventory' ? 'inventory' : 'products');
@@ -107,7 +103,6 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
   const [inventoryStatusFilter, setInventoryStatusFilter] = useState('ALL');
 
   const [showAdjustModal, setShowAdjustModal] = useState(false);
-  const [showCsvModal, setShowCsvModal] = useState(false);
   const [selectedInventory, setSelectedInventory] = useState<InventoryItemWithDetails | null>(null);
 
   const [adjustQtyInput, setAdjustQtyInput] = useState('');
@@ -186,10 +181,10 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
 
         return {
           ...item,
-          productName: prod?.itemName || `Product ${item.productId}`,
-          category: prod?.category || ['General'],
-          price: prod?.price || 0,
-          branchName: br?.name || 'Main Branch',
+          productName: prod?.itemName || item.productName || `Product ${item.productId}`,
+          category: prod?.category || item.category || ['General'],
+          price: prod?.price || item.price || 0,
+          branchName: br?.name || item.branchName || 'Main Branch',
         };
       });
 
@@ -352,30 +347,6 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
       setInventoryModalApiError('An unexpected error occurred. Please try again.');
     } finally {
       setIsInventorySubmitting(false);
-    }
-  };
-
-  const handleDownloadTemplate = async () => {
-    try {
-      const res = await apiService.inventory.getImportTemplate();
-      if (!res.success) {
-        notify.error('Failed to generate CSV template');
-        return;
-      }
-
-      const blob = new Blob([res.data.templateCsv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', res.data.filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      notify.success('CSV import template downloaded');
-    } catch {
-      notify.error('An error occurred while downloading template.');
     }
   };
 
@@ -609,28 +580,6 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
               Add Product
             </Button>
           )}
-
-          {activeTab === 'inventory' && (
-            <>
-              <Button
-                variant="outline"
-                onClick={handleDownloadTemplate}
-                leftIcon={<Download className="h-4 w-4" />}
-              >
-                CSV Template
-              </Button>
-
-              {canImport && (
-                <Button
-                  variant="primary"
-                  onClick={() => setShowCsvModal(true)}
-                  leftIcon={<FileSpreadsheet className="h-4 w-4" />}
-                >
-                  Import Stock CSV
-                </Button>
-              )}
-            </>
-          )}
         </div>
       </div>
 
@@ -667,7 +616,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
         </button>
       </div>
 
-      {/* ─── TAB 1: PRODUCT CATALOG (NO EDIT & NO STOCK BUTTONS) ─── */}
+      {/* ─── TAB 1: PRODUCT CATALOG ─── */}
       {activeTab === 'products' && (
         <div className="space-y-6">
           {/* Summary Metric Cards (Clean 3-Card Grid) */}
@@ -1047,18 +996,6 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
           </ModalFooter>
         </form>
       </Modal>
-
-      {/* ─── CSV IMPORT MODAL ─── */}
-      <CsvImportModal
-        isOpen={showCsvModal}
-        onClose={() => setShowCsvModal(false)}
-        branches={branches}
-        currentBranchId={branchFilter !== 'ALL' ? branchFilter : currentBranch?.id}
-        onSuccess={() => {
-          fetchInventoryData();
-          fetchProductsData();
-        }}
-      />
     </div>
   );
 }
