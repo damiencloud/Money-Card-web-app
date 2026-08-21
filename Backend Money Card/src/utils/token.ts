@@ -11,12 +11,12 @@ export interface TokenPayload {
 }
 
 export function generateAccessToken(payload: TokenPayload): string {
-  const expiresIn = (env.JWT_ACCESS_EXPIRES_IN || '15m') as jwt.SignOptions['expiresIn'];
+  const expiresIn = (env.JWT_ACCESS_EXPIRES_IN || '24h') as jwt.SignOptions['expiresIn'];
   return jwt.sign(payload, env.JWT_SECRET, { expiresIn });
 }
 
 export function generateRefreshToken(payload: TokenPayload): string {
-  const expiresIn = (env.JWT_REFRESH_EXPIRES_IN || '7d') as jwt.SignOptions['expiresIn'];
+  const expiresIn = (env.JWT_REFRESH_EXPIRES_IN || '30d') as jwt.SignOptions['expiresIn'];
   return jwt.sign(payload, env.JWT_REFRESH_SECRET, { expiresIn });
 }
 

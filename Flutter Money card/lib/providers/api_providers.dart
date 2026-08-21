@@ -31,15 +31,32 @@ final Provider<void Function()?> sessionExpiredCallbackProvider =
 final Provider<Future<String?> Function(String)?> refreshTokenCallbackProvider =
     Provider<Future<String?> Function(String)?>((ref) => null);
 
-/// Provider for configured Dio HTTP Client
+/// Provider for configured Dio HTTP Client with automatic silent token refresh
 final Provider<DioClient> dioClientProvider = Provider<DioClient>((ref) {
   final tokenStorage = ref.watch(tokenStorageProvider);
-  final onExpired = ref.watch(sessionExpiredCallbackProvider);
-  final onRefresh = ref.watch(refreshTokenCallbackProvider);
+
   return DioClient.create(
     tokenStorage: tokenStorage,
-    onRefreshToken: onRefresh,
-    onSessionExpired: onExpired,
+    onRefreshToken: (refreshToken) async {
+      try {
+        final authService = ref.read(authServiceProvider);
+        final response = await authService.refreshToken(refreshToken);
+        await tokenStorage.saveTokens(
+          accessToken: response.accessToken,
+          refreshToken: response.refreshToken ?? refreshToken,
+        );
+        return response.accessToken;
+      } catch (_) {
+        await tokenStorage.clearTokens();
+        return null;
+      }
+    },
+    onSessionExpired: () {
+      try {
+        // Clear tokens on hard expiration
+        tokenStorage.clearTokens();
+      } catch (_) {}
+    },
   );
 });
 
