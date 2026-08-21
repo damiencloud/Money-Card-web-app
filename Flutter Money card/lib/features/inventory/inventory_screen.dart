@@ -102,7 +102,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
             controller: _tabController,
             tabs: const [
               Tab(text: 'Menu & Stock', icon: Icon(Icons.inventory_2_outlined, size: 18)),
-              Tab(text: 'Movement History', icon: Icon(Icons.history, size: 18)),
+              Tab(text: 'Restock History', icon: Icon(Icons.add_shopping_cart, size: 18)),
             ],
           ),
         ),
@@ -458,11 +458,14 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     InventoryListState state,
     InventoryNotifier notifier,
   ) {
-    if (state.movements.isEmpty && state.isLoading) {
-      return const AppLoadingView(message: 'Loading movement history...');
+    // Filter strictly for restocks / positive stock additions
+    final restockMovements = state.movements.where((m) => m.changeQuantity > 0).toList();
+
+    if (restockMovements.isEmpty && state.isLoading) {
+      return const AppLoadingView(message: 'Loading restock history...');
     }
 
-    if (state.movements.isEmpty) {
+    if (restockMovements.isEmpty) {
       return RefreshIndicator(
         onRefresh: () async {
           await notifier.loadMovements();
@@ -472,9 +475,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           children: const [
             SizedBox(height: 80),
             AppEmptyState(
-              title: 'No Stock Movements',
-              description: 'Stock additions, sales, and corrections will appear here.',
-              icon: Icons.history,
+              title: 'No Restock History',
+              description: 'Stock additions, fresh batches, and restocks will appear here.',
+              icon: Icons.add_shopping_cart,
             ),
           ],
         ),
@@ -488,11 +491,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: AppSpacing.paddingMd,
-        itemCount: state.movements.length,
+        itemCount: restockMovements.length,
         separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
         itemBuilder: (context, index) {
-          final movement = state.movements[index];
-          final isPositive = movement.changeQuantity > 0;
+          final movement = restockMovements[index];
 
           return AppCard(
             padding: const EdgeInsets.all(AppSpacing.md),
@@ -500,13 +502,13 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
               children: [
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: isPositive ? AppColors.successLight : AppColors.errorLight,
+                  decoration: const BoxDecoration(
+                    color: AppColors.successLight,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    isPositive ? Icons.add : Icons.remove,
-                    color: isPositive ? AppColors.success : AppColors.error,
+                  child: const Icon(
+                    Icons.add_shopping_cart,
+                    color: AppColors.success,
                     size: 18,
                   ),
                 ),
@@ -516,17 +518,17 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        movement.productName.isNotEmpty ? movement.productName : 'Product Item',
+                        movement.productName.isNotEmpty ? movement.productName : 'Product Restock',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 3),
                       Text(
                         movement.reason != null && movement.reason!.isNotEmpty
                             ? movement.reason!
-                            : (isPositive ? 'Stock Addition' : 'Stock Consumption'),
+                            : 'Restock / Fresh Batch Addition',
                         style: const TextStyle(
                           fontWeight: FontWeight.w500,
                           fontSize: 13,
@@ -535,7 +537,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        movement.createdAt,
+                        movement.staffName != null && movement.staffName!.isNotEmpty
+                            ? 'By ${movement.staffName} • ${movement.createdAt}'
+                            : movement.createdAt,
                         style: const TextStyle(
                           fontSize: 11,
                           color: AppColors.textTertiaryLight,
@@ -548,18 +552,20 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '${isPositive ? "+" : ""}${movement.changeQuantity}',
-                      style: TextStyle(
-                        fontSize: 16,
+                      '+${movement.changeQuantity} units',
+                      style: const TextStyle(
+                        fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: isPositive ? AppColors.success : AppColors.error,
+                        color: AppColors.success,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       'Balance: ${movement.balanceAfter}',
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.textSecondaryLight,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],

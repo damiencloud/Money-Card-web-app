@@ -539,7 +539,9 @@ export async function getInventoryMovements(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'Branch ID is required');
   }
 
-  let branchMovements = inventoryMovementsStore.filter((m) => m.branchId === branchId);
+  let branchMovements = inventoryMovementsStore.filter(
+    (m) => m.branchId === branchId && (m.changeQuantity > 0 || m.type === 'RESTOCK')
+  );
 
   if (inventoryId) {
     branchMovements = branchMovements.filter((m) => m.inventoryId === inventoryId);
