@@ -33,7 +33,24 @@
               "mode": "raw",
               "raw": "{\n  \"email\": \"staff@example.com\",\n  \"password\": \"SecurePassword123\"\n}"
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const res = pm.response.json();",
+                  "    if (res.data && res.data.accessToken) {",
+                  "        pm.environment.set('accessToken', res.data.accessToken);",
+                  "        console.log('Saved accessToken to environment');",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "2. POST /api/v1/auth/refresh",
@@ -812,7 +829,24 @@
                 }
               ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const res = pm.response.json();",
+                  "    const branches = Array.isArray(res.data) ? res.data : (res.data && res.data.branches ? res.data.branches : []);",
+                  "    if (branches.length > 0) {",
+                  "        pm.environment.set('branchId', branches[0].id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "29. POST /api/v1/branches",
@@ -863,7 +897,24 @@
                 "{{branchId}}"
               ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const res = pm.response.json();",
+                  "    const branches = Array.isArray(res.data) ? res.data : (res.data && res.data.branches ? res.data.branches : []);",
+                  "    if (branches.length > 0) {",
+                  "        pm.environment.set('branchId', branches[0].id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "31. PATCH /api/v1/branches/:id",
@@ -1082,7 +1133,25 @@
                 }
               ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const res = pm.response.json();",
+                  "    const cards = Array.isArray(res.data) ? res.data : (res.data && res.data.cards ? res.data.cards : []);",
+                  "    if (cards.length > 0) {",
+                  "        pm.environment.set('cardId', cards[0].id);",
+                  "        pm.environment.set('qrToken', cards[0].qrToken);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "38. POST /api/v1/cards",
@@ -1362,7 +1431,24 @@
                 }
               ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const res = pm.response.json();",
+                  "    const prods = Array.isArray(res.data) ? res.data : (res.data && res.data.products ? res.data.products : []);",
+                  "    if (prods.length > 0) {",
+                  "        pm.environment.set('productId', prods[0].id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "47. POST /api/v1/products",
@@ -1929,6 +2015,70 @@
       "key": "sessionToken",
       "value": "portal_token_mc001_session001",
       "type": "string"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-Authentication & Persona Switching Script",
+          "const baseUrl = pm.environment.get(\"baseUrl\") || \"http://localhost:3000/api/v1\";",
+          "const folderName = pm.info.requestName || \"\";",
+          "",
+          "// Detect which persona is required based on URL or folder",
+          "const url = pm.request.url.toString();",
+          "let requiredRole = \"ORG_ADMIN\";",
+          "",
+          "if (url.includes(\"/admin/\") || url.includes(\"/admin\")) {",
+          "    requiredRole = \"SUPER_ADMIN\";",
+          "} else if (url.includes(\"/public/\")) {",
+          "    requiredRole = \"PUBLIC\";",
+          "} else if (url.includes(\"/card-sessions\") || url.includes(\"/pos/\")) {",
+          "    requiredRole = \"STAFF\";",
+          "}",
+          "",
+          "if (requiredRole !== \"PUBLIC\" && !url.includes(\"/auth/login\") && !url.includes(\"/auth/forgot-password\")) {",
+          "    let email = \"admin@maincafe.com\";",
+          "    let password = \"OrgAdmin@123\";",
+          "",
+          "    if (requiredRole === \"SUPER_ADMIN\") {",
+          "        email = pm.environment.get(\"superAdminEmail\") || \"amigosiamoneycard@gmail.com\";",
+          "        password = pm.environment.get(\"superAdminPassword\") || \"SuperAdmin@123\";",
+          "    } else if (requiredRole === \"STAFF\") {",
+          "        email = pm.environment.get(\"staffEmail\") || \"staff@maincafe.com\";",
+          "        password = pm.environment.get(\"staffPassword\") || \"Staff@123\";",
+          "    }",
+          "",
+          "    const currentToken = pm.environment.get(\"accessToken\");",
+          "    const lastRole = pm.environment.get(\"_currentRole\");",
+          "",
+          "    // If token is missing or persona changed, auto-login seamlessly",
+          "    if (!currentToken || lastRole !== requiredRole) {",
+          "        pm.sendRequest({",
+          "            url: baseUrl + \"/auth/login\",",
+          "            method: \"POST\",",
+          "            header: { \"Content-Type\": \"application/json\" },",
+          "            body: {",
+          "                mode: \"raw\",",
+          "                raw: JSON.stringify({ email: email, password: password })",
+          "            }",
+          "        }, function (err, res) {",
+          "            if (!err && res.code === 200) {",
+          "                const data = res.json();",
+          "                if (data && data.data && data.data.accessToken) {",
+          "                    pm.environment.set(\"accessToken\", data.data.accessToken);",
+          "                    pm.environment.set(\"_currentRole\", requiredRole);",
+          "                    pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + data.data.accessToken });",
+          "                }",
+          "            }",
+          "        });",
+          "    }",
+          "}",
+          ""
+        ]
+      }
     }
   ]
 }
