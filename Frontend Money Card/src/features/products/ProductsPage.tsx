@@ -1,6 +1,7 @@
 // ─── Products & Inventory Unified Hub (Org Admin) ──────────────────────────
 // Merges Master Product Catalog and Multi-Branch Stock Control into a cohesive,
 // modern tabbed management workspace.
+// Allows editing stock both upon creation and during subsequent edits.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -20,7 +21,7 @@ import {
   ErrorState,
 } from '@/components/ui';
 import { DataTable } from '@/components/tables';
-import { notify, formatCurrency, formatDate } from '@/utils';
+import { notify, formatCurrency } from '@/utils';
 import { CsvImportModal } from '@/features/inventory/CsvImportModal';
 import { UnauthorizedPage } from '@/features/auth';
 import { CategorySelector } from './CategorySelector';
@@ -31,13 +32,11 @@ import {
   Search,
   Edit2,
   FileSpreadsheet,
-  RefreshCw,
   AlertCircle,
   Power,
   Download,
   Building2,
   Sliders,
-  DollarSign,
   TrendingUp,
   AlertTriangle,
   Layers,
@@ -96,7 +95,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
   const [formCategories, setFormCategories] = useState<string[]>(['Veg']);
   const [formPrice, setFormPrice] = useState('');
   const [formBranchId, setFormBranchId] = useState('');
-  const [formInitialQty, setFormInitialQty] = useState('0');
+  const [formStockQty, setFormStockQty] = useState('0');
   const [formStatus, setFormStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [productModalApiError, setProductModalApiError] = useState<string | null>(null);
@@ -232,7 +231,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     setFormCategories(['Veg']);
     setFormPrice('');
     setFormBranchId(currentBranch?.id || branches[0]?.id || '');
-    setFormInitialQty('0');
+    setFormStockQty('0');
     setFormStatus('ACTIVE');
     setFormErrors({});
     setProductModalApiError(null);
@@ -244,13 +243,20 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     setFormItemName(product.itemName);
     setFormCategories(product.category || ['Veg']);
     setFormPrice(product.price.toString());
+    setFormStockQty(product.quantity.toString());
     setFormStatus(product.status);
     setFormErrors({});
     setProductModalApiError(null);
     setShowEditModal(true);
   };
 
-  const validateProductForm = (isEdit = false) => {
+  const handleStepEditStock = (delta: number) => {
+    const current = parseInt(formStockQty, 10) || 0;
+    const nextVal = Math.max(0, current + delta);
+    setFormStockQty(nextVal.toString());
+  };
+
+  const validateProductForm = () => {
     const errs: Record<string, string> = {};
     if (!formItemName.trim()) errs.itemName = 'Product name is required';
     if (!formCategories || formCategories.length === 0) errs.categories = 'Select at least one category';
@@ -258,10 +264,11 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     const priceNum = parseFloat(formPrice);
     if (isNaN(priceNum) || priceNum <= 0) errs.price = 'Price must be greater than 0';
 
-    if (!isEdit) {
-      if (!formBranchId) errs.branchId = 'Please select a branch';
-      const qtyNum = parseInt(formInitialQty, 10);
-      if (isNaN(qtyNum) || qtyNum < 0) errs.initialQty = 'Initial quantity must be 0 or more';
+    const qtyNum = parseInt(formStockQty, 10);
+    if (isNaN(qtyNum) || qtyNum < 0) errs.stockQty = 'Stock quantity must be 0 or more';
+
+    if (!selectedProduct && !formBranchId) {
+      errs.branchId = 'Please select an initial branch';
     }
 
     setFormErrors(errs);
@@ -270,7 +277,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
 
   const handleCreateProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateProductForm(false)) return;
+    if (!validateProductForm()) return;
 
     setProductModalApiError(null);
     setIsProductSubmitting(true);
@@ -281,7 +288,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
         category: formCategories,
         price: parseFloat(formPrice),
         branchId: formBranchId,
-        initialQuantity: parseInt(formInitialQty, 10),
+        initialQuantity: parseInt(formStockQty, 10),
         status: formStatus,
       });
 
@@ -290,7 +297,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
         return;
       }
 
-      notify.success(`Product "${res.data.itemName}" created successfully`);
+      notify.success(`Product "${res.data.itemName}" created with ${formStockQty} units`);
       setShowCreateModal(false);
       fetchProductsData();
       fetchInventoryData();
@@ -303,12 +310,13 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
 
   const handleEditProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProduct || !validateProductForm(true)) return;
+    if (!selectedProduct || !validateProductForm()) return;
 
     setProductModalApiError(null);
     setIsProductSubmitting(true);
 
     try {
+      // 1. Update product metadata
       const res = await apiService.products.updateProduct(selectedProduct.id, {
         itemName: formItemName.trim(),
         category: formCategories,
@@ -319,6 +327,17 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
       if (!res.success) {
         setProductModalApiError(res.error.message || 'Failed to update product');
         return;
+      }
+
+      // 2. Update stock quantity if changed
+      const newQty = parseInt(formStockQty, 10);
+      if (!isNaN(newQty) && newQty !== selectedProduct.quantity) {
+        const invRecord = inventoryList.find((i) => i.productId === selectedProduct.id);
+        if (invRecord) {
+          await apiService.inventory.updateInventoryQuantity(invRecord.id, newQty);
+        } else {
+          await apiService.inventory.updateInventoryQuantity(selectedProduct.id, newQty);
+        }
       }
 
       notify.success(`Product "${res.data.itemName}" updated successfully`);
@@ -424,13 +443,12 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     }
   };
 
-  // ─── Metrics Calculations ─────────────────────────────────────────────────
+  // ─── Metrics Calculations (No Average Price Box) ───────────────────────────
   const productMetrics = useMemo(() => {
     const total = products.length;
     const active = products.filter((p) => p.status === 'ACTIVE').length;
     const inactive = products.filter((p) => p.status === 'INACTIVE').length;
-    const avgPrice = total > 0 ? products.reduce((acc, p) => acc + p.price, 0) / total : 0;
-    return { total, active, inactive, avgPrice };
+    return { total, active, inactive };
   }, [products]);
 
   const inventoryMetrics = useMemo(() => {
@@ -535,7 +553,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
                 onClick={() => handleOpenEdit(product)}
                 leftIcon={<Edit2 className="h-3.5 w-3.5" />}
               >
-                Edit
+                Edit & Stock
               </Button>
 
               <Button
@@ -742,8 +760,8 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
       {/* ─── TAB 1: PRODUCT CATALOG ─── */}
       {activeTab === 'products' && (
         <div className="space-y-6">
-          {/* Summary Metric Cards */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {/* Summary Metric Cards (Clean 3-Card Grid, No Average Price) */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Card className="flex items-center gap-3 p-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
                 <Package className="h-5 w-5" />
@@ -771,18 +789,6 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
               <div>
                 <p className="text-xs text-slate-400">Archived / Inactive</p>
                 <p className="text-lg font-bold text-slate-300">{productMetrics.inactive}</p>
-              </div>
-            </Card>
-
-            <Card className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400">
-                <DollarSign className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Average Price</p>
-                <p className="text-lg font-bold text-amber-400">
-                  {formatCurrency(productMetrics.avgPrice)}
-                </p>
               </div>
             </Card>
           </div>
@@ -871,7 +877,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
 
             <Card className="flex items-center gap-3 p-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
-                <DollarSign className="h-5 w-5" />
+                <Package className="h-5 w-5" />
               </div>
               <div>
                 <p className="text-xs text-slate-400">Total Stock Valuation</p>
@@ -949,7 +955,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
         </div>
       )}
 
-      {/* ─── MODAL 1: CREATE PRODUCT ─── */}
+      {/* ─── MODAL 1: CREATE PRODUCT (WITH INITIAL STOCK) ─── */}
       <Modal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
@@ -1021,15 +1027,15 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Initial Stock Quantity
+                Initial Stock Quantity (Units)
               </label>
               <Input
                 type="number"
                 min="0"
                 placeholder="e.g. 50"
-                value={formInitialQty}
-                onChange={(e) => setFormInitialQty(e.target.value)}
-                error={formErrors.initialQty}
+                value={formStockQty}
+                onChange={(e) => setFormStockQty(e.target.value)}
+                error={formErrors.stockQty}
               />
             </div>
 
@@ -1059,11 +1065,11 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
         </form>
       </Modal>
 
-      {/* ─── MODAL 2: EDIT PRODUCT ─── */}
+      {/* ─── MODAL 2: EDIT PRODUCT (ALLOWS EDITING STOCK AFTER INITIAL STOCK) ─── */}
       <Modal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
-        title="Edit Product"
+        title="Edit Product & Stock Level"
         size="lg"
       >
         <form onSubmit={handleEditProductSubmit} className="space-y-4">
@@ -1128,12 +1134,57 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
             </div>
           </div>
 
+          {/* Edit Stock Quantity Field */}
+          <div className="rounded-lg bg-slate-800/60 p-4 border border-slate-700 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-slate-200">
+                Current Stock on Hand (Units)
+              </label>
+              <span className="text-xs text-slate-400">
+                Initial/Current: <span className="text-emerald-400 font-bold">{selectedProduct?.quantity ?? 0} units</span>
+              </span>
+            </div>
+
+            <Input
+              type="number"
+              min="0"
+              value={formStockQty}
+              onChange={(e) => setFormStockQty(e.target.value)}
+              error={formErrors.stockQty}
+            />
+
+            {/* Quick Adjustment Stepper Chips */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              <Button type="button" variant="outline" size="sm" onClick={() => handleStepEditStock(-10)}>
+                -10
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => handleStepEditStock(-5)}>
+                -5
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => handleStepEditStock(-1)}>
+                -1
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => handleStepEditStock(1)}>
+                +1
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => handleStepEditStock(5)}>
+                +5
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => handleStepEditStock(10)}>
+                +10
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => handleStepEditStock(50)}>
+                +50
+              </Button>
+            </div>
+          </div>
+
           <ModalFooter>
             <Button variant="ghost" onClick={() => setShowEditModal(false)}>
               Cancel
             </Button>
             <Button variant="primary" type="submit" isLoading={isProductSubmitting}>
-              Save Changes
+              Save Changes & Stock
             </Button>
           </ModalFooter>
         </form>
