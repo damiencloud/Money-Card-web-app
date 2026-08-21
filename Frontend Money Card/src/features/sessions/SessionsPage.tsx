@@ -870,7 +870,7 @@ export function SessionsPage() {
                                   {r.paymentMethod || 'CASH'}
                                 </Badge>
                               </div>
-                              <p className="text-[11px] text-slate-500 font-mono mt-0.5">{r.id}</p>
+                              <p className="text-[11px] text-slate-500 font-mono mt-0.5">RCH-#{r.id.slice(0, 8).toUpperCase()}</p>
                             </div>
 
                             <div className="text-right">
@@ -900,7 +900,7 @@ export function SessionsPage() {
                         {purchases.map((p) => (
                           <div key={p.id} className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-2">
                             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                              <span className="font-mono text-slate-400">{p.id}</span>
+                              <span className="font-mono text-slate-400">PUR-#{p.id.slice(0, 8).toUpperCase()}</span>
                               <span className="font-mono font-bold text-slate-100">{formatCurrency(p.amount)}</span>
                             </div>
 

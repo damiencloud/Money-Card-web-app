@@ -513,7 +513,7 @@ export function AdminPlansSubscriptionsView() {
           </div>
           <div>
             <p className="font-semibold text-slate-100">{plan.name}</p>
-            <p className="text-xs text-slate-500">ID: {plan.id}</p>
+            <p className="text-xs text-slate-500">{plan.code}</p>
           </div>
         </div>
       ),
@@ -586,7 +586,7 @@ export function AdminPlansSubscriptionsView() {
           </div>
           <div>
             <p className="font-semibold text-slate-100">{org.name}</p>
-            <p className="text-xs text-slate-500">ID: {org.id}</p>
+            <p className="text-xs text-slate-500">ORG-#{org.id.slice(0, 8).toUpperCase()}</p>
           </div>
         </div>
       ),
@@ -772,7 +772,7 @@ export function AdminPlansSubscriptionsView() {
       key: 'id',
       header: 'Payment ID',
       render: (p: SubscriptionPayment) => (
-        <span className="font-mono text-xs font-bold text-slate-200">{p.id}</span>
+        <span className="font-mono text-xs font-bold text-slate-200">PAY-#{p.id.slice(0, 8).toUpperCase()}</span>
       ),
     },
     {
