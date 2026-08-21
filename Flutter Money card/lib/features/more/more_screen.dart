@@ -81,22 +81,13 @@ class MoreScreen extends ConsumerWidget {
         const SectionHeader(title: 'Operations & Management'),
         const SizedBox(height: AppSpacing.xs),
 
-        PermissionGuard.single(
-          permission: AppPermission.productView,
-          child: _buildMenuTile(
-            icon: Icons.fastfood_outlined,
-            title: 'Products & Menu',
-            subtitle: 'View and manage cafeteria menu items',
-            onTap: () => context.push('/app/products'),
-          ),
-        ),
-
-        PermissionGuard.single(
-          permission: AppPermission.inventoryView,
+        PermissionGuard(
+          mode: PermissionGuardMode.any,
+          permissions: const [AppPermission.inventoryView, AppPermission.productView],
           child: _buildMenuTile(
             icon: Icons.inventory_2_outlined,
-            title: 'Inventory Stock',
-            subtitle: 'Check stock levels and inventory',
+            title: 'Menu & Inventory',
+            subtitle: 'Check menu prices, live stock, and restock items',
             onTap: () => context.push('/app/inventory'),
           ),
         ),

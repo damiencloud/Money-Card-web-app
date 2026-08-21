@@ -45,8 +45,7 @@ void main() {
     );
 
     expect(find.text('Alex Morgan'), findsOneWidget);
-    expect(find.text('Products & Menu'), findsOneWidget);
-    expect(find.text('Inventory Stock'), findsOneWidget);
+    expect(find.text('Menu & Inventory'), findsOneWidget);
     expect(find.text('Analytics & Reports'), findsOneWidget);
     expect(find.text('Scan Vibration Feedback'), findsNothing);
     expect(find.text('Sample Digital Receipt & PDF'), findsNothing);

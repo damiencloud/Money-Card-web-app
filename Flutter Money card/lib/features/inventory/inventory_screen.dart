@@ -15,6 +15,7 @@ import '../../widgets/common/app_text_field.dart';
 import '../../widgets/guards/permission_guard.dart';
 import '../../widgets/states/app_empty_state.dart';
 import '../../widgets/states/app_loading_view.dart';
+import '../../widgets/states/app_unauthorized_state.dart';
 
 class InventoryScreen extends ConsumerStatefulWidget {
   const InventoryScreen({super.key});
@@ -71,45 +72,50 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     final currentBranch = branchState.currentBranch;
     final assignedBranches = branchState.assignedBranches;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Branch Inventory'),
-                  if (currentBranch != null)
-                    Text(
-                      currentBranch.name,
-                      style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ],
+    return PermissionGuard(
+      mode: PermissionGuardMode.any,
+      permissions: const [AppPermission.inventoryView, AppPermission.productView],
+      fallback: const AppUnauthorizedState(),
+      child: Scaffold(
+        appBar: AppBar(
+          title: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Menu & Inventory'),
+                    if (currentBranch != null)
+                      Text(
+                        currentBranch.name,
+                        style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
               ),
-            ),
-            if (assignedBranches.length > 1 && currentBranch != null)
-              _buildBranchSwitcher(context, ref, currentBranch, assignedBranches),
-          ],
+              if (assignedBranches.length > 1 && currentBranch != null)
+                _buildBranchSwitcher(context, ref, currentBranch, assignedBranches),
+            ],
+          ),
+          bottom: TabBar(
+            controller: _tabController,
+            tabs: const [
+              Tab(text: 'Menu & Stock', icon: Icon(Icons.inventory_2_outlined, size: 18)),
+              Tab(text: 'Movement History', icon: Icon(Icons.history, size: 18)),
+            ],
+          ),
         ),
-        bottom: TabBar(
+        body: TabBarView(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'Stock Levels', icon: Icon(Icons.inventory_2_outlined, size: 18)),
-            Tab(text: 'Movement History', icon: Icon(Icons.history, size: 18)),
+          children: [
+            // Tab 1: Menu & Stock Levels
+            _buildStockTab(context, inventoryState, notifier),
+
+            // Tab 2: Movement History
+            _buildMovementsTab(inventoryState, notifier),
           ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // Tab 1: Stock Levels
-          _buildStockTab(context, inventoryState, notifier),
-
-          // Tab 2: Movement History
-          _buildMovementsTab(inventoryState, notifier),
-        ],
       ),
     );
   }
@@ -192,7 +198,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
               TextField(
                 onChanged: notifier.setSearchQuery,
                 decoration: const InputDecoration(
-                  hintText: 'Search stock by product name...',
+                  hintText: 'Search food or product name...',
                   prefixIcon: Icon(Icons.search, size: 20),
                   isDense: true,
                 ),
@@ -273,7 +279,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     InventoryNotifier notifier,
   ) {
     if (state.isLoading) {
-      return const AppLoadingView(message: 'Loading inventory stock...');
+      return const AppLoadingView(message: 'Loading menu & inventory...');
     }
 
     if (state.errorMessage != null) {
@@ -311,8 +317,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         children: const [
           SizedBox(height: 80),
           AppEmptyState(
-            title: 'No Stock Records Found',
-            description: 'No inventory items match the current search or status filter.',
+            title: 'No Items Found',
+            description: 'No menu or stock records match the current filter.',
             icon: Icons.inventory_2_outlined,
           ),
         ],
@@ -326,11 +332,38 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
       separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
       itemBuilder: (context, index) {
         final item = state.filteredItems[index];
+        final isVeg = item.category.any((c) => c.toLowerCase() == 'veg');
+        final isNonVeg = item.category.any((c) => c.toLowerCase() == 'non-veg');
+        final categoryLabel = item.category.isNotEmpty ? item.category.join(', ') : 'Menu Item';
 
         return AppCard(
           padding: const EdgeInsets.all(AppSpacing.md),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Food Category Icon / Image Container
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: isVeg
+                      ? AppColors.successLight
+                      : (isNonVeg ? AppColors.errorLight : AppColors.primaryLight),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  isVeg
+                      ? Icons.eco
+                      : (isNonVeg ? Icons.kebab_dining : Icons.fastfood_outlined),
+                  color: isVeg
+                      ? AppColors.success
+                      : (isNonVeg ? AppColors.error : AppColors.primary),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+
+              // Product Info & Price
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -341,7 +374,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                           child: Text(
                             item.productName,
                             style: const TextStyle(
-                              fontSize: 15,
+                              fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -352,13 +385,32 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                         ),
                       ],
                     ),
+                    const SizedBox(height: 2),
+                    Text(
+                      categoryLabel,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondaryLight,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                     const SizedBox(height: AppSpacing.xs),
                     Row(
                       children: [
+                        if (item.price > 0)
+                          Text(
+                            '\u20b9${item.price.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primaryDark,
+                            ),
+                          ),
+                        if (item.price > 0) const SizedBox(width: AppSpacing.md),
                         Text(
                           'Stock: ${item.currentStock} units',
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 13,
                             fontWeight: FontWeight.bold,
                             color: item.isOutOfStock
                                 ? AppColors.error
@@ -367,29 +419,29 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
                                     : AppColors.textPrimaryLight,
                           ),
                         ),
-                        const SizedBox(width: AppSpacing.md),
-                        Text(
-                          'Reorder Level: ${item.reorderLevel}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondaryLight,
-                          ),
-                        ),
                       ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Reorder threshold: ${item.reorderLevel} units',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textTertiaryLight,
+                      ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
 
-              // Stock Adjustment Button (INVENTORY_MANAGE guarded)
+              // Restock Button (INVENTORY_MANAGE guarded)
               PermissionGuard.single(
                 permission: AppPermission.inventoryManage,
                 child: OutlinedButton.icon(
-                  icon: const Icon(Icons.add_shopping_cart, size: 16, color: AppColors.primary),
+                  icon: const Icon(Icons.add_shopping_cart, size: 15, color: AppColors.primary),
                   label: const Text('Restock', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     visualDensity: VisualDensity.compact,
                   ),
                   onPressed: () => _showAdjustStockSheet(item),
@@ -558,147 +610,147 @@ class _AdjustStockBottomSheetState extends ConsumerState<_AdjustStockBottomSheet
     return AppBottomSheet(
       title: 'Restock & Adjust Stock',
       child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.item.productName,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.item.productName,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Current Stock on Hand:', style: TextStyle(color: AppColors.textSecondaryLight)),
+              Text(
+                '${widget.item.currentStock} units',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+            ],
+          ),
+          const Divider(height: AppSpacing.lg),
+
+          // Quick Restock Presets
+          const Text('Quick Restock Quantity (+Units)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            spacing: 6,
+            children: quickIncrements.map((qty) {
+              final isSelected = _adjustment == qty;
+              return ActionChip(
+                label: Text('+$qty'),
+                backgroundColor: isSelected ? AppColors.primaryLight : AppColors.surfaceLight,
+                labelStyle: TextStyle(
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  color: isSelected ? AppColors.primaryDark : AppColors.textPrimaryLight,
+                ),
+                onPressed: () => _setDirectAdjustment(qty),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Adjustment Steppers
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              OutlinedButton(
+                onPressed: () => _stepAdjustment(-5),
+                child: const Text('-5'),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              OutlinedButton(
+                onPressed: () => _stepAdjustment(-1),
+                child: const Text('-1'),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                child: Text(
+                  '${_adjustment >= 0 ? "+" : ""}$_adjustment',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: _adjustment >= 0 ? AppColors.primary : AppColors.error,
+                  ),
+                ),
+              ),
+              OutlinedButton(
+                onPressed: () => _stepAdjustment(1),
+                child: const Text('+1'),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              OutlinedButton(
+                onPressed: () => _stepAdjustment(5),
+                child: const Text('+5'),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+
+          // Preview
+          Container(
+            padding: AppSpacing.paddingMd,
+            decoration: BoxDecoration(
+              color: AppColors.primaryLight,
+              borderRadius: AppSpacing.roundedSm,
             ),
-            const SizedBox(height: AppSpacing.xs),
-            Row(
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Current Stock on Hand:', style: TextStyle(color: AppColors.textSecondaryLight)),
+                const Text('Updated Stock After Restock:'),
                 Text(
-                  '${widget.item.currentStock} units',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  '$newStock units',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: AppColors.primaryDark,
+                  ),
                 ),
               ],
             ),
-            const Divider(height: AppSpacing.lg),
+          ),
+          const SizedBox(height: AppSpacing.md),
 
-            // Quick Restock Presets
-            const Text('Quick Restock Quantity (+Units)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-            const SizedBox(height: AppSpacing.xs),
-            Wrap(
-              spacing: 6,
-              children: quickIncrements.map((qty) {
-                final isSelected = _adjustment == qty;
-                return ActionChip(
-                  label: Text('+$qty'),
-                  backgroundColor: isSelected ? AppColors.primaryLight : AppColors.surfaceLight,
-                  labelStyle: TextStyle(
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    color: isSelected ? AppColors.primaryDark : AppColors.textPrimaryLight,
-                  ),
-                  onPressed: () => _setDirectAdjustment(qty),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: AppSpacing.sm),
+          // Reason Quick Chips
+          const Text('Reason / Note', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: quickReasons.map((reason) {
+              final isSelected = _reasonController.text == reason;
+              return ActionChip(
+                label: Text(reason, style: const TextStyle(fontSize: 11)),
+                backgroundColor: isSelected ? AppColors.primaryLight : AppColors.surfaceLight,
+                onPressed: () {
+                  setState(() {
+                    _reasonController.text = reason;
+                  });
+                },
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: AppSpacing.sm),
 
-            // Adjustment Steppers
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                OutlinedButton(
-                  onPressed: () => _stepAdjustment(-5),
-                  child: const Text('-5'),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                OutlinedButton(
-                  onPressed: () => _stepAdjustment(-1),
-                  child: const Text('-1'),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                  child: Text(
-                    '${_adjustment >= 0 ? "+" : ""}$_adjustment',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: _adjustment >= 0 ? AppColors.primary : AppColors.error,
-                    ),
-                  ),
-                ),
-                OutlinedButton(
-                  onPressed: () => _stepAdjustment(1),
-                  child: const Text('+1'),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                OutlinedButton(
-                  onPressed: () => _stepAdjustment(5),
-                  child: const Text('+5'),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
+          // Reason Custom Input
+          AppTextField(
+            controller: _reasonController,
+            label: 'Custom Note / Audit Reason',
+            hintText: 'e.g. Morning kitchen batch, fresh patties prepared',
+          ),
+          const SizedBox(height: AppSpacing.lg),
 
-            // Preview
-            Container(
-              padding: AppSpacing.paddingMd,
-              decoration: BoxDecoration(
-                color: AppColors.primaryLight,
-                borderRadius: AppSpacing.roundedSm,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Updated Stock After Restock:'),
-                  Text(
-                    '$newStock units',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: AppColors.primaryDark,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-
-            // Reason Quick Chips
-            const Text('Reason / Note', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-            const SizedBox(height: AppSpacing.xs),
-            Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              children: quickReasons.map((reason) {
-                final isSelected = _reasonController.text == reason;
-                return ActionChip(
-                  label: Text(reason, style: const TextStyle(fontSize: 11)),
-                  backgroundColor: isSelected ? AppColors.primaryLight : AppColors.surfaceLight,
-                  onPressed: () {
-                    setState(() {
-                      _reasonController.text = reason;
-                    });
-                  },
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-
-            // Reason Custom Input
-            AppTextField(
-              controller: _reasonController,
-              label: 'Custom Note / Audit Reason',
-              hintText: 'e.g. Morning kitchen batch, fresh patties prepared',
-            ),
-            const SizedBox(height: AppSpacing.lg),
-
-            // Confirm Button
-            AppButton(
-              label: 'Confirm Restock',
-              icon: Icons.check,
-              isLoading: inventoryState.isSubmitting,
-              onPressed: _adjustment == 0 || inventoryState.isSubmitting
-                  ? null
-                  : _handleConfirmAdjustment,
-            ),
-          ],
-        ),
+          // Confirm Button
+          AppButton(
+            label: 'Confirm Restock',
+            icon: Icons.check,
+            isLoading: inventoryState.isSubmitting,
+            onPressed: _adjustment == 0 || inventoryState.isSubmitting
+                ? null
+                : _handleConfirmAdjustment,
+          ),
+        ],
+      ),
     );
   }
 }
