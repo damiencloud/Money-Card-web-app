@@ -14,7 +14,7 @@ class AnalyticsService {
   }) async {
     final queryParameters = <String, dynamic>{
       'branchId': branchId,
-      'range': ?range,
+      if (range != null && range.isNotEmpty) 'range': range,
     };
 
     return _apiService.get<BranchPerformanceMetric>(
@@ -23,7 +23,11 @@ class AnalyticsService {
       fromJson: (data) {
         if (data is Map<String, dynamic>) {
           if (data['branchPerformance'] is List && (data['branchPerformance'] as List).isNotEmpty) {
-            return BranchPerformanceMetric.fromJson((data['branchPerformance'] as List).first as Map<String, dynamic>);
+            final list = (data['branchPerformance'] as List)
+                .map((e) => BranchPerformanceMetric.fromJson(e as Map<String, dynamic>))
+                .toList();
+            final match = list.where((item) => item.branchId == branchId).firstOrNull;
+            return match ?? list.first;
           }
           return BranchPerformanceMetric.fromJson(data);
         }

@@ -6,11 +6,15 @@ import 'package:money_card_staff/models/analytics.dart';
 import 'package:money_card_staff/models/auth_user.dart';
 import 'package:money_card_staff/models/branch.dart';
 import 'package:money_card_staff/models/inventory.dart';
+import 'package:money_card_staff/models/card.dart' as model_card;
+import 'package:money_card_staff/models/card_session.dart';
 import 'package:money_card_staff/providers/api_providers.dart';
 import 'package:money_card_staff/providers/auth_provider.dart';
 import 'package:money_card_staff/providers/branch_provider.dart';
 import 'package:money_card_staff/repositories/analytics_repository.dart';
 import 'package:money_card_staff/repositories/inventory_repository.dart';
+import 'package:money_card_staff/repositories/session_repository.dart';
+import 'package:money_card_staff/repositories/card_repository.dart';
 import 'package:money_card_staff/routing/app_router.dart';
 
 class FakeAnalyticsRepository implements AnalyticsRepository {
@@ -55,6 +59,32 @@ class FakeInventoryRepository implements InventoryRepository {
   }
 }
 
+class FakeSessionRepository implements SessionRepository {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
+  Future<List<CardSession>> getSessions({String? branchId, String? status, String? cardId, int? page, int? limit}) async => [];
+
+  @override
+  Future<CardSession> getSessionById(String id) async => const CardSession(
+    id: 's-1',
+    cardId: 'c-1',
+    branchId: 'b-1',
+    status: SessionStatus.active,
+    balance: 100.0,
+    startedAt: '',
+  );
+}
+
+class FakeCardRepository implements CardRepository {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
+  Future<List<model_card.Card>> getCards({String? branchId, String? status, String? search, int? page, int? limit}) async => [];
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -86,6 +116,8 @@ void main() {
         overrides: [
           currentUserProvider.overrideWithValue(mockUser),
           currentBranchProvider.overrideWithValue(mockBranch),
+          sessionRepositoryProvider.overrideWithValue(FakeSessionRepository()),
+          cardRepositoryProvider.overrideWithValue(FakeCardRepository()),
           analyticsRepositoryProvider.overrideWithValue(FakeAnalyticsRepository()),
         ],
       );
@@ -127,6 +159,8 @@ void main() {
         overrides: [
           currentUserProvider.overrideWithValue(mockUser),
           currentBranchProvider.overrideWithValue(mockBranch),
+          sessionRepositoryProvider.overrideWithValue(FakeSessionRepository()),
+          cardRepositoryProvider.overrideWithValue(FakeCardRepository()),
           inventoryRepositoryProvider.overrideWithValue(FakeInventoryRepository()),
         ],
       );

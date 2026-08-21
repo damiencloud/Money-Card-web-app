@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/constants/permission_constants.dart';
+import '../../models/analytics.dart';
+import '../../models/branch.dart';
 import '../../providers/analytics_provider.dart';
 import '../../providers/branch_provider.dart';
 import '../../widgets/common/app_badge.dart';
@@ -35,22 +37,33 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   Widget build(BuildContext context) {
     final analyticsState = ref.watch(analyticsNotifierProvider);
     final notifier = ref.read(analyticsNotifierProvider.notifier);
-    final branch = ref.watch(currentBranchProvider);
+    final branchState = ref.watch(branchNotifierProvider);
+    final currentBranch = branchState.currentBranch;
+    final assignedBranches = branchState.assignedBranches;
 
     return PermissionGuard.single(
       permission: AppPermission.viewAnalytics,
       fallback: const AppUnauthorizedState(),
       child: Scaffold(
         appBar: AppBar(
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          title: Row(
             children: [
-              const Text('Branch Analytics'),
-              if (branch != null)
-                Text(
-                  'Branch: ${branch.name}',
-                  style: const TextStyle(fontSize: 12, color: AppColors.primary),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Branch Analytics'),
+                    if (currentBranch != null)
+                      Text(
+                        currentBranch.name,
+                        style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
                 ),
+              ),
+              if (assignedBranches.length > 1 && currentBranch != null)
+                _buildBranchSwitcher(context, ref, currentBranch, assignedBranches),
             ],
           ),
         ),
@@ -92,6 +105,69 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
     );
   }
 
+  Widget _buildBranchSwitcher(
+    BuildContext context,
+    WidgetRef ref,
+    Branch currentBranch,
+    List<Branch> assignedBranches,
+  ) {
+    return PopupMenuButton<Branch>(
+      initialValue: currentBranch,
+      onSelected: (branch) {
+        ref.read(branchNotifierProvider.notifier).selectBranch(branch);
+      },
+      itemBuilder: (context) {
+        return assignedBranches.map((branch) {
+          final isSelected = branch.id == currentBranch.id;
+          return PopupMenuItem<Branch>(
+            value: branch,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.storefront,
+                  size: 18,
+                  color: isSelected ? AppColors.primary : AppColors.textSecondaryLight,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  branch.name,
+                  style: TextStyle(
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    color: isSelected ? AppColors.primaryDark : AppColors.textPrimaryLight,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.primaryLight,
+          borderRadius: AppSpacing.roundedSm,
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.swap_horiz, size: 16, color: AppColors.primaryDark),
+            const SizedBox(width: 4),
+            const Text(
+              'Switch Branch',
+              style: TextStyle(
+                color: AppColors.primaryDark,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Icon(Icons.arrow_drop_down, size: 16, color: AppColors.primaryDark),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildContent(
     BuildContext context,
     AnalyticsState state,
@@ -102,76 +178,109 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
     }
 
     if (state.errorMessage != null) {
-      return Center(
-        child: Padding(
-          padding: AppSpacing.paddingLg,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                state.errorMessage!,
-                style: const TextStyle(color: AppColors.error),
-                textAlign: TextAlign.center,
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          const SizedBox(height: 80),
+          Center(
+            child: Padding(
+              padding: AppSpacing.paddingLg,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    state.errorMessage!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AppColors.error),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  ElevatedButton(
+                    onPressed: notifier.loadAnalytics,
+                    child: const Text('Retry'),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppSpacing.md),
-              ElevatedButton(
-                onPressed: notifier.loadAnalytics,
-                child: const Text('Retry'),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       );
     }
 
     final data = state.analytics;
     if (data == null) {
-      return const AppEmptyState(
-        title: 'No Analytics Available',
-        description: 'No transaction or sales activity found for the selected period.',
-        icon: Icons.bar_chart_outlined,
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 80),
+          AppEmptyState(
+            title: 'No Analytics Data',
+            description: 'No performance metrics available for this branch.',
+            icon: Icons.bar_chart_outlined,
+          ),
+        ],
       );
     }
 
     return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: AppSpacing.paddingMd,
       children: [
-        // Total Volume Overview Card
+        // Total Revenue & Volume Card
         AppCard(
           padding: AppSpacing.paddingLg,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Total Revenue',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondaryLight),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Branch Performance',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondaryLight,
+                    ),
+                  ),
+                  AppBadge(
+                    label: data.status,
+                    variant: data.status == 'ACTIVE'
+                        ? AppBadgeVariant.success
+                        : AppBadgeVariant.neutral,
+                  ),
+                ],
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: AppSpacing.sm),
               Text(
-                '₹${data.totalRevenue.toStringAsFixed(2)}',
+                '\u20b9${data.totalRevenue.toStringAsFixed(2)}',
                 style: const TextStyle(
-                  fontSize: 28,
+                  fontSize: 32,
                   fontWeight: FontWeight.bold,
                   color: AppColors.primary,
                 ),
               ),
-              const Divider(height: AppSpacing.lg),
+              const Text(
+                'Total Revenue (Sales & Recharges)',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
+              ),
+              const Divider(height: AppSpacing.xl),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildSummaryCol('Transactions', '${data.transactionCount}'),
-                  _buildSummaryCol('Purchases', '₹${data.purchaseVolume.toStringAsFixed(0)}'),
-                  _buildSummaryCol('Recharges', '₹${data.rechargeVolume.toStringAsFixed(0)}'),
+                  _buildSummaryCol('Purchases', '\u20b9${data.purchaseVolume.toStringAsFixed(0)}'),
+                  _buildSummaryCol('Recharges', '\u20b9${data.rechargeVolume.toStringAsFixed(0)}'),
+                  _buildSummaryCol('Refunds', '\u20b9${data.refundVolume.toStringAsFixed(0)}'),
+                  _buildSummaryCol('Tx Count', '${data.transactionCount}'),
                 ],
               ),
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: AppSpacing.md),
 
-        // Operational Metrics Grid
-        const SectionHeader(title: 'Operational Metrics'),
-        const SizedBox(height: AppSpacing.sm),
+        // Key Operations Grid
         Row(
           children: [
             Expanded(
@@ -179,7 +288,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                 icon: Icons.point_of_sale,
                 label: 'Orders / Purchases',
                 value: '${data.purchaseCount}',
-                subValue: 'Avg ₹${data.avgPurchaseValue.toStringAsFixed(0)}',
+                subValue: 'Avg \u20b9${data.avgPurchaseValue.toStringAsFixed(0)}',
                 color: AppColors.primary,
               ),
             ),
@@ -265,7 +374,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           Text(
-                            '₹${prod.totalRevenue.toStringAsFixed(0)}',
+                            '\u20b9${prod.totalRevenue.toStringAsFixed(0)}',
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppColors.textSecondaryLight,
@@ -316,7 +425,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                             ),
                             Text(
-                              '${peak.transactionCount} transactions • ₹${peak.purchaseVolume.toStringAsFixed(0)}',
+                              '${peak.transactionCount} transactions \u2022 \u20b9${peak.purchaseVolume.toStringAsFixed(0)}',
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: AppColors.textSecondaryLight,

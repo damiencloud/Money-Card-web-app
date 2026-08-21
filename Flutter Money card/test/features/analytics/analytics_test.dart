@@ -10,6 +10,15 @@ import 'package:money_card_staff/providers/analytics_provider.dart';
 import 'package:money_card_staff/providers/auth_provider.dart';
 import 'package:money_card_staff/providers/branch_provider.dart';
 import 'package:money_card_staff/repositories/analytics_repository.dart';
+import 'package:money_card_staff/repositories/branch_repository.dart';
+
+class FakeBranchRepository implements BranchRepository {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
+  Future<List<Branch>> getBranches({bool forceRefresh = false}) async => const [];
+}
 
 class FakeAnalyticsRepository implements AnalyticsRepository {
   BranchPerformanceMetric metric = const BranchPerformanceMetric(
@@ -158,6 +167,53 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Access Restricted'), findsOneWidget);
+    });
+
+    testWidgets('AnalyticsScreen allows switching between assigned branches seamlessly', (tester) async {
+      const authorizedUser = AuthUser(
+        id: 'staff-1',
+        email: 'staff@moneycard.io',
+        name: 'Alex Morgan',
+        role: 'STAFF',
+        organizationId: 'org-1',
+        permissions: [AppPermission.viewAnalytics],
+        assignedBranchIds: ['b-1', 'b-2'],
+        assignedBranches: [
+          Branch(id: 'b-1', organizationId: 'org-1', name: 'Main Central 1', status: 'ACTIVE'),
+          Branch(id: 'b-2', organizationId: 'org-1', name: 'Main Central 2', status: 'ACTIVE'),
+        ],
+      );
+
+      final analyticsNotifier = AnalyticsNotifier(fakeRepo, 'b-1');
+      await analyticsNotifier.loadAnalytics();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            currentUserProvider.overrideWithValue(authorizedUser),
+            branchNotifierProvider.overrideWith((ref) {
+              final notifier = BranchNotifier(FakeBranchRepository());
+              notifier.syncWithUser(authorizedUser);
+              return notifier;
+            }),
+            analyticsNotifierProvider.overrideWith((ref) => analyticsNotifier),
+          ],
+          child: const MaterialApp(
+            home: AnalyticsScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Main Central 1'), findsOneWidget);
+      expect(find.text('Switch Branch'), findsOneWidget);
+
+      // Tap Switch Branch button
+      await tester.tap(find.text('Switch Branch'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Main Central 2'), findsOneWidget);
     });
   });
 }
