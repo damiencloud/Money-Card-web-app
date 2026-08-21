@@ -202,7 +202,41 @@ class _CardDetailsScreenState extends ConsumerState<CardDetailsScreen> {
                     ),
                   ],
                 ),
+                if (isActive) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Builder(
+                    builder: (context) {
+                      final branchState = ref.watch(branchNotifierProvider);
+                      final sessionBranchName = activeSession?.branchName ?? card.currentBranchName;
+                      final matchedBranch = branchState.assignedBranches
+                          .where((b) => b.id == (activeSession?.branchId ?? card.currentBranchId))
+                          .firstOrNull;
+                      final resolvedBranchName = sessionBranchName ??
+                          matchedBranch?.name ??
+                          branchState.currentBranch?.name ??
+                          'Main Branch';
 
+                      return Row(
+                        children: [
+                          const Icon(
+                            Icons.storefront_outlined,
+                            size: 15,
+                            color: AppColors.textSecondaryLight,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            resolvedBranchName,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textSecondaryLight,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
               ],
             ),
           ),

@@ -269,6 +269,7 @@ class CardDetailsNotifier extends StateNotifier<CardDetailsState> {
       state = state.copyWith(
         isLoading: false,
         card: card,
+        activeSession: card.activeSession,
       );
     } on ApiException catch (e) {
       state = state.copyWith(

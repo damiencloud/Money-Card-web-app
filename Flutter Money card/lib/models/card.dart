@@ -26,6 +26,8 @@ class Card {
   final String physicalCardNumber;
   final CardStatus status;
   final String? currentBranchId;
+  final String? currentBranchName;
+  final CardSession? activeSession;
   final String? createdAt;
   final String? updatedAt;
 
@@ -36,18 +38,40 @@ class Card {
     required this.physicalCardNumber,
     required this.status,
     this.currentBranchId,
+    this.currentBranchName,
+    this.activeSession,
     this.createdAt,
     this.updatedAt,
   });
 
   factory Card.fromJson(Map<String, dynamic> json) {
+    CardSession? session;
+    if (json['activeSession'] != null && json['activeSession'] is Map<String, dynamic>) {
+      session = CardSession.fromJson(json['activeSession'] as Map<String, dynamic>);
+    } else if (json['sessions'] != null && json['sessions'] is List && (json['sessions'] as List).isNotEmpty) {
+      final sessList = json['sessions'] as List;
+      final activeJson = sessList.firstWhere(
+        (s) => s is Map<String, dynamic> && (s['status'] == 'ACTIVE' || s['sessionStatus'] == 'ACTIVE'),
+        orElse: () => sessList.first,
+      );
+      if (activeJson is Map<String, dynamic>) {
+        session = CardSession.fromJson(activeJson);
+      }
+    }
+
+    String? branchName = json['currentBranchName'] as String? ??
+        session?.branchName ??
+        (json['branch'] != null && json['branch'] is Map ? json['branch']['name'] as String? : null);
+
     return Card(
       id: json['id'] as String? ?? '',
       organizationId: json['organizationId'] as String? ?? '',
       qrToken: json['qrToken'] as String? ?? '',
       physicalCardNumber: json['physicalCardNumber'] as String? ?? '',
       status: CardStatus.fromString(json['status'] as String?),
-      currentBranchId: json['currentBranchId'] as String?,
+      currentBranchId: json['currentBranchId'] as String? ?? session?.branchId,
+      currentBranchName: branchName,
+      activeSession: session,
       createdAt: json['createdAt'] as String?,
       updatedAt: json['updatedAt'] as String?,
     );

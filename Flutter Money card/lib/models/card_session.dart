@@ -23,6 +23,7 @@ class CardSession {
   final String cardId;
   final String? physicalCardNumber;
   final String branchId;
+  final String? branchName;
   final SessionStatus status;
   final double balance;
   final String startedAt;
@@ -35,6 +36,7 @@ class CardSession {
     required this.cardId,
     this.physicalCardNumber,
     required this.branchId,
+    this.branchName,
     required this.status,
     required this.balance,
     required this.startedAt,
@@ -49,6 +51,7 @@ class CardSession {
       cardId: json['cardId'] as String? ?? '',
       physicalCardNumber: json['physicalCardNumber'] as String?,
       branchId: json['branchId'] as String? ?? '',
+      branchName: json['branchName'] as String? ?? (json['branch'] != null && json['branch'] is Map ? json['branch']['name'] as String? : null),
       status: SessionStatus.fromString(json['status'] as String? ?? json['sessionStatus'] as String?),
       balance: (json['balance'] as num?)?.toDouble() ?? 0.0,
       startedAt: json['startedAt'] as String? ?? '',

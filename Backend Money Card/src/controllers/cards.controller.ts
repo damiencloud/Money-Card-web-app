@@ -289,7 +289,30 @@ export async function getCardById(req: Request, res: Response) {
     return sendError(res, 404, 'NOT_FOUND', 'Card not found');
   }
 
-  return sendSuccess(res, card);
+  const activeSession = card.sessions.find((s) => s.status === 'ACTIVE') || card.sessions[0];
+
+  const formatted = {
+    ...card,
+    currentBranchId: activeSession?.branchId || null,
+    currentBranchName: activeSession?.branch?.name || null,
+    activeSession: activeSession
+      ? {
+          id: activeSession.id,
+          cardId: activeSession.cardId,
+          physicalCardNumber: card.physicalCardNumber,
+          branchId: activeSession.branchId,
+          branchName: activeSession.branch?.name || null,
+          status: activeSession.status,
+          balance: activeSession.balance,
+          startedAt: activeSession.issuedAt.toISOString(),
+          settledAt: activeSession.settledAt ? activeSession.settledAt.toISOString() : null,
+          createdAt: activeSession.issuedAt.toISOString(),
+          updatedAt: activeSession.settledAt ? activeSession.settledAt.toISOString() : activeSession.issuedAt.toISOString(),
+        }
+      : null,
+  };
+
+  return sendSuccess(res, formatted);
 }
 
 export async function resolveCard(req: Request, res: Response) {
