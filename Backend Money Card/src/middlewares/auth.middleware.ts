@@ -28,7 +28,9 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       where: { id: payload.userId },
       include: {
         permissions: true,
-        assignedBranches: true,
+        assignedBranches: {
+          include: { branch: true },
+        },
         organization: true,
       },
     });
@@ -64,7 +66,9 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     }
 
     const permissions: PermissionCode[] = user.permissions.map((p) => p.permission);
-    const assignedBranchIds: string[] = user.assignedBranches.map((b) => b.branchId);
+    const assignedBranchIds: string[] = user.assignedBranches
+      .filter((b) => !b.branch || b.branch.status === 'ACTIVE')
+      .map((b) => b.branchId);
 
     req.user = {
       id: user.id,

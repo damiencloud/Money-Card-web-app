@@ -81,10 +81,15 @@ export async function login(req: Request, res: Response) {
   });
 
   const permissions = user.permissions.map((p) => p.permission);
-  const assignedBranches = user.assignedBranches.map((b) => ({
-    id: b.branch.id,
-    name: b.branch.name,
-  }));
+  const activeAssignedBranches = user.assignedBranches
+    .filter((b) => user.role !== Role.STAFF || b.branch.status === 'ACTIVE')
+    .map((b) => ({
+      id: b.branch.id,
+      name: b.branch.name,
+      location: b.branch.location,
+      status: b.branch.status,
+    }));
+  const assignedBranchIds = activeAssignedBranches.map((b) => b.id);
 
   return sendSuccess(res, {
     token: accessToken,
@@ -100,7 +105,8 @@ export async function login(req: Request, res: Response) {
       status: user.status,
       mustChangePassword: user.mustChangePassword,
       permissions,
-      assignedBranches,
+      assignedBranchIds,
+      assignedBranches: activeAssignedBranches,
     },
   });
 }
@@ -168,10 +174,17 @@ export async function getMe(req: Request, res: Response) {
     status: user.status,
     mustChangePassword: user.mustChangePassword,
     permissions: user.permissions.map((p) => p.permission),
-    assignedBranches: user.assignedBranches.map((b) => ({
-      id: b.branch.id,
-      name: b.branch.name,
-    })),
+    assignedBranchIds: user.assignedBranches
+      .filter((b) => user.role !== Role.STAFF || b.branch.status === 'ACTIVE')
+      .map((b) => b.branchId),
+    assignedBranches: user.assignedBranches
+      .filter((b) => user.role !== Role.STAFF || b.branch.status === 'ACTIVE')
+      .map((b) => ({
+        id: b.branch.id,
+        name: b.branch.name,
+        location: b.branch.location,
+        status: b.branch.status,
+      })),
   });
 }
 

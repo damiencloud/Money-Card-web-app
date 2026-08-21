@@ -55,8 +55,6 @@ class BranchNotifier extends StateNotifier<BranchState> {
         isLoading: false,
         error: null,
       );
-    } else if (user.assignedBranchIds.isNotEmpty) {
-      loadAssignedBranches(user.assignedBranchIds);
     } else {
       state = state.copyWith(
         assignedBranches: [],
@@ -67,17 +65,49 @@ class BranchNotifier extends StateNotifier<BranchState> {
     }
   }
 
+  /// Background refresh to detect live branch disabling/enabling by Org Admin
+  Future<void> refreshBranchesSilently() async {
+    try {
+      final activeBranches = await _branchRepository.getBranches(forceRefresh: true);
+      final activeOnly = activeBranches
+          .where((b) => b.status.toUpperCase() == 'ACTIVE')
+          .toList();
+
+      Branch? current = state.currentBranch;
+      if (current != null && !activeOnly.any((b) => b.id == current!.id)) {
+        // Current branch was disabled by Org Admin! Invalidate it immediately
+        current = activeOnly.isNotEmpty ? activeOnly.first : null;
+      } else if (current == null && activeOnly.isNotEmpty) {
+        current = activeOnly.first;
+      }
+
+      state = state.copyWith(
+        assignedBranches: activeOnly,
+        currentBranch: current,
+        error: activeOnly.isEmpty
+            ? 'Your assigned branch is currently inactive. Please contact your Organization Administrator.'
+            : null,
+      );
+    } catch (_) {
+      // Ignore background network errors
+    }
+  }
+
   Future<void> loadAssignedBranches(List<String> assignedBranchIds) async {
     if (assignedBranchIds.isEmpty) {
-      state = state.copyWith(assignedBranches: [], currentBranch: null);
+      state = state.copyWith(
+        assignedBranches: [],
+        currentBranch: null,
+        error: 'Your assigned branch is currently inactive. Please contact your Organization Administrator.',
+      );
       return;
     }
 
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final allBranches = await _branchRepository.getBranches();
+      final allBranches = await _branchRepository.getBranches(forceRefresh: true);
       final assigned = allBranches
-          .where((b) => assignedBranchIds.contains(b.id))
+          .where((b) => assignedBranchIds.contains(b.id) && b.status.toUpperCase() == 'ACTIVE')
           .toList();
 
       Branch? active = state.currentBranch;
@@ -89,6 +119,9 @@ class BranchNotifier extends StateNotifier<BranchState> {
         assignedBranches: assigned,
         currentBranch: active,
         isLoading: false,
+        error: assigned.isEmpty
+            ? 'Your assigned branch is currently inactive. Please contact your Organization Administrator.'
+            : null,
       );
     } catch (e) {
       state = state.copyWith(
@@ -99,7 +132,7 @@ class BranchNotifier extends StateNotifier<BranchState> {
   }
 
   void selectBranch(Branch branch) {
-    if (state.assignedBranches.any((b) => b.id == branch.id)) {
+    if (state.assignedBranches.any((b) => b.id == branch.id && b.status.toUpperCase() == 'ACTIVE')) {
       state = state.copyWith(currentBranch: branch);
     }
   }
