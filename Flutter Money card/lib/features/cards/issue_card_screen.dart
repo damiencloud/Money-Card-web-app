@@ -434,7 +434,7 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
     // If a card was scanned and resolved
     if (_scannedQrToken != null && !_isResolvingQr) {
       if (_scanErrorMessage != null) {
-        // Error state: Card Not Registered or Other Error
+        // Simple unregistered error
         return Padding(
           padding: AppSpacing.paddingLg,
           child: Column(
@@ -442,63 +442,46 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppColors.errorLight,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                child: const Icon(Icons.credit_card_off, size: 48, color: AppColors.error),
               ),
               const SizedBox(height: AppSpacing.md),
               const Text(
-                'QR Card Not Registered',
+                'Card Not Registered',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: AppColors.error,
                 ),
               ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                _scanErrorMessage!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondaryLight,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
+              const SizedBox(height: AppSpacing.sm),
               const Text(
-                'This card does not exist in your organization\'s card inventory. Cards must first be created or imported by an Organization Admin via the Web Portal.',
+                'This QR card is not registered in your organization.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 14,
                   color: AppColors.textSecondaryLight,
                 ),
               ),
-              const SizedBox(height: AppSpacing.lg),
-              Row(
-                children: [
-                  Expanded(
-                    child: AppOutlinedButton(
-                      label: 'Cancel',
-                      icon: Icons.close,
-                      onPressed: () {
-                        setState(() {
-                          _currentTab = IssueCardTab.manual;
-                          _resetScan();
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: AppButton(
-                      label: 'Scan Another',
-                      icon: Icons.qr_code_scanner,
-                      onPressed: _resetScan,
-                    ),
-                  ),
-                ],
+              const SizedBox(height: AppSpacing.xl),
+              AppButton(
+                label: 'Scan Another Card',
+                icon: Icons.qr_code_scanner,
+                onPressed: _resetScan,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              AppOutlinedButton(
+                label: 'Cancel',
+                icon: Icons.close,
+                onPressed: () {
+                  setState(() {
+                    _currentTab = IssueCardTab.manual;
+                    _resetScan();
+                  });
+                },
               ),
             ],
           ),

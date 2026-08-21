@@ -356,7 +356,7 @@ export async function resolveCard(req: Request, res: Response) {
     });
 
     if (!card) {
-      return sendError(res, 404, 'QR_NOT_REGISTERED', 'No matching card found in your organization inventory.');
+      return sendError(res, 404, 'CARD_NOT_FOUND', 'This card is not registered.');
     }
 
     return sendSuccess(res, {

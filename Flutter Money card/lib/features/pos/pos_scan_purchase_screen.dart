@@ -438,36 +438,27 @@ class _PosScanPurchaseScreenState extends ConsumerState<PosScanPurchaseScreen> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: AppColors.errorLight,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                  child: const Icon(Icons.credit_card_off, size: 48, color: AppColors.error),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 const Text(
-                  'QR Card Not Registered',
+                  'Card Not Registered',
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: AppColors.error,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  _scanErrorMessage!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondaryLight,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
+                const SizedBox(height: AppSpacing.sm),
                 const Text(
-                  'This card is not registered in your organization\'s inventory. Please scan a registered Money Card.',
+                  'This QR card is not registered in your organization.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 14,
                     color: AppColors.textSecondaryLight,
                   ),
                 ),

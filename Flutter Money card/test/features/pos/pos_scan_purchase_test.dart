@@ -280,7 +280,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify unregistered error state
-      expect(find.text('QR Card Not Registered'), findsOneWidget);
+      expect(find.text('Card Not Registered'), findsOneWidget);
       expect(find.text('Cancel'), findsOneWidget);
       expect(find.text('Scan Another'), findsOneWidget);
 
