@@ -1,7 +1,7 @@
 // ─── Products & Inventory Unified Hub (Org Admin) ──────────────────────────
-// Merges Master Product Catalog and Multi-Branch Stock Control into a cohesive,
-// modern tabbed management workspace.
-// Allows editing stock both upon creation and during subsequent edits.
+// Clean Separation of Responsibilities:
+// 1. PRODUCT CATALOG: View products, Add product, View details, Activate/Deactivate.
+// 2. INVENTORY & STOCK CONTROL: View inventory, Adjust stock, CSV Import, Asset Valuation.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -30,7 +30,6 @@ import {
   Warehouse,
   Plus,
   Search,
-  Edit2,
   FileSpreadsheet,
   AlertCircle,
   Power,
@@ -87,8 +86,6 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
   const [productCategoryFilter, setProductCategoryFilter] = useState('ALL');
 
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<ProductWithInventory | null>(null);
 
   // Form State
   const [formItemName, setFormItemName] = useState('');
@@ -238,24 +235,6 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     setShowCreateModal(true);
   };
 
-  const handleOpenEdit = (product: ProductWithInventory) => {
-    setSelectedProduct(product);
-    setFormItemName(product.itemName);
-    setFormCategories(product.category || ['Veg']);
-    setFormPrice(product.price.toString());
-    setFormStockQty(product.quantity.toString());
-    setFormStatus(product.status);
-    setFormErrors({});
-    setProductModalApiError(null);
-    setShowEditModal(true);
-  };
-
-  const handleStepEditStock = (delta: number) => {
-    const current = parseInt(formStockQty, 10) || 0;
-    const nextVal = Math.max(0, current + delta);
-    setFormStockQty(nextVal.toString());
-  };
-
   const validateProductForm = () => {
     const errs: Record<string, string> = {};
     if (!formItemName.trim()) errs.itemName = 'Product name is required';
@@ -265,9 +244,9 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     if (isNaN(priceNum) || priceNum <= 0) errs.price = 'Price must be greater than 0';
 
     const qtyNum = parseInt(formStockQty, 10);
-    if (isNaN(qtyNum) || qtyNum < 0) errs.stockQty = 'Stock quantity must be 0 or more';
+    if (isNaN(qtyNum) || qtyNum < 0) errs.stockQty = 'Initial stock quantity must be 0 or more';
 
-    if (!selectedProduct && !formBranchId) {
+    if (!formBranchId) {
       errs.branchId = 'Please select an initial branch';
     }
 
@@ -297,51 +276,8 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
         return;
       }
 
-      notify.success(`Product "${res.data.itemName}" created with ${formStockQty} units`);
+      notify.success(`Product "${res.data.itemName}" created successfully`);
       setShowCreateModal(false);
-      fetchProductsData();
-      fetchInventoryData();
-    } catch {
-      setProductModalApiError('An unexpected network error occurred.');
-    } finally {
-      setIsProductSubmitting(false);
-    }
-  };
-
-  const handleEditProductSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedProduct || !validateProductForm()) return;
-
-    setProductModalApiError(null);
-    setIsProductSubmitting(true);
-
-    try {
-      // 1. Update product metadata
-      const res = await apiService.products.updateProduct(selectedProduct.id, {
-        itemName: formItemName.trim(),
-        category: formCategories,
-        price: parseFloat(formPrice),
-        status: formStatus,
-      });
-
-      if (!res.success) {
-        setProductModalApiError(res.error.message || 'Failed to update product');
-        return;
-      }
-
-      // 2. Update stock quantity if changed
-      const newQty = parseInt(formStockQty, 10);
-      if (!isNaN(newQty) && newQty !== selectedProduct.quantity) {
-        const invRecord = inventoryList.find((i) => i.productId === selectedProduct.id);
-        if (invRecord) {
-          await apiService.inventory.updateInventoryQuantity(invRecord.id, newQty);
-        } else {
-          await apiService.inventory.updateInventoryQuantity(selectedProduct.id, newQty);
-        }
-      }
-
-      notify.success(`Product "${res.data.itemName}" updated successfully`);
-      setShowEditModal(false);
       fetchProductsData();
       fetchInventoryData();
     } catch {
@@ -443,7 +379,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     }
   };
 
-  // ─── Metrics Calculations (No Average Price Box) ───────────────────────────
+  // ─── Metrics Calculations (Clean 3-Card Grid) ─────────────────────────────
   const productMetrics = useMemo(() => {
     const total = products.length;
     const active = products.filter((p) => p.status === 'ACTIVE').length;
@@ -464,14 +400,14 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     return <UnauthorizedPage />;
   }
 
-  // ─── Product Columns ──────────────────────────────────────────────────────
+  // ─── Product Catalog Columns (Clean: No Edit & No Stock Buttons) ──────────
   const productColumns = [
     {
       key: 'itemName',
       header: 'Product Item',
       render: (product: ProductWithInventory) => (
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400 shrink-0">
             <Package className="h-4 w-4" />
           </div>
           <div>
@@ -514,23 +450,6 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
       ),
     },
     {
-      key: 'quantity',
-      header: 'Stock Qty',
-      render: (product: ProductWithInventory) => (
-        <span
-          className={`font-mono text-xs font-semibold ${
-            product.quantity === 0
-              ? 'text-rose-400 font-bold'
-              : product.quantity < 10
-                ? 'text-amber-400'
-                : 'text-emerald-400'
-          }`}
-        >
-          {product.quantity} units
-        </span>
-      ),
-    },
-    {
       key: 'status',
       header: 'Status',
       render: (product: ProductWithInventory) => (
@@ -541,44 +460,33 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     },
     {
       key: 'actions',
-      header: 'Actions',
+      header: 'Status Action',
       className: 'text-right',
       render: (product: ProductWithInventory) => (
-        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
           {canManageProducts && (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleOpenEdit(product)}
-                leftIcon={<Edit2 className="h-3.5 w-3.5" />}
-              >
-                Edit & Stock
-              </Button>
-
-              <Button
-                variant={product.status === 'ACTIVE' ? 'ghost' : 'outline'}
-                size="sm"
-                onClick={() => handleToggleStatus(product)}
-                leftIcon={<Power className="h-3.5 w-3.5" />}
-              >
-                {product.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-              </Button>
-            </>
+            <Button
+              variant={product.status === 'ACTIVE' ? 'ghost' : 'outline'}
+              size="sm"
+              onClick={() => handleToggleStatus(product)}
+              leftIcon={<Power className="h-3.5 w-3.5" />}
+            >
+              {product.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+            </Button>
           )}
         </div>
       ),
     },
   ];
 
-  // ─── Inventory Columns ────────────────────────────────────────────────────
+  // ─── Inventory & Stock Control Columns ────────────────────────────────────
   const inventoryColumns = [
     {
       key: 'productName',
       header: 'Product Item',
       render: (item: InventoryItemWithDetails) => (
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400 shrink-0">
             <Package className="h-4 w-4" />
           </div>
           <div>
@@ -647,10 +555,10 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     },
     {
       key: 'actions',
-      header: 'Actions',
+      header: 'Stock Action',
       className: 'text-right',
       render: (item: InventoryItemWithDetails) => (
-        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
           {canManageInventory && (
             <Button
               variant="ghost"
@@ -673,7 +581,9 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Products & Inventory</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Manage organization product catalog, pricing, categories, multi-branch stock levels, and asset valuation.
+            {activeTab === 'products'
+              ? 'View organization master product catalog, categories, pricing, and sale availability.'
+              : 'Monitor multi-branch physical stock levels, asset valuation, and stock adjustments.'}
           </p>
         </div>
 
@@ -750,17 +660,17 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
           }`}
         >
           <Warehouse className="h-4 w-4" />
-          <span>Branch Stock & Valuation</span>
+          <span>Inventory & Stock Control</span>
           <span className="ml-1.5 rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
             {inventoryList.length}
           </span>
         </button>
       </div>
 
-      {/* ─── TAB 1: PRODUCT CATALOG ─── */}
+      {/* ─── TAB 1: PRODUCT CATALOG (NO EDIT & NO STOCK BUTTONS) ─── */}
       {activeTab === 'products' && (
         <div className="space-y-6">
-          {/* Summary Metric Cards (Clean 3-Card Grid, No Average Price) */}
+          {/* Summary Metric Cards (Clean 3-Card Grid) */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Card className="flex items-center gap-3 p-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
@@ -860,7 +770,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
         </div>
       )}
 
-      {/* ─── TAB 2: BRANCH STOCK & VALUATION ─── */}
+      {/* ─── TAB 2: INVENTORY & STOCK CONTROL ─── */}
       {activeTab === 'inventory' && (
         <div className="space-y-6">
           {/* Summary Metric Cards */}
@@ -955,7 +865,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
         </div>
       )}
 
-      {/* ─── MODAL 1: CREATE PRODUCT (WITH INITIAL STOCK) ─── */}
+      {/* ─── CREATE PRODUCT MODAL ─── */}
       <Modal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
@@ -1065,132 +975,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
         </form>
       </Modal>
 
-      {/* ─── MODAL 2: EDIT PRODUCT (ALLOWS EDITING STOCK AFTER INITIAL STOCK) ─── */}
-      <Modal
-        isOpen={showEditModal}
-        onClose={() => setShowEditModal(false)}
-        title="Edit Product"
-        size="lg"
-      >
-        <form onSubmit={handleEditProductSubmit} className="space-y-4">
-          {productModalApiError && (
-            <div className="flex items-center gap-2 rounded-lg bg-rose-500/10 p-3 text-sm text-rose-400 border border-rose-500/20">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{productModalApiError}</span>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Product Name <span className="text-rose-400">*</span>
-            </label>
-            <Input
-              value={formItemName}
-              onChange={(e) => setFormItemName(e.target.value)}
-              error={formErrors.itemName}
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Categories & Attributes <span className="text-rose-400">*</span>
-            </label>
-            <CategorySelector
-              selectedCategories={formCategories}
-              onChange={(cats) => setFormCategories(cats)}
-            />
-            {formErrors.categories && (
-              <p className="mt-1 text-xs text-rose-400">{formErrors.categories}</p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Selling Price (₹) <span className="text-rose-400">*</span>
-              </label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={formPrice}
-                onChange={(e) => setFormPrice(e.target.value)}
-                error={formErrors.price}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Status
-              </label>
-              <Select
-                value={formStatus}
-                onChange={(e) => setFormStatus(e.target.value as 'ACTIVE' | 'INACTIVE')}
-                options={[
-                  { value: 'ACTIVE', label: 'ACTIVE (Available for sale)' },
-                  { value: 'INACTIVE', label: 'INACTIVE (Hidden from POS)' },
-                ]}
-              />
-            </div>
-          </div>
-
-          {/* Edit Stock Quantity Field */}
-          <div className="rounded-lg bg-slate-800/60 p-4 border border-slate-700 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-semibold text-slate-200">
-                Current Stock on Hand (Units)
-              </label>
-              <span className="text-xs text-slate-400">
-                Initial/Current: <span className="text-emerald-400 font-bold">{selectedProduct?.quantity ?? 0} units</span>
-              </span>
-            </div>
-
-            <Input
-              type="number"
-              min="0"
-              value={formStockQty}
-              onChange={(e) => setFormStockQty(e.target.value)}
-              error={formErrors.stockQty}
-            />
-
-            {/* Quick Adjustment Stepper Chips */}
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              <Button type="button" variant="outline" size="sm" onClick={() => handleStepEditStock(-10)}>
-                -10
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => handleStepEditStock(-5)}>
-                -5
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => handleStepEditStock(-1)}>
-                -1
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => handleStepEditStock(1)}>
-                +1
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => handleStepEditStock(5)}>
-                +5
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => handleStepEditStock(10)}>
-                +10
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => handleStepEditStock(50)}>
-                +50
-              </Button>
-            </div>
-          </div>
-
-          <ModalFooter>
-            <Button variant="ghost" onClick={() => setShowEditModal(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" type="submit" isLoading={isProductSubmitting}>
-              Save Changes & Stock
-            </Button>
-          </ModalFooter>
-        </form>
-      </Modal>
-
-      {/* ─── MODAL 3: ADJUST STOCK ─── */}
+      {/* ─── ADJUST STOCK MODAL (INVENTORY & STOCK CONTROL TAB ONLY) ─── */}
       <Modal
         isOpen={showAdjustModal}
         onClose={() => setShowAdjustModal(false)}
@@ -1263,7 +1048,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
         </form>
       </Modal>
 
-      {/* ─── MODAL 4: CSV IMPORT MODAL ─── */}
+      {/* ─── CSV IMPORT MODAL ─── */}
       <CsvImportModal
         isOpen={showCsvModal}
         onClose={() => setShowCsvModal(false)}
