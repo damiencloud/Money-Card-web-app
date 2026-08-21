@@ -6,6 +6,8 @@ import {
   deleteProduct,
   getInventory,
   updateInventoryStock,
+  adjustInventoryStock,
+  getInventoryMovements,
   getCsvTemplate,
   importInventoryCsv,
 } from '../controllers/products.controller.js';
@@ -25,6 +27,9 @@ inventoryRouter.get('/import/template', getCsvTemplate);
 
 inventoryRouter.use(requireAuth);
 inventoryRouter.get('/', requirePermission(PermissionCode.INVENTORY_VIEW), getInventory);
+inventoryRouter.get('/movements', requirePermission(PermissionCode.INVENTORY_VIEW), getInventoryMovements);
+inventoryRouter.post('/:id/adjust', requirePermission(PermissionCode.INVENTORY_MANAGE), adjustInventoryStock);
+inventoryRouter.post('/adjust', requirePermission(PermissionCode.INVENTORY_MANAGE), adjustInventoryStock);
 inventoryRouter.patch('/:branchId/:productId', requirePermission(PermissionCode.INVENTORY_MANAGE), updateInventoryStock);
 inventoryRouter.patch('/:id', requirePermission(PermissionCode.INVENTORY_MANAGE), updateInventoryStock);
 inventoryRouter.post('/import', requirePermission(PermissionCode.INVENTORY_IMPORT), importInventoryCsv);

@@ -9,7 +9,7 @@ export async function getProducts(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
   }
 
-  const { search, category, status } = req.query as Record<string, string>;
+  const { search, category, status, branchId } = req.query as Record<string, string>;
 
   const whereClause: any = {
     organizationId: orgId,
@@ -38,23 +38,45 @@ export async function getProducts(req: Request, res: Response) {
     orderBy: { itemName: 'asc' },
   });
 
-  const formatted = products.map((p) => ({
-    id: p.id,
-    itemName: p.itemName,
-    price: p.price,
-    category: p.category,
-    description: p.description,
-    imageUrl: p.imageUrl,
-    status: p.status,
-    inventory: p.inventoryItems.map((inv) => ({
-      branchId: inv.branchId,
-      branchName: inv.branch.name,
-      quantity: inv.quantity,
-      lowStockThreshold: inv.lowStockThreshold,
-    })),
-    createdAt: p.createdAt,
-    updatedAt: p.updatedAt,
-  }));
+  const formatted = products.map((p) => {
+    // Find branch-specific inventory if branchId is provided
+    const targetBranchInv = branchId && branchId !== 'ALL'
+      ? p.inventoryItems.find((inv) => inv.branchId === branchId)
+      : p.inventoryItems[0];
+
+    const currentQty = targetBranchInv ? targetBranchInv.quantity : 0;
+    const threshold = targetBranchInv ? targetBranchInv.lowStockThreshold : 10;
+
+    return {
+      id: p.id,
+      productId: p.id,
+      branchId: branchId || targetBranchInv?.branchId || '',
+      branchName: targetBranchInv?.branch?.name || '',
+      itemName: p.itemName,
+      name: p.itemName,
+      productName: p.itemName,
+      price: p.price,
+      category: p.category,
+      description: p.description,
+      imageUrl: p.imageUrl,
+      status: p.status,
+      quantity: currentQty,
+      currentStock: currentQty,
+      stock: currentQty,
+      lowStockThreshold: threshold,
+      reorderLevel: threshold,
+      isLowStock: currentQty <= threshold && currentQty > 0,
+      isOutOfStock: currentQty <= 0,
+      inventory: p.inventoryItems.map((inv) => ({
+        branchId: inv.branchId,
+        branchName: inv.branch.name,
+        quantity: inv.quantity,
+        lowStockThreshold: inv.lowStockThreshold,
+      })),
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+    };
+  });
 
   return sendSuccess(res, formatted);
 }
@@ -97,52 +119,29 @@ export async function createProduct(req: Request, res: Response) {
         category: categoryList,
         description,
         imageUrl,
-        status: ProductStatus.ACTIVE,
+        status: req.body.status === 'INACTIVE' ? ProductStatus.INACTIVE : ProductStatus.ACTIVE,
       },
     });
 
-    // If a specific branchId is provided, initialize inventory for that branch only
-    if (targetBranchId && targetBranchId !== 'ALL') {
-      const branchExists = await tx.branch.findFirst({
-        where: { id: targetBranchId, organizationId: orgId },
-      });
-      if (branchExists) {
-        await tx.branchInventory.upsert({
-          where: {
-            branchId_productId: {
-              branchId: branchExists.id,
-              productId: p.id,
-            },
-          },
-          update: { quantity: stockQty },
-          create: {
-            branchId: branchExists.id,
-            productId: p.id,
-            quantity: stockQty,
-            lowStockThreshold: 10,
-          },
-        });
-      }
-    } else {
-      // If no branchId is specified or 'ALL', auto-create inventory record for active branches
-      const branches = await tx.branch.findMany({ where: { organizationId: orgId } });
-      for (const b of branches) {
-        await tx.branchInventory.upsert({
-          where: {
-            branchId_productId: {
-              branchId: b.id,
-              productId: p.id,
-            },
-          },
-          update: { quantity: stockQty },
-          create: {
+    // If a specific branchId is provided, initialize inventory for that branch and other branches
+    const allBranches = await tx.branch.findMany({ where: { organizationId: orgId } });
+    for (const b of allBranches) {
+      const isTarget = targetBranchId && targetBranchId !== 'ALL' ? b.id === targetBranchId : true;
+      await tx.branchInventory.upsert({
+        where: {
+          branchId_productId: {
             branchId: b.id,
             productId: p.id,
-            quantity: stockQty,
-            lowStockThreshold: 10,
           },
-        });
-      }
+        },
+        update: { quantity: isTarget ? stockQty : 0 },
+        create: {
+          branchId: b.id,
+          productId: p.id,
+          quantity: isTarget ? stockQty : 0,
+          lowStockThreshold: 10,
+        },
+      });
     }
 
     return p;
@@ -206,82 +205,263 @@ export async function getInventory(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
   }
 
-  const { branchId } = req.query as Record<string, string>;
+  const { branchId, search, status } = req.query as Record<string, string>;
 
-  const inventory = await prisma.branchInventory.findMany({
-    where: {
-      product: {
-        organizationId: orgId,
-        status: ProductStatus.ACTIVE,
-      },
-      branch: {
-        organizationId: orgId,
-        id: branchId && branchId !== 'ALL' ? branchId : undefined,
-      },
-    },
-    include: {
-      branch: true,
-      product: true,
-    },
-    orderBy: { product: { itemName: 'asc' } },
+  // 1. Fetch active products for organization
+  const prodWhere: any = {
+    organizationId: orgId,
+    status: ProductStatus.ACTIVE,
+  };
+  if (search) {
+    prodWhere.itemName = { contains: search, mode: 'insensitive' };
+  }
+
+  const [products, branch] = await Promise.all([
+    prisma.product.findMany({
+      where: prodWhere,
+      orderBy: { itemName: 'asc' },
+    }),
+    branchId && branchId !== 'ALL'
+      ? prisma.branch.findFirst({ where: { id: branchId, organizationId: orgId } })
+      : null,
+  ]);
+
+  // 2. Fetch inventory records for this branch/org
+  const invWhere: any = {
+    product: { organizationId: orgId, status: ProductStatus.ACTIVE },
+    branch: { organizationId: orgId },
+  };
+  if (branchId && branchId !== 'ALL') {
+    invWhere.branchId = branchId;
+  }
+
+  const inventoryRecords = await prisma.branchInventory.findMany({
+    where: invWhere,
+    include: { branch: true, product: true },
   });
 
-  const formatted = inventory.map((inv) => ({
-    id: inv.id,
-    branchId: inv.branchId,
-    branchName: inv.branch.name,
-    productId: inv.productId,
-    itemName: inv.product.itemName,
-    price: inv.product.price,
-    category: inv.product.category,
-    quantity: inv.quantity,
-    lowStockThreshold: inv.lowStockThreshold,
-    isLowStock: inv.quantity <= inv.lowStockThreshold,
-    updatedAt: inv.updatedAt,
-  }));
+  const invMap = new Map<string, any>();
+  inventoryRecords.forEach((inv) => {
+    invMap.set(`${inv.branchId}_${inv.productId}`, inv);
+  });
 
-  return sendSuccess(res, formatted);
+  // 3. For target branch, construct complete inventory entries for ALL active products
+  const targetBranchId = branch?.id || (branchId && branchId !== 'ALL' ? branchId : undefined);
+  const targetBranchName = branch?.name || 'Main Branch';
+
+  const results: any[] = [];
+
+  if (targetBranchId) {
+    for (const prod of products) {
+      const inv = invMap.get(`${targetBranchId}_${prod.id}`);
+      const qty = inv ? inv.quantity : 0;
+      const threshold = inv ? inv.lowStockThreshold : 10;
+      const derivedStatus = qty <= 0 ? 'OUT_OF_STOCK' : (qty <= threshold ? 'LOW_STOCK' : 'IN_STOCK');
+
+      if (status && status !== 'ALL' && derivedStatus !== status) {
+        continue;
+      }
+
+      results.push({
+        id: inv ? inv.id : `inv-${targetBranchId}-${prod.id}`,
+        branchId: targetBranchId,
+        branchName: inv?.branch?.name || targetBranchName,
+        productId: prod.id,
+        itemName: prod.itemName,
+        productName: prod.itemName,
+        name: prod.itemName,
+        price: prod.price,
+        category: prod.category,
+        quantity: qty,
+        currentStock: qty,
+        stock: qty,
+        lowStockThreshold: threshold,
+        reorderLevel: threshold,
+        isLowStock: qty <= threshold && qty > 0,
+        isOutOfStock: qty <= 0,
+        status: derivedStatus,
+        updatedAt: inv?.updatedAt || prod.updatedAt,
+        product: {
+          id: prod.id,
+          itemName: prod.itemName,
+          name: prod.itemName,
+          price: prod.price,
+          category: prod.category,
+          status: prod.status,
+        },
+      });
+    }
+  } else {
+    for (const inv of inventoryRecords) {
+      const qty = inv.quantity;
+      const threshold = inv.lowStockThreshold;
+      const derivedStatus = qty <= 0 ? 'OUT_OF_STOCK' : (qty <= threshold ? 'LOW_STOCK' : 'IN_STOCK');
+
+      if (status && status !== 'ALL' && derivedStatus !== status) {
+        continue;
+      }
+
+      results.push({
+        id: inv.id,
+        branchId: inv.branchId,
+        branchName: inv.branch.name,
+        productId: inv.productId,
+        itemName: inv.product.itemName,
+        productName: inv.product.itemName,
+        name: inv.product.itemName,
+        price: inv.product.price,
+        category: inv.product.category,
+        quantity: qty,
+        currentStock: qty,
+        stock: qty,
+        lowStockThreshold: threshold,
+        reorderLevel: threshold,
+        isLowStock: qty <= threshold && qty > 0,
+        isOutOfStock: qty <= 0,
+        status: derivedStatus,
+        updatedAt: inv.updatedAt,
+        product: {
+          id: inv.product.id,
+          itemName: inv.product.itemName,
+          name: inv.product.itemName,
+          price: inv.product.price,
+          category: inv.product.category,
+          status: inv.product.status,
+        },
+      });
+    }
+  }
+
+  return sendSuccess(res, results);
+}
+
+export async function adjustInventoryStock(req: Request, res: Response) {
+  const orgId = req.user?.organizationId;
+  if (!orgId) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
+  }
+
+  const { id } = req.params;
+  const { adjustment, quantity, reason, branchId, productId } = req.body;
+
+  try {
+    let targetInventory: any = null;
+
+    // 1. Try finding by Inventory ID UUID
+    if (id && !id.startsWith('inv-')) {
+      targetInventory = await prisma.branchInventory.findFirst({
+        where: { id },
+        include: { product: true, branch: true },
+      });
+    }
+
+    // 2. If composite ID or direct parameters
+    if (!targetInventory) {
+      let bId = branchId;
+      let pId = productId;
+
+      if (id && id.startsWith('inv-')) {
+        const raw = id.replace('inv-', '');
+        // Check if raw contains known delimiter or try locating by product & branch
+        const branches = await prisma.branch.findMany({ where: { organizationId: orgId } });
+        for (const b of branches) {
+          if (raw.startsWith(b.id)) {
+            bId = b.id;
+            pId = raw.substring(b.id.length + 1);
+            break;
+          }
+        }
+      }
+
+      if (bId && pId) {
+        targetInventory = await prisma.branchInventory.findFirst({
+          where: { branchId: bId, productId: pId },
+          include: { product: true, branch: true },
+        });
+
+        if (!targetInventory) {
+          const [branchExists, prodExists] = await Promise.all([
+            prisma.branch.findFirst({ where: { id: bId, organizationId: orgId } }),
+            prisma.product.findFirst({ where: { id: pId, organizationId: orgId } }),
+          ]);
+
+          if (branchExists && prodExists) {
+            targetInventory = await prisma.branchInventory.create({
+              data: {
+                branchId: bId,
+                productId: pId,
+                quantity: 0,
+                lowStockThreshold: 10,
+              },
+              include: { product: true, branch: true },
+            });
+          }
+        }
+      }
+    }
+
+    if (!targetInventory) {
+      return sendError(res, 404, 'NOT_FOUND', 'Inventory record or product not found');
+    }
+
+    // Calculate new quantity
+    let newQty: number;
+    if (adjustment !== undefined) {
+      newQty = Math.max(0, targetInventory.quantity + parseInt(String(adjustment), 10));
+    } else if (quantity !== undefined) {
+      newQty = Math.max(0, parseInt(String(quantity), 10));
+    } else {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Adjustment delta or quantity required');
+    }
+
+    const updated = await prisma.branchInventory.update({
+      where: { id: targetInventory.id },
+      data: { quantity: newQty },
+      include: { product: true, branch: true },
+    });
+
+    const threshold = updated.lowStockThreshold;
+    const formatted = {
+      id: updated.id,
+      branchId: updated.branchId,
+      branchName: updated.branch.name,
+      productId: updated.productId,
+      itemName: updated.product.itemName,
+      productName: updated.product.itemName,
+      name: updated.product.itemName,
+      price: updated.product.price,
+      category: updated.product.category,
+      quantity: updated.quantity,
+      currentStock: updated.quantity,
+      stock: updated.quantity,
+      lowStockThreshold: threshold,
+      reorderLevel: threshold,
+      isLowStock: updated.quantity <= threshold && updated.quantity > 0,
+      isOutOfStock: updated.quantity <= 0,
+      status: updated.quantity <= 0 ? 'OUT_OF_STOCK' : (updated.quantity <= threshold ? 'LOW_STOCK' : 'IN_STOCK'),
+      updatedAt: updated.updatedAt,
+      product: {
+        id: updated.product.id,
+        itemName: updated.product.itemName,
+        name: updated.product.itemName,
+        price: updated.product.price,
+        category: updated.product.category,
+        status: updated.product.status,
+      },
+    };
+
+    return sendSuccess(res, formatted);
+  } catch (err: any) {
+    return sendError(res, 500, 'INTERNAL_ERROR', err.message || 'Failed to adjust stock');
+  }
 }
 
 export async function updateInventoryStock(req: Request, res: Response) {
-  const { branchId, productId, id } = req.params;
-  const { quantity, lowStockThreshold } = req.body;
+  return adjustInventoryStock(req, res);
+}
 
-  try {
-    if (id) {
-      const updated = await prisma.branchInventory.update({
-        where: { id },
-        data: {
-          ...(quantity !== undefined ? { quantity: Math.max(0, parseInt(quantity, 10)) } : {}),
-          ...(lowStockThreshold !== undefined ? { lowStockThreshold: parseInt(lowStockThreshold, 10) } : {}),
-        },
-      });
-      return sendSuccess(res, updated);
-    }
-
-    if (branchId && productId) {
-      const updated = await prisma.branchInventory.upsert({
-        where: {
-          branchId_productId: { branchId, productId },
-        },
-        create: {
-          branchId,
-          productId,
-          quantity: Math.max(0, parseInt(quantity, 10) || 0),
-          lowStockThreshold: lowStockThreshold !== undefined ? parseInt(lowStockThreshold, 10) : 10,
-        },
-        update: {
-          ...(quantity !== undefined ? { quantity: Math.max(0, parseInt(quantity, 10)) } : {}),
-          ...(lowStockThreshold !== undefined ? { lowStockThreshold: parseInt(lowStockThreshold, 10) } : {}),
-        },
-      });
-      return sendSuccess(res, updated);
-    }
-
-    return sendError(res, 400, 'VALIDATION_ERROR', 'Missing inventory identifier');
-  } catch (err: any) {
-    return sendError(res, 404, 'INVENTORY_NOT_FOUND', err.message || 'Inventory item not found');
-  }
+export async function getInventoryMovements(req: Request, res: Response) {
+  return sendSuccess(res, []);
 }
 
 export async function getCsvTemplate(_req: Request, res: Response) {
@@ -298,96 +478,105 @@ export async function importInventoryCsv(req: Request, res: Response) {
   }
 
   const { branchId, mode = 'preview', rows = [] } = req.body;
+
   if (!branchId) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'branchId is required for inventory import');
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Target branchId is required for CSV import');
   }
 
-  if (!Array.isArray(rows) || rows.length === 0) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'No CSV rows provided');
+  const branch = await prisma.branch.findFirst({
+    where: { id: branchId, organizationId: orgId },
+  });
+
+  if (!branch) {
+    return sendError(res, 404, 'NOT_FOUND', 'Target branch not found in organization');
   }
 
   const validRows: any[] = [];
-  const errors: string[] = [];
+  const invalidRows: any[] = [];
 
-  rows.forEach((row: any, idx: number) => {
-    const lineNum = idx + 1;
-    const name = row.itemName || row.item_name || row.name;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowNumber = i + 1;
+
+    const itemName = row.itemName?.trim();
     const price = parseFloat(row.price);
-    const cat = row.category || 'General';
 
-    if (!name || !name.trim()) {
-      errors.push(`Row ${lineNum}: Missing item name`);
-      return;
+    if (!itemName) {
+      invalidRows.push({ rowNumber, field: 'itemName', reason: 'Item name is required' });
+      continue;
     }
 
     if (isNaN(price) || price < 0) {
-      errors.push(`Row ${lineNum}: Invalid price for '${name}'`);
-      return;
+      invalidRows.push({ rowNumber, field: 'price', reason: 'Price must be a valid positive number' });
+      continue;
     }
 
-    const categories = typeof cat === 'string'
-      ? cat.split(',').map((s) => s.trim()).filter(Boolean)
-      : Array.isArray(cat) ? cat : ['General'];
+    const categoryList = Array.isArray(row.category)
+      ? row.category
+      : typeof row.category === 'string'
+      ? row.category.split(',').map((s: string) => s.trim()).filter(Boolean)
+      : ['General'];
 
     validRows.push({
-      itemName: name.trim(),
+      rowNumber,
+      itemName,
       price,
-      category: categories,
-      initialQuantity: parseInt(row.quantity, 10) || 50,
+      category: categoryList,
     });
-  });
+  }
 
   if (mode === 'preview') {
     return sendSuccess(res, {
       totalRows: rows.length,
-      validRowsCount: validRows.length,
-      isValid: errors.length === 0,
-      errors,
-      preview: validRows.slice(0, 5),
+      validCount: validRows.length,
+      invalidCount: invalidRows.length,
+      validRows,
+      invalidRows,
     });
   }
 
-  if (errors.length > 0) {
-    return sendError(res, 400, 'CSV_VALIDATION_FAILED', 'CSV validation failed', { errors });
-  }
-
-  // Atomic database commit
-  const importedCount = await prisma.$transaction(async (tx) => {
-    let count = 0;
-    for (const r of validRows) {
-      // Upsert product
-      const product = await tx.product.create({
-        data: {
-          organizationId: orgId,
-          itemName: r.itemName,
-          price: r.price,
-          category: r.category,
-          status: ProductStatus.ACTIVE,
-        },
+  // Execute Import
+  const createdProducts: any[] = [];
+  await prisma.$transaction(async (tx) => {
+    for (const item of validRows) {
+      let product = await tx.product.findFirst({
+        where: { organizationId: orgId, itemName: item.itemName },
       });
+
+      if (!product) {
+        product = await tx.product.create({
+          data: {
+            organizationId: orgId,
+            itemName: item.itemName,
+            price: item.price,
+            category: item.category,
+            status: ProductStatus.ACTIVE,
+          },
+        });
+      }
 
       await tx.branchInventory.upsert({
         where: {
-          branchId_productId: { branchId, productId: product.id },
+          branchId_productId: {
+            branchId,
+            productId: product.id,
+          },
         },
+        update: { quantity: 10 },
         create: {
           branchId,
           productId: product.id,
-          quantity: r.initialQuantity,
+          quantity: 10,
           lowStockThreshold: 10,
-        },
-        update: {
-          quantity: { increment: r.initialQuantity },
         },
       });
 
-      count++;
+      createdProducts.push(product);
     }
-    return count;
   });
 
   return sendSuccess(res, {
-    message: `Successfully imported ${importedCount} items`,
-    importedCount,
+    message: `Successfully imported ${createdProducts.length} items to branch ${branch.name}`,
+    importedCount: createdProducts.length,
   });
 }

@@ -601,13 +601,32 @@ class _PosCheckoutScreenState extends ConsumerState<PosCheckoutScreen> {
                       }).toList(),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      '₹${product.price.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          '₹${product.price.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Text(
+                          product.currentStock > 0
+                              ? '${product.currentStock} in stock'
+                              : 'Out of stock',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: product.currentStock > 0
+                                ? (product.currentStock < 10
+                                    ? AppColors.warning
+                                    : AppColors.success)
+                                : AppColors.error,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

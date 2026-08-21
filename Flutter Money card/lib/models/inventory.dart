@@ -65,8 +65,49 @@ class InventoryItem {
   bool get isOutOfStock => currentStock <= 0;
 
   factory InventoryItem.fromJson(Map<String, dynamic> json) {
-    final stock = (json['currentStock'] as num?)?.toInt() ?? 0;
-    final reorder = (json['reorderLevel'] as num?)?.toInt() ?? 10;
+    // 1. Stock quantity can come as 'quantity', 'currentStock', 'stock', etc.
+    final stock = (json['currentStock'] as num?)?.toInt() ??
+        (json['quantity'] as num?)?.toInt() ??
+        (json['stock'] as num?)?.toInt() ??
+        0;
+
+    // 2. Reorder level / low stock threshold
+    final reorder = (json['reorderLevel'] as num?)?.toInt() ??
+        (json['lowStockThreshold'] as num?)?.toInt() ??
+        (json['low_stock_threshold'] as num?)?.toInt() ??
+        10;
+
+    // 3. Product object or flat product fields
+    final productMap = json['product'] is Map<String, dynamic>
+        ? json['product'] as Map<String, dynamic>
+        : null;
+
+    final prodName = (json['productName'] as String?) ??
+        (json['itemName'] as String?) ??
+        (json['item_name'] as String?) ??
+        (json['name'] as String?) ??
+        (productMap?['itemName'] as String?) ??
+        (productMap?['productName'] as String?) ??
+        (productMap?['name'] as String?) ??
+        '';
+
+    final prodId = (json['productId'] as String?) ??
+        (json['product_id'] as String?) ??
+        (productMap?['id'] as String?) ??
+        (json['id'] as String?) ??
+        '';
+
+    final prodPrice = (json['price'] as num?)?.toDouble() ??
+        (productMap?['price'] as num?)?.toDouble() ??
+        0.0;
+
+    List<String> parsedCategories = [];
+    final catData = json['category'] ?? json['categories'] ?? productMap?['category'] ?? productMap?['categories'];
+    if (catData is List) {
+      parsedCategories = catData.map((e) => e.toString()).toList();
+    } else if (catData is String) {
+      parsedCategories = [catData];
+    }
 
     StockStatus derivedStatus = StockStatus.inStock;
     if (json['status'] != null) {
@@ -81,15 +122,15 @@ class InventoryItem {
 
     return InventoryItem(
       id: json['id'] as String? ?? '',
-      productId: json['productId'] as String? ?? '',
-      productName: json['productName'] as String? ?? json['itemName'] as String? ?? '',
-      branchId: json['branchId'] as String? ?? '',
+      productId: prodId,
+      productName: prodName.isNotEmpty ? prodName : (prodId.isNotEmpty ? 'Product $prodId' : 'Item'),
+      branchId: json['branchId'] as String? ?? json['branch_id'] as String? ?? '',
       currentStock: stock,
       reorderLevel: reorder,
       status: derivedStatus,
-      category: (json['category'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
-      price: (json['price'] as num?)?.toDouble() ?? 0.0,
-      updatedAt: json['updatedAt'] as String?,
+      category: parsedCategories,
+      price: prodPrice,
+      updatedAt: json['updatedAt'] as String? ?? json['updated_at'] as String?,
     );
   }
 
@@ -99,7 +140,9 @@ class InventoryItem {
         'productName': productName,
         'branchId': branchId,
         'currentStock': currentStock,
+        'quantity': currentStock,
         'reorderLevel': reorderLevel,
+        'lowStockThreshold': reorderLevel,
         'status': status.value,
         'category': category,
         'price': price,
@@ -168,7 +211,7 @@ class InventoryMovement {
       productId: json['productId'] as String? ?? '',
       productName: json['productName'] as String? ?? json['itemName'] as String? ?? '',
       branchId: json['branchId'] as String? ?? '',
-      changeQuantity: (json['changeQuantity'] as num?)?.toInt() ?? 0,
+      changeQuantity: (json['changeQuantity'] as num?)?.toInt() ?? (json['quantity'] as num?)?.toInt() ?? 0,
       balanceAfter: (json['balanceAfter'] as num?)?.toInt() ?? 0,
       type: MovementType.fromString(json['type'] as String?),
       reason: json['reason'] as String?,

@@ -7,6 +7,7 @@ class Product {
   final List<String> category;
   final double price;
   final String status; // 'ACTIVE' | 'INACTIVE'
+  final int currentStock;
   final String? createdAt;
   final String? updatedAt;
 
@@ -17,31 +18,50 @@ class Product {
     this.category = const [],
     required this.price,
     this.status = 'ACTIVE',
+    this.currentStock = 0,
     this.createdAt,
     this.updatedAt,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
     List<String> parsedCategories = [];
-    if (json['category'] is List) {
-      parsedCategories = (json['category'] as List<dynamic>)
+    final catData = json['category'] ?? json['categories'];
+    if (catData is List) {
+      parsedCategories = catData
           .map((e) => e.toString())
           .toList();
-    } else if (json['categories'] is List) {
-      parsedCategories = (json['categories'] as List<dynamic>)
-          .map((e) => e.toString())
-          .toList();
-    } else if (json['category'] is String) {
-      parsedCategories = [json['category'] as String];
+    } else if (catData is String) {
+      parsedCategories = [catData];
+    }
+
+    final targetBranchId = json['branchId'] as String? ?? json['branch_id'] as String? ?? '';
+
+    // Parse stock from top-level quantity, currentStock, or inventory array
+    int stock = (json['quantity'] as num?)?.toInt() ??
+        (json['currentStock'] as num?)?.toInt() ??
+        (json['stock'] as num?)?.toInt() ??
+        0;
+
+    if (stock == 0 && json['inventory'] is List) {
+      final invList = json['inventory'] as List;
+      for (final inv in invList) {
+        if (inv is Map<String, dynamic>) {
+          if (targetBranchId.isEmpty || inv['branchId'] == targetBranchId) {
+            stock = (inv['quantity'] as num?)?.toInt() ?? 0;
+            break;
+          }
+        }
+      }
     }
 
     return Product(
       id: json['id'] as String? ?? '',
-      branchId: json['branchId'] as String? ?? json['branch_id'] as String? ?? '',
-      itemName: json['itemName'] as String? ?? json['item_name'] as String? ?? '',
+      branchId: targetBranchId,
+      itemName: json['itemName'] as String? ?? json['item_name'] as String? ?? json['name'] as String? ?? '',
       category: parsedCategories,
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
       status: json['status'] as String? ?? 'ACTIVE',
+      currentStock: stock,
       createdAt: json['createdAt'] as String? ?? json['created_at'] as String?,
       updatedAt: json['updatedAt'] as String? ?? json['updated_at'] as String?,
     );
@@ -54,6 +74,8 @@ class Product {
         'category': category,
         'price': price,
         'status': status,
+        'quantity': currentStock,
+        'currentStock': currentStock,
         if (createdAt != null) 'createdAt': createdAt,
         if (updatedAt != null) 'updatedAt': updatedAt,
       };
@@ -80,7 +102,7 @@ class InventoryItem {
       id: json['id'] as String? ?? '',
       branchId: json['branchId'] as String? ?? json['branch_id'] as String? ?? '',
       productId: json['productId'] as String? ?? json['product_id'] as String? ?? '',
-      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      quantity: (json['quantity'] as num?)?.toInt() ?? (json['currentStock'] as num?)?.toInt() ?? 0,
       updatedAt: json['updatedAt'] as String? ?? json['updated_at'] as String?,
     );
   }
@@ -107,7 +129,7 @@ class ProductWithInventory {
   factory ProductWithInventory.fromJson(Map<String, dynamic> json) {
     return ProductWithInventory(
       product: Product.fromJson(json),
-      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      quantity: (json['quantity'] as num?)?.toInt() ?? (json['currentStock'] as num?)?.toInt() ?? 0,
     );
   }
 
