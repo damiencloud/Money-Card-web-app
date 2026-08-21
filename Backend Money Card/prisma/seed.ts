@@ -111,7 +111,7 @@ async function main() {
   const superAdmin = await prisma.user.create({
     data: {
       id: 'usr_superadmin',
-      email: 'superadmin@moneycard.platform',
+      email: 'amigosiamoneycard@gmail.com',
       passwordHash: superAdminPasswordHash,
       name: 'Platform Super Admin',
       role: Role.SUPER_ADMIN,
@@ -128,7 +128,7 @@ async function main() {
     });
   }
 
-  console.log('✅ Root Super Admin created: superadmin@moneycard.platform');
+  console.log('✅ Root Super Admin created: amigosiamoneycard@gmail.com');
 
   // 4. Seed Demo Organization (Acme Foods)
   const org = await prisma.organization.create({
