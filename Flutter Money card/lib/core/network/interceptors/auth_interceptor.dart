@@ -45,6 +45,21 @@ class AuthInterceptor extends Interceptor {
         path.endsWith(ApiEndpoints.refresh) ||
         path.endsWith(ApiEndpoints.logout);
 
+    final isInactiveAccount = response?.statusCode == 401 || response?.statusCode == 403;
+    final responseData = response?.data;
+    final errorCode = (responseData is Map<String, dynamic>)
+        ? (responseData['error'] is Map ? responseData['error']['code'] : null)
+        : null;
+
+    final isStaffOrOrgInactive = errorCode == 'STAFF_INACTIVE' || errorCode == 'ORGANIZATION_INACTIVE';
+
+    if (isStaffOrOrgInactive) {
+      // Deactivated account or organization -> immediately clear session and force logout
+      await tokenStorage.clearTokens();
+      onSessionExpired?.call();
+      return handler.next(err);
+    }
+
     if (response?.statusCode == 401 && !isAuthEndpoint) {
       final refreshToken = await tokenStorage.getRefreshToken();
 

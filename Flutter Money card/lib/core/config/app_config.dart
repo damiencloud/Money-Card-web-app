@@ -21,11 +21,11 @@ class AppConfig {
   static const String appVersion = '1.0.0';
 
   /// Default API base URL (conforming to M0 V10 /api/v1)
-  static const String defaultBaseUrl = 'http://localhost:8080/api/v1';
+  static const String defaultBaseUrl = 'http://localhost:3000/api/v1';
 
   /// Active API Mode: 'mock' (default for M13-M17) or 'real' (M18+)
   static ApiMode apiMode = ApiMode.fromString(
-    const String.fromEnvironment('API_MODE', defaultValue: 'mock'),
+    const String.fromEnvironment('API_MODE', defaultValue: 'real'),
   );
 
   /// Helper flag for backward compatibility

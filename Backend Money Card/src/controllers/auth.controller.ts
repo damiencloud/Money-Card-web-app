@@ -36,7 +36,24 @@ export async function login(req: Request, res: Response) {
   }
 
   if (user.status !== UserStatus.ACTIVE) {
-    return sendError(res, 403, 'ACCOUNT_DEACTIVATED', 'Your account has been deactivated');
+    return sendError(
+      res,
+      401,
+      'STAFF_INACTIVE',
+      'Your staff account is no longer active. Please contact your Organization Administrator.',
+    );
+  }
+
+  if (user.organizationId && user.organization) {
+    const orgStatus = (user.organization as any).status;
+    if (orgStatus === 'SUSPENDED' || orgStatus === 'INACTIVE') {
+      return sendError(
+        res,
+        403,
+        'ORGANIZATION_INACTIVE',
+        'Your organization account is currently inactive or suspended. Please contact your platform administrator.',
+      );
+    }
   }
 
   const isPasswordValid = await comparePassword(password, user.passwordHash);

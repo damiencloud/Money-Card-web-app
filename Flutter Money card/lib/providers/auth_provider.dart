@@ -98,7 +98,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } on ApiException catch (e) {
       String userMessage;
 
-      if (e.code == ApiErrorCode.unauthorized || e.statusCode == 401) {
+      if (e.code.name.toUpperCase().contains('STAFF_INACTIVE') || e.message.toLowerCase().contains('no longer active') || e.message.toLowerCase().contains('deactivated')) {
+        userMessage = 'Your staff account is no longer active. Please contact your Organization Administrator.';
+      } else if (e.code.name.toUpperCase().contains('ORGANIZATION_INACTIVE') || e.message.toLowerCase().contains('organization')) {
+        userMessage = 'Your organization account is currently inactive or suspended. Please contact platform administration.';
+      } else if (e.code == ApiErrorCode.unauthorized || e.statusCode == 401) {
         userMessage = 'Email or password is incorrect.';
       } else if (e.code == ApiErrorCode.networkError || e.code == ApiErrorCode.timeoutError) {
         userMessage = 'Unable to connect. Check your internet connection and try again.';

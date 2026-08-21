@@ -29,6 +29,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       include: {
         permissions: true,
         assignedBranches: true,
+        organization: true,
       },
     });
 
@@ -37,7 +38,25 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     }
 
     if (user.status !== UserStatus.ACTIVE) {
-      return sendError(res, 401, 'UNAUTHORIZED', 'User account is deactivated or inactive');
+      return sendError(
+        res,
+        401,
+        'STAFF_INACTIVE',
+        'Your staff account is no longer active. Please contact your Organization Administrator.',
+      );
+    }
+
+    // Validate Organization status for non-superadmin users
+    if (user.organizationId && user.organization) {
+      const orgStatus = (user.organization as any).status;
+      if (orgStatus === 'SUSPENDED' || orgStatus === 'INACTIVE') {
+        return sendError(
+          res,
+          403,
+          'ORGANIZATION_INACTIVE',
+          'Your organization account is currently inactive or suspended. Please contact your platform administrator.',
+        );
+      }
     }
 
     if (user.tokenVersion !== payload.tokenVersion) {

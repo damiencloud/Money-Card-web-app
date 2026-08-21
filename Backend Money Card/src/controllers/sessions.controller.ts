@@ -31,6 +31,10 @@ export async function createSession(req: Request, res: Response) {
     return sendError(res, 400, 'CARD_ALREADY_ACTIVE', 'Card already has an active session');
   }
 
+  if (req.user?.role === 'STAFF' && !req.user.assignedBranchIds.includes(branchId)) {
+    return sendError(res, 403, 'BRANCH_ACCESS_DENIED', 'You are not assigned to this branch location');
+  }
+
   const initAmount = Math.max(0, parseFloat(initialAmount) || 0);
   const sessionToken = generateSessionToken();
 
@@ -153,6 +157,10 @@ export async function rechargeSession(req: Request, res: Response) {
     return sendError(res, 400, 'INVALID_STATE', 'Cannot recharge an inactive or settled session');
   }
 
+  if (req.user?.role === 'STAFF' && !req.user.assignedBranchIds.includes(session.branchId)) {
+    return sendError(res, 403, 'BRANCH_ACCESS_DENIED', 'You are not authorized to recharge a session belonging to another branch');
+  }
+
   if (session.card.status === CardStatus.BLOCKED) {
     return sendError(res, 400, 'CARD_BLOCKED', 'Cannot recharge a blocked card');
   }
@@ -212,6 +220,10 @@ export async function purchaseSession(req: Request, res: Response) {
 
   if (session.card.status === CardStatus.BLOCKED) {
     return sendError(res, 400, 'CARD_BLOCKED', 'Card is blocked');
+  }
+
+  if (req.user?.role === 'STAFF' && !req.user.assignedBranchIds.includes(session.branchId)) {
+    return sendError(res, 403, 'BRANCH_ACCESS_DENIED', 'You are not authorized to make purchases on a session belonging to another branch');
   }
 
   // Calculate total and validate stock inside atomic transaction
