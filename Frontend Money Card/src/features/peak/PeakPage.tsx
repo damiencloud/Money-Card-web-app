@@ -115,31 +115,39 @@ export function PeakPage() {
   }, [selectedBranchId]);
 
   // ── CSV Export Handler ────────────────────────────────────
-  const handleExportCsv = async () => {
+  // ── PDF Download Handler ──────────────────────────────────────────
+  const handleDownloadPdf = async () => {
+    if (!data) {
+      notify.error('No peak demand data available to export.');
+      return;
+    }
+
     setIsExporting(true);
     try {
-      const res = await apiService.analytics.exportPeakAnalyticsCsv({
-        branchId: selectedBranchId !== 'ALL' ? selectedBranchId : undefined,
+      const selectedBranchObj = allBranches.find((b) => b.id === selectedBranchId);
+      const selectedBranchName = selectedBranchId === 'ALL'
+        ? 'All Permitted Branches'
+        : (selectedBranchObj?.name || 'Selected Branch');
+
+      const dateRangeLabel = selectedDateRange === 'today'
+        ? 'Today'
+        : selectedDateRange === '7d'
+          ? 'Last 7 Days'
+          : 'Last 30 Days';
+
+      const doc = buildPeakDemandJsPdf({
+        data,
+        selectedBranchName,
+        dateRangeLabel,
+        organizationName: 'Money Card Cafeteria',
       });
 
-      if (!res.success) {
-        notify.error(res.error.message || 'Failed to generate export');
-        return;
-      }
+      const filename = `Peak_Demand_Report_${selectedBranchName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      doc.save(filename);
 
-      const blob = new Blob([res.data.content], { type: res.data.mimeType });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', res.data.filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      notify.success('Peak & demand report downloaded successfully');
-    } catch {
-      notify.error('An unexpected error occurred during export.');
+      notify.success('Peak & Demand PDF downloaded successfully.');
+    } catch (err: any) {
+      notify.error(err?.message || 'Failed to generate Peak & Demand PDF.');
     } finally {
       setIsExporting(false);
     }
