@@ -371,3 +371,39 @@ export async function logout(_req: Request, res: Response) {
   res.clearCookie('refreshToken');
   return sendSuccess(res, { message: 'Logged out successfully' });
 }
+
+export async function updateProfile(req: Request, res: Response) {
+  if (!req.user) {
+    return sendError(res, 401, 'UNAUTHORIZED', 'Authentication required');
+  }
+
+  const { name } = req.body;
+
+  // Strict allowlist: Only update explicitly permitted fields
+  const updateData: { name?: string } = {};
+  if (name !== undefined && typeof name === 'string' && name.trim().length >= 2) {
+    updateData.name = name.trim();
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: { id: req.user.id },
+    data: updateData,
+    include: {
+      permissions: true,
+      assignedBranches: { include: { branch: true } },
+      organization: true,
+    },
+  });
+
+  return sendSuccess(res, {
+    message: 'Profile updated successfully',
+    user: {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      role: updatedUser.role,
+      organizationId: updatedUser.organizationId,
+      status: updatedUser.status,
+    },
+  });
+}

@@ -21,6 +21,8 @@ import {
 import { requireAuth } from '../middlewares/auth.middleware.js';
 import { requireRole } from '../middlewares/role.middleware.js';
 import { Role } from '@prisma/client';
+import { validateRequest } from '../middlewares/validate.middleware.js';
+import { createOrganizationSchema, resetOrgAdminPasswordSchema } from '../validation/index.js';
 
 const router = Router();
 
@@ -28,10 +30,10 @@ const router = Router();
 router.use(requireAuth, requireRole(Role.SUPER_ADMIN));
 
 router.get('/organizations', getOrganizations);
-router.post('/organizations', createOrganization);
+router.post('/organizations', validateRequest({ body: createOrganizationSchema }), createOrganization);
 router.get('/organizations/:id', getOrganizationById);
 router.patch('/organizations/:id', updateOrganization);
-router.post('/organizations/:id/reset-admin-password', resetOrgAdminPassword);
+router.post('/organizations/:id/reset-admin-password', validateRequest({ body: resetOrgAdminPasswordSchema }), resetOrgAdminPassword);
 router.get('/organizations/:id/subscription', getOrganizationSubscription);
 router.patch('/organizations/:id/subscription', updateOrganizationSubscription);
 
