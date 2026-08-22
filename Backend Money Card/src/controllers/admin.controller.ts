@@ -456,6 +456,60 @@ export async function updatePlan(req: Request, res: Response) {
   }
 }
 
+export async function deletePlan(req: Request, res: Response) {
+  const { id } = req.params;
+  try {
+    const plan = await prisma.plan.findUnique({ where: { id } });
+    if (!plan) {
+      return sendError(res, 404, 'NOT_FOUND', 'Plan not found');
+    }
+
+    const activeSubs = await prisma.subscription.count({
+      where: { planId: id, status: 'ACTIVE' },
+    });
+
+    if (activeSubs > 0) {
+      return sendError(
+        res,
+        400,
+        'CANNOT_DELETE_ACTIVE_PLAN',
+        `Cannot delete plan "${plan.name}" because ${activeSubs} organization(s) are currently subscribed to it. Please reassign them first.`
+      );
+    }
+
+    // Safely cascade delete related change requests, unlink orgs, and delete plan inside a single transaction
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete plan change requests referencing this plan (as requested or current plan)
+      await tx.planChangeRequest.deleteMany({
+        where: {
+          OR: [
+            { requestedPlanId: id },
+            { currentPlanId: id },
+          ],
+        },
+      });
+
+      // 2. Unlink any organizations pointing to this plan
+      await tx.organization.updateMany({
+        where: { planId: id },
+        data: { planId: null },
+      });
+
+      // 3. Delete non-active subscriptions pointing to this plan
+      await tx.subscription.deleteMany({
+        where: { planId: id },
+      });
+
+      // 4. Delete the plan itself
+      await tx.plan.delete({ where: { id } });
+    });
+
+    return sendSuccess(res, { message: `Plan "${plan.name}" deleted successfully` });
+  } catch (error: any) {
+    return sendError(res, 400, 'DELETE_FAILED', error.message || 'Failed to delete plan');
+  }
+}
+
 export async function getSubscriptions(_req: Request, res: Response) {
   const subs = await prisma.subscription.findMany({
     include: {
@@ -617,9 +671,11 @@ export async function resetOrgAdminPassword(req: Request, res: Response) {
     data: {
       passwordHash: tempHash,
       mustChangePassword: true,
-      tokenVersion: { increment: 1 }, // Invalidate existing sessions
+      tokenVersion: { increment: 1 },
     },
   });
+
+  console.log(`[AUTH_AUDIT_LOG] PASSWORD_CHANGE source=resetOrgAdminPassword targetUserId=${orgAdmin.id} targetEmail=${orgAdmin.email} role=${orgAdmin.role} callerUserId=${req.user?.id} timestamp=${new Date().toISOString()}`);
 
   return sendSuccess(res, {
     message: `Password reset successfully for ${orgAdmin.name}.`,

@@ -34,6 +34,7 @@ import {
   Receipt,
   Plus,
   Edit2,
+  Trash2,
   AlertCircle,
   Check,
   Zap,
@@ -103,6 +104,7 @@ export function AdminPlansSubscriptionsView() {
   const [payReference, setPayReference] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [modalApiError, setModalApiError] = useState<string | null>(null);
 
   // ── Fetch Unified Data ─────────────────────────────────────
@@ -284,6 +286,32 @@ export function AdminPlansSubscriptionsView() {
       setModalApiError('An unexpected error occurred.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDeletePlan = async () => {
+    if (!selectedPlan) return;
+    const confirm = window.confirm(
+      `Are you sure you want to permanently delete the global plan "${selectedPlan.name}"? This action cannot be undone.`
+    );
+    if (!confirm) return;
+
+    setIsDeleting(true);
+    setModalApiError(null);
+    try {
+      const res = await apiService.plans.deletePlan(selectedPlan.id);
+      if (!res.success) {
+        setModalApiError(res.error.message || 'Failed to delete plan.');
+        return;
+      }
+
+      notify.success(`Global Plan "${selectedPlan.name}" deleted successfully.`);
+      setShowEditPlanModal(false);
+      fetchUnifiedData();
+    } catch {
+      setModalApiError('An unexpected error occurred while deleting the plan.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -547,15 +575,7 @@ export function AdminPlansSubscriptionsView() {
         return <Badge variant="outline">{count} Organizations</Badge>;
       },
     },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (plan: Plan) => (
-        <Badge variant={plan.status === 'ACTIVE' ? 'success' : 'danger'}>
-          {plan.status}
-        </Badge>
-      ),
-    },
+
     {
       key: 'actions',
       header: 'Actions',
@@ -586,7 +606,7 @@ export function AdminPlansSubscriptionsView() {
           </div>
           <div>
             <p className="font-semibold text-slate-100">{org.name}</p>
-            <p className="text-xs text-slate-500">ORG-#{org.id.slice(0, 8).toUpperCase()}</p>
+            
           </div>
         </div>
       ),
@@ -697,7 +717,7 @@ export function AdminPlansSubscriptionsView() {
       render: (req: PlanChangeRequest) => (
         <div className="flex flex-wrap items-center gap-2">
           <Building2 className="h-4 w-4 text-violet-400" />
-          <span className="font-bold text-slate-100">{req.organizationName || req.organizationId}</span>
+          <span className="font-bold text-slate-100">{req.organizationName || "Organization"}</span>
         </div>
       ),
     },
@@ -1241,9 +1261,24 @@ export function AdminPlansSubscriptionsView() {
             Note: Changing default limits updates the global template. Organization-specific overrides will remain intact.
           </p>
 
-          <ModalFooter>
-            <Button variant="outline" type="button" onClick={() => setShowEditPlanModal(false)}>Cancel</Button>
-            <Button variant="primary" type="submit" isLoading={isSubmitting}>Save Global Plan</Button>
+          <ModalFooter className="flex items-center justify-between w-full">
+            <Button
+              variant="danger"
+              type="button"
+              onClick={handleDeletePlan}
+              isLoading={isDeleting}
+              leftIcon={<Trash2 className="h-4 w-4" />}
+            >
+              Delete Plan
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" type="button" onClick={() => setShowEditPlanModal(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" type="submit" isLoading={isSubmitting}>
+                Save Global Plan
+              </Button>
+            </div>
           </ModalFooter>
         </form>
       </Modal>

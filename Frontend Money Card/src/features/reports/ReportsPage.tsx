@@ -229,7 +229,7 @@ export function ReportsPage() {
           </div>
           <div>
             <p className="font-semibold text-slate-100">{report.title}</p>
-            <p className="text-xs text-slate-500">Document ID: DOC-#{report.id.slice(0, 8).toUpperCase()}</p>
+            
           </div>
         </div>
       ),
@@ -493,18 +493,30 @@ export function ReportsPage() {
                     </div>
 
                     <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                      <p className="text-xs font-semibold text-slate-300 mb-2">Sample Session Audit</p>
+                      <p className="text-xs font-semibold text-slate-300 mb-2">Sample Card Session & Wallet Ledger</p>
                       <div className="divide-y divide-slate-800/80 text-xs">
-                        {previewData.sessions.slice(0, 5).map((s) => (
-                          <div key={s.id} className="flex justify-between py-1.5 text-slate-400">
-                            <span className="font-mono text-slate-300">SESSION-#{s.id.slice(0, 8).toUpperCase()}</span>
-                            <Badge variant={s.status === 'ACTIVE' ? 'success' : 'outline'}>{s.status}</Badge>
-                            <span className="font-mono font-medium text-slate-200">
-                              {formatCurrency(s.balance)}
-                            </span>
-                            <span className="text-[11px]">{new Date(s.createdAt).toLocaleDateString()}</span>
-                          </div>
-                        ))}
+                        {previewData.sessions.slice(0, 6).map((s) => {
+                          const cardNum = s.physicalCardNumber || (s.cardId?.startsWith('MC-') ? s.cardId : `MC-${s.cardId ? s.cardId.replace(/-/g, '').slice(0, 6).toUpperCase() : '105'}`);
+                          const shortSessId = `SESSION-#${s.id.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+
+                          return (
+                            <div key={s.id} className="flex items-center justify-between py-2 text-slate-400">
+                              <div className="flex items-center gap-3">
+                                <div>
+                                  <span className="font-mono font-bold text-violet-300">{cardNum}</span>
+                                  <p className="text-[10px] text-slate-500 font-mono">{shortSessId}</p>
+                                </div>
+                              </div>
+                              <Badge variant={s.status === 'ACTIVE' ? 'success' : 'outline'}>{s.status}</Badge>
+                              <div className="text-right">
+                                <span className="font-mono font-bold text-emerald-400">
+                                  {formatCurrency(s.balance)}
+                                </span>
+                                <p className="text-[10px] text-slate-500">{new Date(s.createdAt).toLocaleDateString()}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>

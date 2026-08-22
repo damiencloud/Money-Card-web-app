@@ -100,9 +100,9 @@ export const realClient: typeof mockClient = {
       return res;
     },
 
-    async refresh(refreshToken: string): Promise<ApiResult<{ accessToken: string }>> {
+    async refresh(refreshToken?: string): Promise<ApiResult<{ accessToken: string }>> {
       return handleApiCall(() =>
-        apiClient.post<{ accessToken: string }>('/v1/auth/refresh', { refreshToken }),
+        apiClient.post<{ accessToken: string }>('/v1/auth/refresh', refreshToken ? { refreshToken } : {}),
       );
     },
 
@@ -480,6 +480,9 @@ export const realClient: typeof mockClient = {
     async updatePlan(id: string, req: Partial<Plan>): Promise<ApiResult<Plan>> {
       return handleApiCall(() => apiClient.patch<Plan>(`/v1/admin/plans/${id}`, req));
     },
+    async deletePlan(id: string): Promise<ApiResult<void>> {
+      return handleApiCall(() => apiClient.delete<void>(`/v1/admin/plans/${id}`));
+    },
     async getAllSubscriptions(): Promise<ApiResult<Subscription[]>> {
       return handleApiCall(() => apiClient.get<Subscription[]>('/v1/admin/subscriptions'));
     },
@@ -533,6 +536,9 @@ export const realClient: typeof mockClient = {
     },
     async updatePlan(id: string, req: Partial<Plan>): Promise<ApiResult<Plan>> {
       return handleApiCall(() => apiClient.patch<Plan>(`/v1/admin/plans/${id}`, req));
+    },
+    async deletePlan(id: string): Promise<ApiResult<void>> {
+      return handleApiCall(() => apiClient.delete<void>(`/v1/admin/plans/${id}`));
     },
     async getAllSubscriptions(): Promise<ApiResult<Subscription[]>> {
       return handleApiCall(() => apiClient.get<Subscription[]>('/v1/admin/subscriptions'));

@@ -1917,7 +1917,7 @@ export function CardsPage() {
                         cardTransactions.map((tx) => {
                           const isRecharge = tx.type === 'RECHARGE' || tx.type === 'ISSUANCE';
                           const isPurchase = tx.type === 'PURCHASE';
-                          const isRefund = tx.type === 'REFUND';
+                          // const isRefund = tx.type === 'REFUND';
 
                           return (
                             <div

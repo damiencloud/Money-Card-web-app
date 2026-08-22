@@ -2,21 +2,27 @@ import axios from 'axios';
 import type { AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 import type { ApiResponse } from '@/types';
 
-// ─── API Client ────────────────────────────────────────────
+// ─── API Client Configuration ────────────────────────────────────────────────
 // Centralized HTTP client abstraction.
 // Supports: base URL from env, auth headers, JSON, centralized error handling,
 // mid-session 401 response interception with token refresh & retry.
 
 const API_BASE_URL =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) ||
-  'http://localhost:4000/api';
+  'http://localhost:3000/api';
 
 interface RetryAxiosRequestConfig extends InternalAxiosRequestConfig {
   _retry?: boolean;
 }
 
+export interface ApiError {
+  message: string;
+  status: number;
+  errors?: Record<string, string[]>;
+}
+
 class ApiClient {
-  private client: AxiosInstance;
+  private readonly client: AxiosInstance;
   private accessToken: string | null = null;
   private isRefreshing = false;
   private failedQueue: Array<{
@@ -31,6 +37,7 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
       },
+      withCredentials: true,
       timeout: 15000,
     });
 
@@ -48,7 +55,11 @@ class ApiClient {
     // Response interceptor — centralized error handling & mid-session 401 token refresh
     this.client.interceptors.response.use(
       (response) => response,
-      async (error) => {
+      async (error: unknown) => {
+        if (!axios.isAxiosError(error)) {
+          return Promise.reject(this.normalizeError(error));
+        }
+
         const originalRequest = error.config as RetryAxiosRequestConfig | undefined;
 
         if (
@@ -88,10 +99,9 @@ class ApiClient {
                 originalRequest.headers.Authorization = `Bearer ${newToken}`;
               }
               this.processQueue(null, newToken);
-              return this.client(originalRequest);
-            } else {
-              throw new Error('Refresh failed');
+              return await this.client(originalRequest);
             }
+            throw new Error('Refresh failed: missing access token');
           } catch (refreshErr) {
             this.processQueue(refreshErr, null);
             this.notifySessionExpired();
@@ -107,13 +117,13 @@ class ApiClient {
   }
 
   private processQueue(error: unknown, token: string | null = null): void {
-    this.failedQueue.forEach((prom) => {
+    for (const prom of this.failedQueue) {
       if (error) {
         prom.reject(error);
       } else if (token) {
         prom.resolve(token);
       }
-    });
+    }
     this.failedQueue = [];
   }
 
@@ -128,10 +138,12 @@ class ApiClient {
 
   public notifySessionExpired(): void {
     this.setAccessToken(null);
-    this.onSessionExpiredCallbacks.forEach((cb) => cb());
+    for (const cb of this.onSessionExpiredCallbacks) {
+      cb();
+    }
   }
 
-  // ── Token Management ──────────────────────────────────────
+  // ─── Token Management ───────────────────────────────────────────────────────
 
   setAccessToken(token: string | null): void {
     this.accessToken = token;
@@ -141,7 +153,7 @@ class ApiClient {
     return this.accessToken;
   }
 
-  // ── HTTP Methods ──────────────────────────────────────────
+  // ─── HTTP Methods ──────────────────────────────────────────────────────────
 
   async get<T>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     const response = await this.client.get<ApiResponse<T>>(url, config);
@@ -172,32 +184,36 @@ class ApiClient {
     return response.data;
   }
 
-  // ── Error Normalization ───────────────────────────────────
+  // ─── Error Normalization ───────────────────────────────────────────────────
 
   private normalizeError(error: unknown): ApiError {
     if (axios.isAxiosError(error)) {
-      const serverMessage = error.response?.data?.error?.message || error.response?.data?.message;
+      const serverMessage =
+        typeof error.response?.data?.error?.message === 'string'
+          ? error.response.data.error.message
+          : typeof error.response?.data?.message === 'string'
+            ? error.response.data.message
+            : undefined;
+
       return {
         message: serverMessage || error.message || 'An unexpected error occurred',
         status: error.response?.status || 0,
         errors: error.response?.data?.error?.details || error.response?.data?.errors || undefined,
       };
     }
+    if (error instanceof Error) {
+      return {
+        message: error.message,
+        status: 0,
+      };
+    }
     return {
-      message: error instanceof Error ? error.message : 'An unexpected error occurred',
+      message: 'An unexpected error occurred',
       status: 0,
     };
   }
 }
 
-// ─── Error Type ────────────────────────────────────────────
-
-export interface ApiError {
-  message: string;
-  status: number;
-  errors?: Record<string, string[]>;
-}
-
-// ─── Singleton Export ──────────────────────────────────────
+// ─── Singleton Export ────────────────────────────────────────────────────────
 
 export const apiClient = new ApiClient();

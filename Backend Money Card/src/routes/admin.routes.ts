@@ -10,6 +10,7 @@ import {
   getPlanById,
   createPlan,
   updatePlan,
+  deletePlan,
   getSubscriptions,
   recordSubscriptionPayment,
   getSubscriptionPayments,
@@ -38,6 +39,7 @@ router.get('/plans', getPlans);
 router.get('/plans/:id', getPlanById);
 router.post('/plans', createPlan);
 router.patch('/plans/:id', updatePlan);
+router.delete('/plans/:id', deletePlan);
 
 router.get('/subscriptions', getSubscriptions);
 router.get('/subscription-payments', getSubscriptionPayments);

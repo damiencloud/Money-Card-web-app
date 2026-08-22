@@ -97,10 +97,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (isRefreshing.current) return;
       isRefreshing.current = true;
 
-      const mockRefreshToken = `mock_jwt_refresh_simulated_${Date.now()}`;
-
       apiService.auth
-        .refresh(mockRefreshToken)
+        .refresh()
         .then((refreshResult: ApiResult<{ accessToken: string }>) => {
           if (refreshResult.success) {
             const newToken = refreshResult.data.accessToken;

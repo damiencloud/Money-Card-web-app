@@ -355,7 +355,7 @@ export function OrganizationsPage() {
           </div>
           <div>
             <p className="font-semibold text-slate-100">{org.name}</p>
-            <span className="text-xs text-slate-400">ID: {org.id}</span>
+            
           </div>
         </div>
       ),

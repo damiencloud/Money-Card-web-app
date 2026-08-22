@@ -325,15 +325,7 @@ export function AdminPlansView() {
         </div>
       ),
     },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (plan: Plan) => (
-        <Badge variant={plan.status === 'ACTIVE' ? 'success' : 'danger'}>
-          {plan.status}
-        </Badge>
-      ),
-    },
+
     {
       key: 'actions',
       header: 'Actions',

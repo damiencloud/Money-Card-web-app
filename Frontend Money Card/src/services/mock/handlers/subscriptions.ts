@@ -486,3 +486,12 @@ export const mockSubscriptionsHandlers = {
     );
   },
 };
+
+export const deletePlan = (id: string): { success: boolean; data?: any; error?: any } => {
+  const index = mockStore.plans.findIndex((p) => p.id === id);
+  if (index === -1) {
+    return { success: false, error: { code: 'NOT_FOUND', message: 'Plan not found.' } };
+  }
+  const deleted = mockStore.plans.splice(index, 1)[0];
+  return { success: true, data: deleted };
+};

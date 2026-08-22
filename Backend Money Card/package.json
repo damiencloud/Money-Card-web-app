@@ -4,6 +4,7 @@
   "description": "Money Card M0 V10 Multi-Tenant Enterprise Backend API",
   "main": "dist/server.js",
   "scripts": {
+    "create:superadmin": "tsx src/scripts/createSuperAdmin.ts",
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate && tsc",
     "start": "node dist/server.js",

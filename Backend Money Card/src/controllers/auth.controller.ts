@@ -76,7 +76,7 @@ export async function login(req: Request, res: Response) {
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
 
@@ -269,10 +269,12 @@ export async function resetPassword(req: Request, res: Response) {
       passwordHash: newHash,
       resetPasswordToken: null,
       resetPasswordExpires: null,
-      mustChangePassword: false, // User personally chose their new password
-      tokenVersion: { increment: 1 }, // Invalidate old sessions/tokens
+      mustChangePassword: false,
+      tokenVersion: { increment: 1 },
     },
   });
+
+  console.log(`[AUTH_AUDIT_LOG] PASSWORD_CHANGE source=resetPassword userId=${user.id} email=${user.email} role=${user.role} timestamp=${new Date().toISOString()} ip=${req.ip}`);
 
   return sendSuccess(res, {
     message: 'Password changed successfully. Please log in with your new password.',
@@ -321,7 +323,7 @@ export async function changePassword(req: Request, res: Response) {
     data: {
       passwordHash: newHash,
       mustChangePassword: false,
-      tokenVersion: { increment: 1 }, // Invalidate previous sessions
+      tokenVersion: { increment: 1 },
     },
     include: {
       permissions: true,
@@ -329,6 +331,8 @@ export async function changePassword(req: Request, res: Response) {
       organization: true,
     },
   });
+
+  console.log(`[AUTH_AUDIT_LOG] PASSWORD_CHANGE source=changePassword userId=${user.id} email=${user.email} role=${user.role} timestamp=${new Date().toISOString()} ip=${req.ip}`);
 
   // Generate fresh token with updated tokenVersion and mustChangePassword = false
   const tokenPayload = {

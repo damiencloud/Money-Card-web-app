@@ -61,7 +61,7 @@ export function generateReportPdfBlob({
   streamLines.push('/F1 9 Tf');
   streamLines.push('0.45 0.45 0.55 rg');
   streamLines.push('50 754 Td');
-  streamLines.push(`(Category: ${escapePdfText(report.type)}  |  Report ID: ${escapePdfText(report.id)}  |  Generated: ${new Date().toLocaleString()}) Tj`);
+  streamLines.push(`(Category: ${escapePdfText(report.type)}  |  Generated: ${new Date().toLocaleString()}) Tj`);
   streamLines.push('ET');
 
   // Divider line
@@ -183,15 +183,18 @@ export function generateReportPdfBlob({
       streamLines.push('0.9 0.9 0.93 RG');
       streamLines.push(`50 ${curY} 495 18 re S`);
 
+      const shortTxnId = `TXN-#${t.id.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+      const amountStr = `INR ${Number(t.amount || 0).toFixed(2)}`;
+
       streamLines.push('BT');
       streamLines.push('/F1 8 Tf');
       streamLines.push('0.2 0.2 0.25 rg');
       streamLines.push(`58 ${curY + 5} Td`);
-      streamLines.push(`(${escapePdfText(t.id)}) Tj`);
+      streamLines.push(`(${escapePdfText(shortTxnId)}) Tj`);
       streamLines.push('100 0 Td');
       streamLines.push(`(${escapePdfText(t.type)}) Tj`);
       streamLines.push('80 0 Td');
-      streamLines.push(`(${escapePdfText(formatCurrency(t.amount))}) Tj`);
+      streamLines.push(`(${escapePdfText(amountStr)}) Tj`);
       streamLines.push('90 0 Td');
       streamLines.push(`(${escapePdfText(t.status)}) Tj`);
       streamLines.push('90 0 Td');
@@ -249,7 +252,7 @@ export function generateReportPdfBlob({
       streamLines.push('140 0 Td');
       streamLines.push(`(${escapePdfText(catText)}) Tj`);
       streamLines.push('100 0 Td');
-      streamLines.push(`(${escapePdfText(formatCurrency(item.price))}) Tj`);
+      streamLines.push(`(INR ${Number(item.price || 0).toFixed(2)}) Tj`);
       streamLines.push('90 0 Td');
       streamLines.push(`(${item.quantity} units) Tj`);
       streamLines.push('80 0 Td');
@@ -276,15 +279,15 @@ export function generateReportPdfBlob({
     streamLines.push('/F2 8 Tf');
     streamLines.push('0.2 0.2 0.35 rg');
     streamLines.push(`58 ${curY + 5} Td`);
-    streamLines.push('(Session ID) Tj');
+    streamLines.push('(Session Ref) Tj');
     streamLines.push('110 0 Td');
-    streamLines.push('(Card ID) Tj');
+    streamLines.push('(Card Number) Tj');
     streamLines.push('90 0 Td');
     streamLines.push('(Current Bal (INR)) Tj');
     streamLines.push('100 0 Td');
     streamLines.push('(Session Status) Tj');
     streamLines.push('90 0 Td');
-    streamLines.push('(Created Date) Tj');
+    streamLines.push('(Started Date) Tj');
     streamLines.push('ET');
     curY -= 18;
 
@@ -298,15 +301,19 @@ export function generateReportPdfBlob({
       streamLines.push('0.9 0.9 0.93 RG');
       streamLines.push(`50 ${curY} 495 18 re S`);
 
+      const shortSessId = `SESSION-#${s.id.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+      const cardNum = s.physicalCardNumber || (s.cardId.startsWith('MC-') ? s.cardId : `MC-${s.cardId.replace(/-/g, '').slice(0, 6).toUpperCase()}`);
+      const balanceStr = `INR ${Number(s.balance || 0).toFixed(2)}`;
+
       streamLines.push('BT');
       streamLines.push('/F1 8 Tf');
       streamLines.push('0.2 0.2 0.25 rg');
       streamLines.push(`58 ${curY + 5} Td`);
-      streamLines.push(`(${escapePdfText(s.id)}) Tj`);
+      streamLines.push(`(${escapePdfText(shortSessId)}) Tj`);
       streamLines.push('110 0 Td');
-      streamLines.push(`(${escapePdfText(s.cardId)}) Tj`);
+      streamLines.push(`(${escapePdfText(cardNum)}) Tj`);
       streamLines.push('90 0 Td');
-      streamLines.push(`(${escapePdfText(formatCurrency(s.balance))}) Tj`);
+      streamLines.push(`(${escapePdfText(balanceStr)}) Tj`);
       streamLines.push('100 0 Td');
       streamLines.push(`(${escapePdfText(s.status)}) Tj`);
       streamLines.push('90 0 Td');

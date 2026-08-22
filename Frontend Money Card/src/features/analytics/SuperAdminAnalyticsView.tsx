@@ -278,7 +278,7 @@ export function SuperAdminAnalyticsView() {
           </div>
           <div>
             <p className="font-semibold text-slate-100">{org.name}</p>
-            <p className="text-xs text-slate-500">ID: {org.id}</p>
+            
           </div>
         </div>
       ),
