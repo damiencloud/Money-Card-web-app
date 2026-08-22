@@ -236,65 +236,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       isLoading: authState.isAuthenticating,
                       onPressed: authState.isAuthenticating ? null : _handleLogin,
                     ),
-                    const SizedBox(height: AppSpacing.lg),
 
-                    // Live Staff Quick-Fill Helper
-                    Container(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceVariantLight,
-                        borderRadius: AppSpacing.roundedMd,
-                        border: Border.all(color: AppColors.borderLight),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Expanded(
-                                child: Text(
-                                  'STAFF ACCOUNT',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.8,
-                                    color: AppColors.textSecondaryLight,
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.success.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: AppColors.success.withOpacity(0.3)),
-                                ),
-                                child: const Text(
-                                  'LIVE API',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.success,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          ActionChip(
-                            label: const Text('staff@maincafe.com (Rahul Counter)', style: TextStyle(fontSize: 12)),
-                            avatar: const Icon(Icons.badge, size: 14, color: AppColors.primaryLight),
-                            onPressed: () {
-                              setState(() {
-                                _emailController.text = 'staff@maincafe.com';
-                                _passwordController.text = 'Staff@123';
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),

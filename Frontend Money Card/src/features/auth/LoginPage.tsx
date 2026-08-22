@@ -184,28 +184,7 @@ export function LoginPage() {
           </Link>
         </div>
 
-        {/* Dev test credentials hint */}
-        {import.meta.env.DEV && (
-          <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3">
-            <p className="mb-2 text-xs font-medium text-slate-500">Test Accounts (Dev only)</p>
-            <div className="space-y-1 text-xs text-slate-500">
-              <p>
-                <Mail className="mr-1 inline h-3 w-3" />
-                <span className="text-slate-400">admin@platform.com</span>
-                <Lock className="ml-2 mr-1 inline h-3 w-3" />
-                <span className="text-slate-400">password</span>
-                <span className="ml-1 text-violet-500">(Super Admin)</span>
-              </p>
-              <p>
-                <Mail className="mr-1 inline h-3 w-3" />
-                <span className="text-slate-400">admin@acme.com</span>
-                <Lock className="ml-2 mr-1 inline h-3 w-3" />
-                <span className="text-slate-400">password</span>
-                <span className="ml-1 text-violet-500">(Org Admin)</span>
-              </p>
-            </div>
-          </div>
-        )}
+
       </form>
     </Card>
   );
