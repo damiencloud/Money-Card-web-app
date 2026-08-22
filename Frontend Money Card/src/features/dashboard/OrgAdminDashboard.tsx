@@ -1,6 +1,6 @@
 // ─── Organization Admin Dashboard (M11) ────────────────────
-// Real-time organization metrics, plan usage limits, financial summary,
-// and date-range calendar filtered operational metrics.
+// Real-time organization metrics, plan usage limits, and
+// date-range calendar filtered operational metrics.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -38,11 +38,9 @@ import {
   AlertTriangle,
   Upload,
   BarChart3,
-  Calendar,
   CalendarDays,
   Clock,
   X,
-  Filter,
 } from 'lucide-react';
 
 export type DatePreset = 'all' | 'today' | 'yesterday' | 'last7' | 'last30' | 'thisMonth' | 'custom';
@@ -679,33 +677,6 @@ export function OrgAdminDashboard() {
               icon={<AlertTriangle className="h-5 w-5 text-amber-400" />}
             />
           </div>
-
-          {/* Financial Distinction Summary Card (M0 Rule 7) */}
-          <Card className="border-violet-500/30 bg-gradient-to-r from-slate-900 via-slate-900/90 to-violet-950/30">
-            <CardHeader
-              title="Financial Revenue vs. Wallet Liabilities (M0 Section 29)"
-              description={`Authoritative distinction between actual POS purchase sales revenue and unspent card wallet deposits for ${activeDateLabel.toLowerCase()}.`}
-            />
-            <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 space-y-1">
-                  <span className="text-xs font-semibold text-slate-400">Actual POS Purchase Sales:</span>
-                  <p className="font-mono text-xl font-bold text-emerald-400">
-                    {formatCurrency(analytics?.totalPurchaseVolume || 0)}
-                  </p>
-                  <p className="text-[11px] text-slate-500">Recognized revenue from completed food/store purchases.</p>
-                </div>
-
-                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 space-y-1">
-                  <span className="text-xs font-semibold text-slate-400">Card Wallet Deposits (Recharges):</span>
-                  <p className="font-mono text-xl font-bold text-violet-300">
-                    {formatCurrency(analytics?.totalRechargeVolume || 0)}
-                  </p>
-                  <p className="text-[11px] text-slate-500">Unspent pre-funded card balance liabilities.</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       )}
     </div>
