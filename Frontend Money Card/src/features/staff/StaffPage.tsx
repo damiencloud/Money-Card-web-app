@@ -34,6 +34,7 @@ import {
   Power,
   Building2,
   ShieldCheck,
+  Send,
   RefreshCw,
   AlertCircle,
   Eye,
@@ -56,6 +57,24 @@ export function StaffPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [resendingId, setResendingId] = useState<string | null>(null);
+
+  const handleResendInvite = async (staffId: string) => {
+    setResendingId(staffId);
+    try {
+      const res = await apiService.staff.resendInvite(staffId);
+      if (res.success) {
+        notify.success(res.data?.message || 'Activation invitation re-sent successfully!');
+      } else {
+        notify.error(res.error?.message || 'Failed to resend activation invitation.');
+      }
+    } catch {
+      notify.error('An unexpected error occurred while sending the invitation.');
+    } finally {
+      setResendingId(null);
+    }
+  };
+
 
   // ── Unified Staff Details/Edit Modal State ─────────────────
   const [showStaffModal, setShowStaffModal] = useState(false);
@@ -446,9 +465,15 @@ export function StaffPage() {
       key: 'status',
       header: 'Status',
       render: (staff: Staff) => (
-        <Badge variant={staff.status === 'ACTIVE' ? 'success' : 'danger'}>
-          {staff.status}
-        </Badge>
+        staff.status === 'PENDING_ACTIVATION' ? (
+          <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-400 border border-amber-500/30">
+            Pending Activation
+          </span>
+        ) : (
+          <Badge variant={staff.status === 'ACTIVE' ? 'success' : 'danger'}>
+            {staff.status === 'ACTIVE' ? 'Active' : 'Inactive'}
+          </Badge>
+        )
       ),
     },
     {
@@ -495,6 +520,21 @@ export function StaffPage() {
       className: 'text-right',
       render: (staff: Staff) => (
         <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {/* Resend Activation Invite if Pending */}
+          {canManage && staff.status === 'PENDING_ACTIVATION' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleResendInvite(staff.id)}
+              disabled={resendingId === staff.id}
+              className="text-amber-400 border-amber-500/30 hover:bg-amber-500/10 text-xs"
+              title="Resend Activation Invite"
+              leftIcon={<Send className="h-3.5 w-3.5" />}
+            >
+              {resendingId === staff.id ? 'Sending...' : 'Resend Invite'}
+            </Button>
+          )}
+
           {/* Unified Details / Edit Action */}
           <Button
             variant="ghost"

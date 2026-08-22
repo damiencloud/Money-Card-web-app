@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+import { sendAccountActivationEmail } from '../services/email.service.js';
 import { getEffectiveLimits } from '../utils/limits.js';
 import { Request, Response } from 'express';
 import { prisma } from '../config/database.js';
@@ -96,8 +98,10 @@ export async function createStaffMember(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', `Account with email '${email}' already exists`);
   }
 
-  if (!password || password.length < 6) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'Password must be at least 6 characters');
+  // If no password provided, user will be invited via activation email
+  const isInvitation = !password || password.trim().length === 0;
+  if (password && password.trim().length < 8) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Password must be at least 8 characters long');
   }
 
   // Authoritative Effective Staff Limit Check
@@ -115,7 +119,20 @@ export async function createStaffMember(req: Request, res: Response) {
     );
   }
 
-  const passwordHash = await hashPassword(password);
+  let rawActivationToken: string | null = null;
+  let tokenHash: string | null = null;
+  let activationExpires: Date | null = null;
+  let passwordHash: string;
+
+  if (isInvitation) {
+    rawActivationToken = crypto.randomBytes(32).toString('hex');
+    tokenHash = crypto.createHash('sha256').update(rawActivationToken).digest('hex');
+    activationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    passwordHash = await hashPassword(crypto.randomBytes(16).toString('hex')); // temporary unusable hash
+  } else {
+    passwordHash = await hashPassword(password);
+  }
+
   const targetPermissions: PermissionCode[] = Array.isArray(permissions) && permissions.length > 0
     ? permissions
     : [
@@ -142,7 +159,9 @@ export async function createStaffMember(req: Request, res: Response) {
         passwordHash,
         role: Role.STAFF,
         organizationId: orgId,
-        status: UserStatus.ACTIVE,
+        status: isInvitation ? UserStatus.PENDING_ACTIVATION : UserStatus.ACTIVE,
+        activationToken: tokenHash,
+        activationTokenExpires: activationExpires,
       },
     });
 
@@ -371,5 +390,58 @@ export async function updateStaffPermissions(req: Request, res: Response) {
     assignedBranchIds: fullStaff!.assignedBranches.map((b) => b.branchId),
     assignedBranches: fullStaff!.assignedBranches.map((b) => ({ id: b.branch.id, name: b.branch.name })),
     message: 'Permissions updated successfully.',
+  });
+}
+
+export async function resendStaffInvite(req: Request, res: Response) {
+  const { id } = req.params;
+  const orgId = req.user?.organizationId;
+
+  if (!orgId && req.user?.role !== Role.SUPER_ADMIN) {
+    return sendError(res, 403, 'FORBIDDEN', 'No organization context found');
+  }
+
+  const user = await prisma.user.findFirst({
+    where: {
+      id,
+      ...(orgId ? { organizationId: orgId } : {}),
+      role: Role.STAFF,
+    },
+    include: { organization: true },
+  });
+
+  if (!user) {
+    return sendError(res, 404, 'NOT_FOUND', 'Staff member not found');
+  }
+
+  if (user.status !== UserStatus.PENDING_ACTIVATION) {
+    return sendError(res, 400, 'ALREADY_ACTIVE', 'This staff account is already active.');
+  }
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const activationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      activationToken: tokenHash,
+      activationTokenExpires: activationExpires,
+    },
+  });
+
+  const clientOrigin = req.headers.origin || 'http://localhost:5173';
+  const activationLink = `${clientOrigin}/activate?token=${rawToken}`;
+
+  await sendAccountActivationEmail(
+    user.email,
+    user.name,
+    activationLink,
+    Role.STAFF,
+    user.organization?.name || null,
+  );
+
+  return sendSuccess(res, {
+    message: `Activation invitation re-sent successfully to ${user.email}.`,
   });
 }

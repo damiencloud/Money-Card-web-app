@@ -76,3 +76,20 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
+
+export interface VerifyActivationTokenResponse {
+  valid: boolean;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: Role;
+    organizationName: string | null;
+  };
+}
+
+export interface ActivateAccountRequest {
+  token: string;
+  password: string;
+  confirmPassword?: string;
+}

@@ -136,6 +136,18 @@ export const realClient: typeof mockClient = {
       );
     },
 
+    async verifyActivationToken(token: string): Promise<ApiResult<{ valid: boolean; user: { id: string; name: string; email: string; role: any; organizationName: string | null } }>> {
+      return handleApiCall(() =>
+        apiClient.get(`/v1/auth/verify-activation-token?token=${encodeURIComponent(token)}`),
+      );
+    },
+
+    async activateAccount(req: { token: string; password: string; confirmPassword?: string }): Promise<ApiResult<{ message: string; accessToken: string; refreshToken?: string; user: AuthUser }>> {
+      return handleApiCall(() =>
+        apiClient.post('/v1/auth/activate-account', req),
+      );
+    },
+
     setMockSessionUser(): void {},
     getCurrentSessionUser(): AuthUser | null {
       return null;

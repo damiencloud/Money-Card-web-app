@@ -17,6 +17,7 @@ import {
   getPlanChangeRequests,
   reviewPlanChangeRequest,
   resetOrgAdminPassword,
+  resendOrgAdminInvite,
 } from '../controllers/admin.controller.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
 import { requireRole } from '../middlewares/role.middleware.js';
@@ -51,3 +52,5 @@ router.get('/plan-change-requests', getPlanChangeRequests);
 router.patch('/plan-change-requests/:id', reviewPlanChangeRequest);
 
 export default router;
+
+router.post('/organizations/:id/resend-admin-invite', resendOrgAdminInvite);

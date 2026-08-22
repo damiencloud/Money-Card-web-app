@@ -6,7 +6,7 @@ import type { Plan, Subscription } from './subscription';
 export interface Organization {
   id: string;
   name: string;
-  status: 'ACTIVE' | 'INACTIVE';
+  status: 'ACTIVE' | 'INACTIVE' | 'PENDING_ACTIVATION';
   planId: string;
   createdAt: string;
   updatedAt: string;
@@ -44,7 +44,7 @@ export interface Branch {
   id: string;
   organizationId: string;
   name: string;
-  status: 'ACTIVE' | 'INACTIVE';
+  status: 'ACTIVE' | 'INACTIVE' | 'PENDING_ACTIVATION';
   createdAt: string;
   updatedAt: string;
 }
@@ -57,7 +57,7 @@ export interface Staff {
   organizationId: string;
   name: string;
   email: string;
-  status: 'ACTIVE' | 'INACTIVE';
+  status: 'ACTIVE' | 'INACTIVE' | 'PENDING_ACTIVATION';
   permissions: Permission[];
   assignedBranchIds: string[];
   createdAt: string;

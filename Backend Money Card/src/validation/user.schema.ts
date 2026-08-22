@@ -5,7 +5,7 @@ export const createStaffMemberSchema = z
   .object({
     name: safeDisplayName,
     email: safeEmail,
-    password: strongPasswordSchema,
+    password: strongPasswordSchema.optional(),
     branchIds: z.array(safeId).optional(),
     permissionCodes: z.array(z.string().max(50)).optional(),
   })
@@ -46,6 +46,6 @@ export const createOrganizationSchema = z
     address: safeFreeText.optional(),
     adminName: safeDisplayName,
     adminEmail: safeEmail,
-    adminPassword: strongPasswordSchema,
+    adminPassword: strongPasswordSchema.optional(),
   })
   .strict();

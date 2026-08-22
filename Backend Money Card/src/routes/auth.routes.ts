@@ -7,6 +7,8 @@ import {
   resetPassword,
   changePassword,
   updateProfile,
+  verifyActivationToken,
+  activateAccount,
   logout,
 } from '../controllers/auth.controller.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
@@ -18,6 +20,8 @@ import {
   resetPasswordSchema,
   changePasswordSchema,
   updateProfileSchema,
+  verifyActivationTokenSchema,
+  activateAccountSchema,
 } from '../validation/index.js';
 
 const router = Router();
@@ -29,6 +33,8 @@ router.patch('/profile', requireAuth, validateRequest({ body: updateProfileSchem
 router.post('/forgot-password', authRateLimiter, validateRequest({ body: forgotPasswordSchema }), forgotPassword);
 router.post('/reset-password', validateRequest({ body: resetPasswordSchema }), resetPassword);
 router.post('/change-password', requireAuth, validateRequest({ body: changePasswordSchema }), changePassword);
+router.get('/verify-activation-token', validateRequest({ query: verifyActivationTokenSchema }), verifyActivationToken);
+router.post('/activate-account', validateRequest({ body: activateAccountSchema }), activateAccount);
 router.post('/logout', logout);
 
 export default router;

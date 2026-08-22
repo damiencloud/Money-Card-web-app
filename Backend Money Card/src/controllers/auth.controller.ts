@@ -1,4 +1,4 @@
-import { sendPasswordResetEmail } from '../services/email.service.js';
+import { sendPasswordResetEmail, sendAccountActivationEmail } from '../services/email.service.js';
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
@@ -404,6 +404,151 @@ export async function updateProfile(req: Request, res: Response) {
       role: updatedUser.role,
       organizationId: updatedUser.organizationId,
       status: updatedUser.status,
+    },
+  });
+}
+
+export async function verifyActivationToken(req: Request, res: Response) {
+  const token = (req.query.token as string)?.trim();
+  if (!token) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Activation token is required');
+  }
+
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { activationToken: tokenHash },
+        { activationToken: token },
+      ],
+    },
+    include: { organization: true },
+  });
+
+  if (!user || !user.activationTokenExpires) {
+    return sendError(res, 400, 'INVALID_TOKEN', 'Activation link is invalid or has already been used.');
+  }
+
+  const isExpired = new Date(user.activationTokenExpires).getTime() < Date.now();
+  if (isExpired) {
+    return sendError(res, 400, 'EXPIRED_TOKEN', 'This activation link has expired. Please ask your administrator to resend the invitation.');
+  }
+
+  return sendSuccess(res, {
+    valid: true,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      organizationName: user.organization?.name || null,
+    },
+  });
+}
+
+export async function activateAccount(req: Request, res: Response) {
+  const { token, password } = req.body;
+  if (!token) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Activation token is required');
+  }
+
+  if (!password || password.length < 8) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Password must be at least 8 characters long');
+  }
+
+  const rawToken = token.trim();
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { activationToken: tokenHash },
+        { activationToken: rawToken },
+      ],
+    },
+    include: {
+      organization: true,
+      permissions: true,
+      assignedBranches: { include: { branch: true } },
+    },
+  });
+
+  if (!user || !user.activationTokenExpires) {
+    return sendError(res, 400, 'INVALID_TOKEN', 'Activation link is invalid or has already been used.');
+  }
+
+  const isExpired = new Date(user.activationTokenExpires).getTime() < Date.now();
+  if (isExpired) {
+    return sendError(res, 400, 'EXPIRED_TOKEN', 'This activation link has expired. Please ask your administrator to resend the invitation.');
+  }
+
+  const passwordHash = await hashPassword(password);
+
+  const updatedUser = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash,
+      status: UserStatus.ACTIVE,
+      activationToken: null,
+      activationTokenExpires: null,
+      mustChangePassword: false,
+      tokenVersion: { increment: 1 },
+    },
+    include: {
+      organization: true,
+      permissions: true,
+      assignedBranches: { include: { branch: true } },
+    },
+  });
+
+  console.log(`[AUTH_AUDIT_LOG] ACCOUNT_ACTIVATED userId=${updatedUser.id} email=${updatedUser.email} role=${updatedUser.role} timestamp=${new Date().toISOString()} ip=${req.ip}`);
+
+  const tokenPayload = {
+    userId: updatedUser.id,
+    email: updatedUser.email,
+    role: updatedUser.role,
+    organizationId: updatedUser.organizationId,
+    tokenVersion: updatedUser.tokenVersion,
+  };
+
+  const accessToken = generateAccessToken(tokenPayload);
+  const refreshToken = generateRefreshToken(tokenPayload);
+
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+
+  const permissions = updatedUser.permissions.map((p) => p.permission);
+  const activeAssignedBranches = updatedUser.assignedBranches
+    .filter((b) => updatedUser.role !== Role.STAFF || b.branch.status === 'ACTIVE')
+    .map((b) => ({
+      id: b.branch.id,
+      name: b.branch.name,
+      location: b.branch.location,
+      status: b.branch.status,
+    }));
+
+  return sendSuccess(res, {
+    message: 'Account activated successfully! You are now logged in.',
+    token: accessToken,
+    accessToken,
+    refreshToken,
+    user: {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      role: updatedUser.role,
+      organizationId: updatedUser.organizationId,
+      organizationName: updatedUser.organization?.name || null,
+      status: updatedUser.status,
+      mustChangePassword: false,
+      permissions,
+      assignedBranchIds: activeAssignedBranches.map((b) => b.id),
+      assignedBranches: activeAssignedBranches,
     },
   });
 }

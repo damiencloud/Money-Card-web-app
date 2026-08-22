@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+import { sendAccountActivationEmail } from '../services/email.service.js';
 import { Request, Response } from 'express';
 import { prisma } from '../config/database.js';
 import { sendError, sendSuccess } from '../utils/response.js';
@@ -100,7 +102,20 @@ export async function createOrganization(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', `Admin email '${email}' is already in use`);
   }
 
-  const passwordHash = await hashPassword(adminPassword || 'OrgAdmin@123');
+  const isInvitation = !adminPassword || adminPassword.trim().length === 0;
+  let rawActivationToken: string | null = null;
+  let tokenHash: string | null = null;
+  let activationExpires: Date | null = null;
+  let passwordHash: string;
+
+  if (isInvitation) {
+    rawActivationToken = crypto.randomBytes(32).toString('hex');
+    tokenHash = crypto.createHash('sha256').update(rawActivationToken).digest('hex');
+    activationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    passwordHash = await hashPassword(crypto.randomBytes(16).toString('hex'));
+  } else {
+    passwordHash = await hashPassword(adminPassword);
+  }
 
   const result = await prisma.$transaction(async (tx) => {
     const org = await tx.organization.create({
@@ -132,12 +147,26 @@ export async function createOrganization(req: Request, res: Response) {
         email,
         passwordHash,
         role: Role.ORG_ADMIN,
-        status: UserStatus.ACTIVE,
+        status: isInvitation ? UserStatus.PENDING_ACTIVATION : UserStatus.ACTIVE,
+        activationToken: tokenHash,
+        activationTokenExpires: activationExpires,
       },
     });
 
     return { org, sub, adminUser };
   });
+
+  if (isInvitation && rawActivationToken) {
+    const clientOrigin = req.headers.origin || 'http://localhost:5173';
+    const activationLink = `${clientOrigin}/activate?token=${rawActivationToken}`;
+    await sendAccountActivationEmail(
+      email,
+      adminName || `${name} Admin`,
+      activationLink,
+      Role.ORG_ADMIN,
+      name,
+    );
+  }
 
   return sendSuccess(res, {
     id: result.org.id,
@@ -685,5 +714,59 @@ export async function resetOrgAdminPassword(req: Request, res: Response) {
       email: orgAdmin.email,
       mustChangePassword: true,
     },
+  });
+}
+
+export async function resendOrgAdminInvite(req: Request, res: Response) {
+  const { id } = req.params;
+
+  const org = await prisma.organization.findUnique({
+    where: { id },
+  });
+
+  if (!org) {
+    return sendError(res, 404, 'NOT_FOUND', 'Organization not found');
+  }
+
+  const orgAdmin = await prisma.user.findFirst({
+    where: {
+      organizationId: id,
+      role: Role.ORG_ADMIN,
+    },
+  });
+
+  if (!orgAdmin) {
+    return sendError(res, 404, 'NOT_FOUND', 'No Org Admin found for this organization');
+  }
+
+  if (orgAdmin.status !== UserStatus.PENDING_ACTIVATION) {
+    return sendError(res, 400, 'ALREADY_ACTIVE', 'This Org Admin account is already active.');
+  }
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const activationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  await prisma.user.update({
+    where: { id: orgAdmin.id },
+    data: {
+      activationToken: tokenHash,
+      activationTokenExpires: activationExpires,
+    },
+  });
+
+  const clientOrigin = req.headers.origin || 'http://localhost:5173';
+  const activationLink = `${clientOrigin}/activate?token=${rawToken}`;
+
+  await sendAccountActivationEmail(
+    orgAdmin.email,
+    orgAdmin.name,
+    activationLink,
+    Role.ORG_ADMIN,
+    org.name,
+  );
+
+  return sendSuccess(res, {
+    message: `Activation invitation re-sent successfully to ${orgAdmin.email}.`,
   });
 }

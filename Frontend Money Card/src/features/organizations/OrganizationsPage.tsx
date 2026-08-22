@@ -24,6 +24,7 @@ import {
   RefreshCw,
   AlertCircle,
   Building2,
+  Send,
   Users,
   CreditCard,
   ShieldAlert,
@@ -138,6 +139,24 @@ export function OrganizationsPage() {
     setConfirmTempPasswordError(null);
     setModalApiError(null);
     setShowResetPasswordModal(true);
+  };
+
+    const [resendingAdminOrgId, setResendingAdminOrgId] = useState<string | null>(null);
+
+  const handleResendAdminInvite = async (orgId: string) => {
+    setResendingAdminOrgId(orgId);
+    try {
+      const res = await apiService.organizations.resendAdminInvite(orgId);
+      if (res.success) {
+        notify.success(res.data?.message || 'Admin invitation re-sent successfully!');
+      } else {
+        notify.error(res.error?.message || 'Failed to resend admin invitation.');
+      }
+    } catch {
+      notify.error('An unexpected error occurred while resending the invitation.');
+    } finally {
+      setResendingAdminOrgId(null);
+    }
   };
 
   const handleResetPasswordSubmit = async () => {

@@ -43,3 +43,21 @@ export const resetOrgAdminPasswordSchema = z
     temporaryPassword: strongPasswordSchema,
   })
   .strict();
+
+export const verifyActivationTokenSchema = z
+  .object({
+    token: z.string({ required_error: 'Activation token is required' }).trim().min(1, 'Token cannot be empty').max(256),
+  })
+  .strict();
+
+export const activateAccountSchema = z
+  .object({
+    token: z.string({ required_error: 'Activation token is required' }).trim().min(1, 'Token cannot be empty').max(256),
+    password: strongPasswordSchema,
+    confirmPassword: z.string().max(128).optional(),
+  })
+  .strict()
+  .refine((data) => !data.confirmPassword || data.password === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });

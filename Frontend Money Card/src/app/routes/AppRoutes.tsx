@@ -9,6 +9,7 @@ import {
   LoginPage,
   ForgotPasswordPage,
   ResetPasswordPage,
+  ActivateAccountPage,
   UnauthorizedPage,
   MandatoryChangePasswordPage,
 } from '@/features/auth';
@@ -50,6 +51,7 @@ export function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/activate" element={<ActivateAccountPage />} />
       </Route>
 
       {/* ── Unauthorized (authenticated but no permission) ── */}

@@ -7,6 +7,7 @@ import {
   updateStaffMember,
   updateStaffBranches,
   updateStaffPermissions,
+  resendStaffInvite,
 } from '../controllers/staff.controller.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
 import { requireRole } from '../middlewares/role.middleware.js';
@@ -49,4 +50,11 @@ staffRouter.put(
   requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN),
   validateRequest({ body: updateStaffPermissionsSchema }),
   updateStaffPermissions,
+  resendStaffInvite,
+);
+
+staffRouter.post(
+  '/:id/resend-invite',
+  requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN),
+  resendStaffInvite,
 );
