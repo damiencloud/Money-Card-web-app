@@ -1,3 +1,4 @@
+import { buildPeakDemandJsPdf } from "./peakPdfExport";
 // ─── Peak & Demand Analysis Page (M-Peak) ──────────────────────
 // Dedicated Peak Hours, Food Demand, and Operational Traffic Analysis for ORG_ADMIN.
 // Uses apiService abstraction strictly — does NOT import mock handlers directly.
@@ -252,11 +253,11 @@ export function PeakPage() {
           <Button
             variant="primary"
             size="sm"
-            onClick={handleExportCsv}
+            onClick={handleDownloadPdf}
             isLoading={isExporting}
             leftIcon={<Download className="h-4 w-4" />}
           >
-            Export Peak CSV
+            Download PDF
           </Button>
         </div>
       </div>
