@@ -127,7 +127,7 @@ class ResolveQrResponseData {
       return ResolveQrResponseData(
         card: Card.fromJson(json['card'] as Map<String, dynamic>),
         session: sessionData != null && sessionData is Map<String, dynamic>
-            ? CardSession.fromJson(sessionData as Map<String, dynamic>)
+            ? CardSession.fromJson(sessionData)
             : null,
       );
     }

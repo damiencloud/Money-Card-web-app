@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/constants/permission_constants.dart';
-import '../../models/analytics.dart';
 import '../../models/branch.dart';
 import '../../providers/analytics_provider.dart';
 import '../../providers/branch_provider.dart';

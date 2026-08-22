@@ -45,7 +45,6 @@ class AuthInterceptor extends Interceptor {
         path.endsWith(ApiEndpoints.refresh) ||
         path.endsWith(ApiEndpoints.logout);
 
-    final isInactiveAccount = response?.statusCode == 401 || response?.statusCode == 403;
     final responseData = response?.data;
     final errorCode = (responseData is Map<String, dynamic>)
         ? (responseData['error'] is Map ? responseData['error']['code'] : null)

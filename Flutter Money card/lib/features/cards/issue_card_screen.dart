@@ -125,7 +125,7 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
 
     final session = await ref.read(cardDetailsNotifierProvider.notifier).issueCardSession(
           cardId: card.id,
-          branchId: branch!.id,
+          branchId: branch.id,
         );
 
     if (session != null && mounted) {
@@ -145,7 +145,7 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
         context.pushReplacement(
           '/app/cards/${card.id}',
           extra: {
-            'initialCard': card.copyWith(status: CardStatus.active, currentBranchId: branch!.id),
+            'initialCard': card.copyWith(status: CardStatus.active, currentBranchId: branch.id),
             'initialSession': session,
           },
         );

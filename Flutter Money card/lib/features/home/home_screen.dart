@@ -53,7 +53,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(currentBranchProvider, (_, __) {
+    ref.listen(currentBranchProvider, (_, _) {
       ref.read(sessionListNotifierProvider.notifier).loadSessions();
     });
 

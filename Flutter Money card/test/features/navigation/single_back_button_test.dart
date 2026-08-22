@@ -64,7 +64,8 @@ class FakeSessionRepository implements SessionRepository {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 
   @override
-  Future<List<CardSession>> getSessions({String? branchId, String? status, String? cardId, int? page, int? limit}) async => [];
+  @override
+  Future<List<CardSession>> listSessions({String? branchId, String? status, int? page, int? limit}) async => [];
 
   @override
   Future<CardSession> getSessionById(String id) async => const CardSession(
