@@ -58,7 +58,12 @@ export async function getOrgAnalytics(req: Request, res: Response) {
       include: { branch: true },
       orderBy: { createdAt: 'asc' },
     }),
-    prisma.card.count({ where: orgId ? { organizationId: orgId } : {} }),
+    prisma.card.count({
+      where: {
+        ...(orgId ? { organizationId: orgId } : {}),
+        ...(fromDate || toDate ? { createdAt: dateFilter } : {}),
+      },
+    }),
     prisma.cardSession.count({
       where: {
         ...(orgId ? { organizationId: orgId } : {}),

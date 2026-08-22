@@ -1,7 +1,8 @@
 // ─── Organization Admin Dashboard (M11) ────────────────────
-// Real-time organization metrics, plan usage limits, financial summary, and permission-guarded quick actions.
+// Real-time organization metrics, plan usage limits, financial summary,
+// and date-range calendar filtered operational metrics.
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '@/services/api';
 import { useBranch, usePermissions } from '@/hooks';
@@ -37,7 +38,45 @@ import {
   AlertTriangle,
   Upload,
   BarChart3,
+  Calendar,
+  CalendarDays,
+  Clock,
+  X,
+  Filter,
 } from 'lucide-react';
+
+export type DatePreset = 'all' | 'today' | 'yesterday' | 'last7' | 'last30' | 'thisMonth' | 'custom';
+
+export function getPresetDates(preset: DatePreset): { startDate: string; endDate: string } {
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+
+  if (preset === 'today') {
+    return { startDate: todayStr, endDate: todayStr };
+  }
+  if (preset === 'yesterday') {
+    const yest = new Date(now);
+    yest.setDate(yest.getDate() - 1);
+    const yestStr = yest.toISOString().split('T')[0];
+    return { startDate: yestStr, endDate: yestStr };
+  }
+  if (preset === 'last7') {
+    const start = new Date(now);
+    start.setDate(start.getDate() - 7);
+    return { startDate: start.toISOString().split('T')[0], endDate: todayStr };
+  }
+  if (preset === 'last30') {
+    const start = new Date(now);
+    start.setDate(start.getDate() - 30);
+    return { startDate: start.toISOString().split('T')[0], endDate: todayStr };
+  }
+  if (preset === 'thisMonth') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { startDate: start.toISOString().split('T')[0], endDate: todayStr };
+  }
+
+  return { startDate: '', endDate: '' };
+}
 
 export function OrgAdminDashboard() {
   const navigate = useNavigate();
@@ -52,10 +91,38 @@ export function OrgAdminDashboard() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
 
+  // Date Filtering State
+  const [datePreset, setDatePreset] = useState<DatePreset>('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [showCustomPicker, setShowCustomPicker] = useState(false);
+
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchOrgDashboardData = useCallback(async () => {
+  const handlePresetChange = (preset: DatePreset) => {
+    setDatePreset(preset);
+    if (preset === 'custom') {
+      setShowCustomPicker(true);
+    } else {
+      setShowCustomPicker(false);
+      const { startDate: s, endDate: e } = getPresetDates(preset);
+      setStartDate(s);
+      setEndDate(e);
+    }
+  };
+
+  const handleClearDateFilter = () => {
+    setDatePreset('all');
+    setStartDate('');
+    setEndDate('');
+    setShowCustomPicker(false);
+  };
+
+  const fetchOrgDashboardData = useCallback(async (isSilent = false) => {
+    if (!isSilent) setIsLoading(true);
+    setIsRefreshing(true);
     setError(null);
     try {
       const [plansRes, subRes, branchRes, staffRes, cardRes, invRes, analyticsRes] =
@@ -66,9 +133,11 @@ export function OrgAdminDashboard() {
           apiService.staff.getStaff(),
           apiService.cards.getCards(),
           apiService.inventory.getInventory(),
-          apiService.analytics.getAnalyticsOverview(
-            currentBranch ? { branchId: currentBranch.id } : undefined,
-          ),
+          apiService.analytics.getAnalyticsOverview({
+            branchId: currentBranch ? currentBranch.id : undefined,
+            startDate: startDate || undefined,
+            endDate: endDate || undefined,
+          }),
         ]);
 
       if (!subRes.success) {
@@ -92,8 +161,9 @@ export function OrgAdminDashboard() {
       setError('Unable to connect to server. Please try again.');
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-  }, [currentBranch]);
+  }, [currentBranch, startDate, endDate]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -108,9 +178,11 @@ export function OrgAdminDashboard() {
             apiService.staff.getStaff(),
             apiService.cards.getCards(),
             apiService.inventory.getInventory(),
-            apiService.analytics.getAnalyticsOverview(
-              currentBranch ? { branchId: currentBranch.id } : undefined,
-            ),
+            apiService.analytics.getAnalyticsOverview({
+              branchId: currentBranch ? currentBranch.id : undefined,
+              startDate: startDate || undefined,
+              endDate: endDate || undefined,
+            }),
           ]);
         if (isCancelled) return;
 
@@ -142,7 +214,7 @@ export function OrgAdminDashboard() {
     return () => {
       isCancelled = true;
     };
-  }, [currentBranch]);
+  }, [currentBranch, startDate, endDate]);
 
   // Authoritative Effective Limits: Custom Override > Plan Default
   const branchUsage = branches.length;
@@ -168,11 +240,40 @@ export function OrgAdminDashboard() {
 
   const txnUsage = analytics?.totalTransactions || 0;
 
-  const lowStockCount = inventory.filter((i) => i.quantity <= 10).length;
+  // Filter Cards by Date Range
+  const filteredCardsIssuedCount = useMemo(() => {
+    if (!startDate && !endDate) return cardsList.length;
+    const start = startDate ? new Date(startDate).getTime() : 0;
+    const end = endDate ? new Date(endDate + 'T23:59:59.999Z').getTime() : Infinity;
+
+    return cardsList.filter((c) => {
+      const cardDate = new Date(c.createdAt || (c as any).issuedAt || 0).getTime();
+      return cardDate >= start && cardDate <= end;
+    }).length;
+  }, [cardsList, startDate, endDate]);
+
+  // Low Stock Items (Threshold <= 10)
+  const lowStockCount = useMemo(() => {
+    return inventory.filter((i) => i.quantity <= 10).length;
+  }, [inventory]);
+
+  // Formatted date period description
+  const activeDateLabel = useMemo(() => {
+    if (!startDate && !endDate) return 'All Time';
+    if (startDate && endDate && startDate === endDate) {
+      return `Date: ${startDate}`;
+    }
+    if (startDate && endDate) {
+      return `${startDate} to ${endDate}`;
+    }
+    if (startDate) return `From ${startDate}`;
+    if (endDate) return `Until ${endDate}`;
+    return 'All Time';
+  }, [startDate, endDate]);
 
   return (
-    <div className="space-y-8">
-      {/* Header Bar & Branch Selector */}
+    <div className="space-y-6">
+      {/* Header Bar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Organization Dashboard</h1>
@@ -205,11 +306,177 @@ export function OrgAdminDashboard() {
             </select>
           )}
 
-          <Button variant="outline" size="sm" onClick={fetchOrgDashboardData} leftIcon={<RefreshCw className="h-4 w-4" />}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchOrgDashboardData(false)}
+            isLoading={isRefreshing}
+            leftIcon={<RefreshCw className="h-4 w-4" />}
+          >
             Refresh
           </Button>
         </div>
       </div>
+
+      {/* Date Range Calendar Filter Bar */}
+      <Card className="border-slate-800/80 bg-slate-900/50 backdrop-blur-sm">
+        <div className="p-4 space-y-3">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+            {/* Quick Preset Pills */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 mr-2">
+                <CalendarDays className="h-4 w-4 text-violet-400" />
+                Date Filter:
+              </span>
+
+              <button
+                type="button"
+                onClick={() => handlePresetChange('all')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                  datePreset === 'all'
+                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                    : 'bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                }`}
+              >
+                All Time
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handlePresetChange('today')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                  datePreset === 'today'
+                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                    : 'bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                }`}
+              >
+                Today
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handlePresetChange('yesterday')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                  datePreset === 'yesterday'
+                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                    : 'bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                }`}
+              >
+                Yesterday
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handlePresetChange('last7')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                  datePreset === 'last7'
+                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                    : 'bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                }`}
+              >
+                Last 7 Days
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handlePresetChange('last30')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                  datePreset === 'last30'
+                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                    : 'bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                }`}
+              >
+                Last 30 Days
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handlePresetChange('thisMonth')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                  datePreset === 'thisMonth'
+                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                    : 'bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                }`}
+              >
+                This Month
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handlePresetChange('custom')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                  datePreset === 'custom'
+                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                    : 'bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                }`}
+              >
+                Custom Range
+              </button>
+            </div>
+
+            {/* Active Range Summary Tag */}
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-950 px-2.5 py-1 text-xs font-medium text-slate-300 border border-slate-800">
+                <Clock className="h-3.5 w-3.5 text-violet-400" />
+                <span>Period: <strong className="text-slate-100">{activeDateLabel}</strong></span>
+              </span>
+
+              {(startDate || endDate) && (
+                <button
+                  type="button"
+                  onClick={handleClearDateFilter}
+                  className="inline-flex items-center gap-1 rounded-md bg-slate-800/80 px-2 py-1 text-xs font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                  title="Reset date filter to All Time"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  <span>Reset</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Expanded Custom Date Picker Inputs */}
+          {(showCustomPicker || datePreset === 'custom') && (
+            <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-800/80 text-xs">
+              <div className="flex items-center gap-2">
+                <label htmlFor="dashboard-start-date" className="font-medium text-slate-400">
+                  From:
+                </label>
+                <input
+                  id="dashboard-start-date"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setDatePreset('custom');
+                  }}
+                  className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none [color-scheme:dark]"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label htmlFor="dashboard-end-date" className="font-medium text-slate-400">
+                  To:
+                </label>
+                <input
+                  id="dashboard-end-date"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setDatePreset('custom');
+                  }}
+                  className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none [color-scheme:dark]"
+                />
+              </div>
+
+              <span className="text-[11px] text-slate-500">
+                Metrics update automatically when dates are selected.
+              </span>
+            </div>
+          )}
+        </div>
+      </Card>
 
       {/* Permission-Guarded Quick Actions Bar */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
@@ -285,10 +552,10 @@ export function OrgAdminDashboard() {
       {isLoading ? (
         <LoadingState message="Loading organization dashboard..." />
       ) : error ? (
-        <ErrorState title="Failed to load dashboard" message={error} onRetry={fetchOrgDashboardData} />
+        <ErrorState title="Failed to load dashboard" message={error} onRetry={() => fetchOrgDashboardData(false)} />
       ) : (
-        <div className="space-y-8">
-          {/* Active Plan & Real-Time Resource Usage Summary Card */}
+        <div className="space-y-6">
+          {/* Active Plan & Resource Utilization Limits */}
           <Card>
             <CardHeader
               title={`Active Plan: ${currentPlan?.name || 'Standard Plan'}`}
@@ -351,7 +618,7 @@ export function OrgAdminDashboard() {
                   </div>
                 </div>
 
-                {/* Active Cards */}
+                {/* Active Cards Fleet Total */}
                 <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="flex items-center gap-1.5 text-slate-300">
@@ -386,7 +653,7 @@ export function OrgAdminDashboard() {
             </CardContent>
           </Card>
 
-          {/* Operational Stat Cards */}
+          {/* Operational Stat Cards (Filtered by Date Range) */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               label="Purchase Sales Volume"
@@ -401,8 +668,8 @@ export function OrgAdminDashboard() {
             />
 
             <StatCard
-              label="Active Cards Issued"
-              value={cardsList.length}
+              label={startDate || endDate ? "Cards Issued in Period" : "Active Cards Issued"}
+              value={filteredCardsIssuedCount}
               icon={<CreditCard className="h-5 w-5 text-sky-400" />}
             />
 
@@ -417,7 +684,7 @@ export function OrgAdminDashboard() {
           <Card className="border-violet-500/30 bg-gradient-to-r from-slate-900 via-slate-900/90 to-violet-950/30">
             <CardHeader
               title="Financial Revenue vs. Wallet Liabilities (M0 Section 29)"
-              description="Authoritative distinction between actual POS purchase sales revenue and unspent card wallet deposits."
+              description={`Authoritative distinction between actual POS purchase sales revenue and unspent card wallet deposits for ${activeDateLabel.toLowerCase()}.`}
             />
             <CardContent>
               <div className="grid gap-4 sm:grid-cols-2">
