@@ -431,7 +431,7 @@ export async function blockCard(req: Request, res: Response) {
   const { id } = req.params;
   const { reason = 'Card blocked by administrator' } = req.body || {};
   const orgId = req.user?.organizationId;
-  const staffUserId = req.user?.userId;
+  const staffUserId = req.user?.id;
   const staffName = req.user?.name || req.user?.email || 'Administrator';
 
   if (!orgId) {
@@ -497,7 +497,7 @@ export async function unblockCard(req: Request, res: Response) {
   const { id } = req.params;
   const { reason = 'Card unblocked by administrator' } = req.body || {};
   const orgId = req.user?.organizationId;
-  const staffUserId = req.user?.userId;
+  const staffUserId = req.user?.id;
   const staffName = req.user?.name || req.user?.email || 'Administrator';
 
   if (!orgId) {
@@ -649,7 +649,7 @@ export async function getCardById(req: Request, res: Response) {
     where: { id, organizationId: orgId },
     include: {
       sessions: {
-        orderBy: { createdAt: 'desc' },
+        orderBy: { issuedAt: 'desc' },
         take: 20,
         include: { branch: true },
       },

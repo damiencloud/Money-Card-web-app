@@ -1,5 +1,6 @@
+type CustomerHistoryItem = any;
 import { describe, it, expect } from 'vitest';
-import { CustomerHistoryItem, CustomerHistoryEvent } from '../types';
+import type { CustomerHistoryEvent } from '../types';
 
 describe('Customer History Sync & Table Rendering', () => {
   const sampleSessions: CustomerHistoryItem[] = [

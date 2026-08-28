@@ -290,7 +290,7 @@ export function AdminPlansView() {
           </div>
           <div>
             <p className="font-semibold text-slate-100">{plan.name}</p>
-            <p className="text-xs text-slate-500 font-mono">{plan.code}</p>
+            <p className="text-xs text-slate-500 font-mono">{plan.id}</p>
           </div>
         </div>
       ),

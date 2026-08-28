@@ -126,7 +126,7 @@ export const mockAnalyticsHandlers = {
       return {
         branchId: b.id,
         branchName: b.name,
-        status: b.status,
+        status: (b.status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE') as 'ACTIVE' | 'INACTIVE',
         transactionCount: bTxns.length,
         purchaseCount: bPurchaseCount,
         purchaseVolume: Number(bPurchaseVol.toFixed(2)),

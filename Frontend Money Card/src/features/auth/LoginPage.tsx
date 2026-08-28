@@ -1,3 +1,4 @@
+import { AlertCircle, LogIn } from 'lucide-react';
 // ─── Login Page ────────────────────────────────────────────
 // M3 Web Authentication — SUPER_ADMIN & ORG_ADMIN only.
 // Staff login is NOT implemented here (Flutter-only).
@@ -8,7 +9,6 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Card, Button, Input } from '@/components/ui';
 import { useAuth } from '@/hooks';
 import { apiService } from '@/services/api';
-import { Mail, Lock, LogIn, AlertCircle } from 'lucide-react';
 
 // ── Email Validation ─────────────────────────────────────
 

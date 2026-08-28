@@ -116,7 +116,7 @@ export const mockBranchesHandlers = {
       ).length;
       if (activeCount <= 1) {
         return createMockError(
-          'MIN_ACTIVE_BRANCH_REQUIRED',
+          'VALIDATION_ERROR',
           'Cannot disable this branch. An organization must have at least one active branch.',
         );
       }

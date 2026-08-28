@@ -161,6 +161,9 @@ export const realClient: typeof mockClient = {
   },
 
   organizations: {
+    async resendAdminInvite(orgId: string): Promise<ApiResult<any>> {
+      return handleApiCall(() => apiClient.post(`/v1/admin/organizations/${orgId}/resend-invite`));
+    },
     async getOrganization(): Promise<ApiResult<OrganizationOverview>> {
       return handleApiCall(() => apiClient.get<OrganizationOverview>('/v1/organization'));
     },
@@ -239,6 +242,9 @@ export const realClient: typeof mockClient = {
   },
 
   staff: {
+    async resendInvite(id: string): Promise<ApiResult<any>> {
+      return handleApiCall(() => apiClient.post(`/v1/admin/staff/${id}/resend-invite`));
+    },
     async getStaff(params?: PaginationParams): Promise<ApiResult<PaginatedData<Staff>>> {
       const res = await handleApiCall<any>(() => apiClient.get('/v1/staff', { params }));
       if (res.success && Array.isArray(res.data)) {
@@ -562,8 +568,8 @@ export const realClient: typeof mockClient = {
     async recordDirectPayment(data: any): Promise<ApiResult<SubscriptionPayment>> {
       return handleApiCall(() => apiClient.post<SubscriptionPayment>('/v1/admin/subscription-payments', data));
     },
-    async renewSubscription(): Promise<ApiResult<Subscription>> {
-      return handleApiCall(() => apiClient.post<Subscription>('/v1/subscription/renew'));
+    async renewSubscription(data?: { reason?: string }): Promise<ApiResult<any>> {
+      return handleApiCall(() => apiClient.post<any>('/v1/subscription/renew', data || {}));
     },
     async checkout(_req: CheckoutRequest): Promise<ApiResult<CheckoutResponseData>> {
       return handleApiCall(() => apiClient.post<CheckoutResponseData>('/v1/subscription/checkout', _req));
@@ -619,8 +625,8 @@ export const realClient: typeof mockClient = {
     async recordDirectPayment(data: any): Promise<ApiResult<SubscriptionPayment>> {
       return handleApiCall(() => apiClient.post<SubscriptionPayment>('/v1/admin/subscription-payments', data));
     },
-    async renewSubscription(): Promise<ApiResult<Subscription>> {
-      return handleApiCall(() => apiClient.post<Subscription>('/v1/subscription/renew'));
+    async renewSubscription(data?: { reason?: string }): Promise<ApiResult<any>> {
+      return handleApiCall(() => apiClient.post<any>('/v1/subscription/renew', data || {}));
     },
     async checkout(_req: CheckoutRequest): Promise<ApiResult<CheckoutResponseData>> {
       return handleApiCall(() => apiClient.post<CheckoutResponseData>('/v1/subscription/checkout', _req));

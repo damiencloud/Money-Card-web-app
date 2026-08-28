@@ -23,6 +23,7 @@ export type {
 
 export type {
   CardStatus,
+  CardAssignmentStatus,
   Card,
   SessionStatus,
   CardSession,
@@ -47,6 +48,17 @@ export type {
   CardImportPreview,
   ImportCardsRequest,
   ImportCardsResponseData,
+  ImportQrCodesRequest,
+  ImportQrCodesResponseData,
+  AssignCardNumberRequest,
+  BulkAssignCardNumbersRequest,
+  BulkAssignCardNumbersResponseData,
+  QrImportPreview,
+  QrImportEntry,
+  CustomerHistoryEvent,
+  CustomerHistoryItem,
+  CardHistoryAction,
+  CardSessionOverview,
 } from './card';
 
 export type {

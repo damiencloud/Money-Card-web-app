@@ -51,8 +51,8 @@ export function ActivateAccountPage() {
 
     apiService.auth
       .verifyActivationToken(token)
-      .then((res) => {
-        if (res.success && res.data.valid) {
+      .then((res: any) => {
+        if (res.success && res.data?.valid) {
           setInvitee(res.data.user);
         } else {
           setTokenError(res.error?.message || 'This activation link is invalid or has expired.');

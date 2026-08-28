@@ -541,7 +541,7 @@ export function AdminPlansSubscriptionsView() {
           </div>
           <div>
             <p className="font-semibold text-slate-100">{plan.name}</p>
-            <p className="text-xs text-slate-500">{plan.code}</p>
+            <p className="text-xs text-slate-500">{plan.id}</p>
           </div>
         </div>
       ),
@@ -734,11 +734,20 @@ export function AdminPlansSubscriptionsView() {
     {
       key: 'requestType',
       header: 'Request Type',
-      render: (req: PlanChangeRequest) => (
-        <Badge variant="outline" className="text-violet-300 border-violet-500/30">
-          {(req.requestType || 'UPGRADE').replace(/_/g, ' ')}
-        </Badge>
-      ),
+      render: (req: PlanChangeRequest) => {
+        if (req.requestType === 'RENEWAL') {
+          return (
+            <Badge variant="success" className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 font-semibold">
+              Subscription Renewal
+            </Badge>
+          );
+        }
+        return (
+          <Badge variant="outline" className="text-violet-300 border-violet-500/30">
+            {(req.requestType || 'UPGRADE').replace(/_/g, ' ')}
+          </Badge>
+        );
+      },
     },
     {
       key: 'status',
@@ -1431,8 +1440,19 @@ export function AdminPlansSubscriptionsView() {
         )}
       </Modal>
 
-      {/* ── Review Plan Change Request Modal ── */}
-      <Modal isOpen={showReviewModal} onClose={() => setShowReviewModal(false)} title="Review Plan Change Request">
+      {/* ── Review Plan Change / Renewal Request Modal ── */}
+      <Modal
+        isOpen={showReviewModal}
+        onClose={() => {
+          setShowReviewModal(false);
+          setModalApiError(null);
+        }}
+        title={
+          selectedRequest?.requestType === 'RENEWAL'
+            ? 'Review & Accept Subscription Renewal'
+            : 'Review Plan Change Request'
+        }
+      >
         {selectedRequest && (
           <form onSubmit={handleReviewSubmit} className="space-y-4 py-2">
             {modalApiError && (
@@ -1443,55 +1463,123 @@ export function AdminPlansSubscriptionsView() {
             )}
 
             <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 space-y-2 text-xs">
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span className="text-slate-400">Organization:</span>
-                <strong className="text-slate-100">{selectedRequest.organizationName || selectedRequest.organizationId}</strong>
+                <strong className="text-slate-100 text-sm">
+                  {selectedRequest.organizationName || selectedRequest.organizationId}
+                </strong>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Transition:</span>
-                <span className="font-bold text-violet-300">{selectedRequest.currentPlanName} → {selectedRequest.requestedPlanName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Request Type:</span>
-                <Badge variant="outline">{selectedRequest.requestType}</Badge>
-              </div>
+
+              {selectedRequest.requestType === 'RENEWAL' ? (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Plan to Renew:</span>
+                    <span className="font-bold text-emerald-400 text-sm">
+                      {selectedRequest.requestedPlanName}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Request Intent:</span>
+                    <Badge variant="success" className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30">
+                      Active Subscription Renewal
+                    </Badge>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Transition:</span>
+                    <span className="font-bold text-violet-300">
+                      {selectedRequest.currentPlanName} → {selectedRequest.requestedPlanName}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Request Type:</span>
+                    <Badge variant="outline">{selectedRequest.requestType}</Badge>
+                  </div>
+                </>
+              )}
+
               {selectedRequest.reason && (
                 <div className="pt-2 border-t border-slate-800 text-slate-300">
                   <span className="text-slate-400 block mb-1">Tenant Notes:</span>
-                  <p className="bg-slate-900 p-2.5 rounded-lg">{selectedRequest.reason}</p>
+                  <p className="bg-slate-900 p-2.5 rounded-lg text-slate-200">{selectedRequest.reason}</p>
                 </div>
               )}
             </div>
+
+            {selectedRequest.requestType === 'RENEWAL' ? (
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-xs text-emerald-200 space-y-1">
+                <span className="font-bold block text-emerald-300">Super Admin Renewal Acceptance:</span>
+                <p className="leading-relaxed">
+                  Accepting this renewal will extend the active subscription date by 1 billing cycle, ensure organization access remains uninterrupted, and log a verified payment record in the billing ledger.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 p-3.5 text-xs text-violet-200 space-y-1">
+                <span className="font-bold block text-violet-300">Plan Change Application:</span>
+                <p className="leading-relaxed">
+                  Approving this request will switch the organization active plan to {selectedRequest.requestedPlanName} and update their resource limits.
+                </p>
+              </div>
+            )}
 
             <Select
               label="Review Decision *"
               value={reviewStatus}
               onChange={(e) => setReviewStatus(e.target.value as 'APPROVED' | 'REJECTED')}
-              options={[
-                { value: 'APPROVED', label: 'Approve & Apply Plan Change' },
-                { value: 'REJECTED', label: 'Reject Request' },
-              ]}
+              options={
+                selectedRequest.requestType === 'RENEWAL'
+                  ? [
+                      { value: 'APPROVED', label: 'Accept & Extend Active Subscription' },
+                      { value: 'REJECTED', label: 'Reject Renewal Request' },
+                    ]
+                  : [
+                      { value: 'APPROVED', label: 'Approve & Apply Plan Change' },
+                      { value: 'REJECTED', label: 'Reject Request' },
+                    ]
+              }
             />
 
             <div className="space-y-1 text-xs">
-              <label className="font-semibold text-slate-300">Admin Notes / Remarks</label>
+              <label className="font-semibold text-slate-300">Admin Remarks / Audit Notes</label>
               <textarea
                 value={reviewNotes}
                 onChange={(e) => setReviewNotes(e.target.value)}
-                placeholder="Optional notes for the tenant regarding this decision..."
+                placeholder={
+                  selectedRequest.requestType === 'RENEWAL'
+                    ? 'e.g. Bank payment received and verified, active subscription extended...'
+                    : 'Optional remarks for the organization regarding this decision...'
+                }
                 rows={3}
                 className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-violet-500 focus:outline-none"
               />
             </div>
 
             <ModalFooter>
-              <Button variant="outline" type="button" onClick={() => setShowReviewModal(false)}>Cancel</Button>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => {
+                  setShowReviewModal(false);
+                  setModalApiError(null);
+                }}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
               <Button
                 variant={reviewStatus === 'APPROVED' ? 'primary' : 'danger'}
                 type="submit"
                 isLoading={isSubmitting}
+                disabled={isSubmitting}
+                leftIcon={reviewStatus === 'APPROVED' ? <Check className="h-4 w-4" /> : undefined}
               >
-                {reviewStatus === 'APPROVED' ? 'Approve & Update Subscription' : 'Reject Request'}
+                {reviewStatus === 'APPROVED'
+                  ? selectedRequest.requestType === 'RENEWAL'
+                    ? 'Accept & Renew Subscription'
+                    : 'Approve & Apply Plan Change'
+                  : 'Reject Request'}
               </Button>
             </ModalFooter>
           </form>

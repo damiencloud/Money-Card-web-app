@@ -9,7 +9,9 @@ import {
   UserStatus,
   OrgStatus,
   SubscriptionStatus,
+  PaymentStatus,
   DirectPaymentMethod,
+  PaymentRecordStatus,
   PlanRequestStatus,
 } from '@prisma/client';
 
@@ -596,23 +598,28 @@ export async function getPlanChangeRequests(_req: Request, res: Response) {
   const allPlans = await prisma.plan.findMany();
   const planMap = new Map(allPlans.map((p) => [p.id, p.name]));
 
-  const formatted = requests.map((r) => ({
-    id: r.id,
-    organizationId: r.organizationId,
-    organizationName: r.organization?.name || 'Organization',
-    currentPlanId: r.currentPlanId,
-    currentPlanName: planMap.get(r.currentPlanId) || 'Standard Plan',
-    requestedPlanId: r.requestedPlanId,
-    requestedPlanName: r.requestedPlan?.name || 'Enterprise Plan',
-    requestType: 'UPGRADE',
-    reason: r.reason || '',
-    status: r.status,
-    adminNotes: r.adminNotes || '',
-    createdAt: r.requestedAt,
-    updatedAt: r.requestedAt,
-    reviewedAt: r.reviewedAt,
-    reviewedBy: r.reviewedByUserId,
-  }));
+  const formatted = requests.map((r) => {
+    const isRenewal =
+      r.currentPlanId === r.requestedPlanId || r.reason?.toLowerCase().includes('renewal');
+
+    return {
+      id: r.id,
+      organizationId: r.organizationId,
+      organizationName: r.organization?.name || 'Organization',
+      currentPlanId: r.currentPlanId,
+      currentPlanName: planMap.get(r.currentPlanId) || 'Standard Plan',
+      requestedPlanId: r.requestedPlanId,
+      requestedPlanName: r.requestedPlan?.name || 'Standard Plan',
+      requestType: isRenewal ? 'RENEWAL' : 'UPGRADE',
+      reason: r.reason || '',
+      status: r.status,
+      adminNotes: r.adminNotes || '',
+      createdAt: r.requestedAt,
+      updatedAt: r.requestedAt,
+      reviewedAt: r.reviewedAt,
+      reviewedBy: r.reviewedByUserId,
+    };
+  });
 
   return sendSuccess(res, formatted);
 }
@@ -625,10 +632,21 @@ export async function reviewPlanChangeRequest(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', "Status must be 'APPROVED' or 'REJECTED'");
   }
 
-  const reqDoc = await prisma.planChangeRequest.findUnique({ where: { id } });
+  const reqDoc = await prisma.planChangeRequest.findUnique({
+    where: { id },
+    include: {
+      organization: true,
+      requestedPlan: true,
+    },
+  });
+
   if (!reqDoc) {
     return sendError(res, 404, 'NOT_FOUND', 'Plan change request not found');
   }
+
+  const isRenewal =
+    reqDoc.currentPlanId === reqDoc.requestedPlanId ||
+    reqDoc.reason?.toLowerCase().includes('renewal');
 
   const updated = await prisma.$transaction(async (tx) => {
     const pcr = await tx.planChangeRequest.update({
@@ -642,14 +660,95 @@ export async function reviewPlanChangeRequest(req: Request, res: Response) {
     });
 
     if (status === 'APPROVED') {
-      await tx.organization.update({
-        where: { id: reqDoc.organizationId },
-        data: { planId: reqDoc.requestedPlanId },
-      });
-      await tx.subscription.update({
+      const existingSub = await tx.subscription.findUnique({
         where: { organizationId: reqDoc.organizationId },
-        data: { planId: reqDoc.requestedPlanId },
+        include: { plan: true },
       });
+
+      const targetPlan =
+        reqDoc.requestedPlan ||
+        (await tx.plan.findUnique({ where: { id: reqDoc.requestedPlanId } }));
+
+      if (isRenewal && existingSub && targetPlan) {
+        // Renewal: extend active duration (+365 days if YEARLY, +30 days if MONTHLY)
+        const durationDays = targetPlan.billingInterval === 'YEARLY' ? 365 : 30;
+        const durationMs = durationDays * 24 * 60 * 60 * 1000;
+        const now = new Date();
+
+        const baseDate =
+          existingSub.endDate && existingSub.endDate.getTime() > now.getTime()
+            ? existingSub.endDate
+            : now;
+
+        const newEndDate = new Date(baseDate.getTime() + durationMs);
+
+        await tx.subscription.update({
+          where: { organizationId: reqDoc.organizationId },
+          data: {
+            status: SubscriptionStatus.ACTIVE,
+            paymentStatus: PaymentStatus.SUCCESS,
+            endDate: newEndDate,
+            renewalDate: newEndDate,
+          },
+        });
+
+        await tx.subscriptionPayment.create({
+          data: {
+            organizationId: reqDoc.organizationId,
+            amount: targetPlan.price,
+            paymentMethod: DirectPaymentMethod.DIRECT_BANK_TRANSFER,
+            paymentReference: `PAY-REN-${reqDoc.id.slice(0, 8).toUpperCase()}`,
+            status: PaymentRecordStatus.SUCCESS,
+            notes: `Subscription renewal approved by Super Admin (${req.user?.name || req.user?.email || 'Platform Admin'})`,
+            recordedByUserId: req.user?.id,
+          },
+        });
+      } else {
+        // Plan Upgrade / Change
+        await tx.organization.update({
+          where: { id: reqDoc.organizationId },
+          data: { planId: reqDoc.requestedPlanId },
+        });
+
+        const durationDays = targetPlan?.billingInterval === 'YEARLY' ? 365 : 30;
+        const durationMs = durationDays * 24 * 60 * 60 * 1000;
+        const now = new Date();
+        const newEndDate = new Date(now.getTime() + durationMs);
+
+        await tx.subscription.upsert({
+          where: { organizationId: reqDoc.organizationId },
+          create: {
+            organizationId: reqDoc.organizationId,
+            planId: reqDoc.requestedPlanId,
+            status: SubscriptionStatus.ACTIVE,
+            paymentStatus: PaymentStatus.SUCCESS,
+            startDate: now,
+            endDate: newEndDate,
+            renewalDate: newEndDate,
+          },
+          update: {
+            planId: reqDoc.requestedPlanId,
+            status: SubscriptionStatus.ACTIVE,
+            paymentStatus: PaymentStatus.SUCCESS,
+            endDate: newEndDate,
+            renewalDate: newEndDate,
+          },
+        });
+
+        if (targetPlan) {
+          await tx.subscriptionPayment.create({
+            data: {
+              organizationId: reqDoc.organizationId,
+              amount: targetPlan.price,
+              paymentMethod: DirectPaymentMethod.DIRECT_BANK_TRANSFER,
+              paymentReference: `PAY-PLAN-${reqDoc.id.slice(0, 8).toUpperCase()}`,
+              status: PaymentRecordStatus.SUCCESS,
+              notes: `Plan change to ${targetPlan.name} approved by Super Admin`,
+              recordedByUserId: req.user?.id,
+            },
+          });
+        }
+      }
     }
 
     return pcr;

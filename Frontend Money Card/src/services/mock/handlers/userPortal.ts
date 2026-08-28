@@ -49,12 +49,12 @@ export const mockUserPortalHandlers = {
       );
     }
 
-    const sessionToken = `portal_token_${card.physicalCardNumber.toLowerCase()}_${activeSession.id.toLowerCase()}`;
+    const sessionToken = `portal_token_${(card.physicalCardNumber || 'UNASSIGNED').toLowerCase()}_${activeSession.id.toLowerCase()}`;
     publicSessionTokens.set(sessionToken, activeSession.id);
 
     return createMockSuccess({
       sessionToken,
-      cardDisplayNumber: card.physicalCardNumber,
+      cardDisplayNumber: (card.physicalCardNumber || 'UNASSIGNED') || 'UNASSIGNED',
       sessionStatus: activeSession.status,
       currentBalance: activeSession.balance,
     });
@@ -80,7 +80,7 @@ export const mockUserPortalHandlers = {
 
     return createMockSuccess({
       sessionId: session.id,
-      cardDisplayNumber: card ? card.physicalCardNumber : 'MC-000',
+      cardDisplayNumber: card ? (card.physicalCardNumber || 'UNASSIGNED') : 'MC-000',
       sessionStatus: session.status,
       currentBalance: session.balance,
       branchDisplayName: branch ? branch.name : 'Cafeteria Branch',

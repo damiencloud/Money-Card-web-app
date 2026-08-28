@@ -16,6 +16,15 @@ import type {
 } from '@/types';
 
 export const mockSubscriptionsHandlers = {
+  async deletePlan(id: string): Promise<ApiResult<any>> {
+    await mockDelay();
+    const index = mockStore.plans.findIndex((p) => p.id === id);
+    if (index === -1) {
+      return createMockError('NOT_FOUND', 'Plan not found');
+    }
+    const deleted = mockStore.plans.splice(index, 1)[0];
+    return createMockSuccess({ message: `Plan "${deleted.name}" deleted successfully` });
+  },
   // GET /api/v1/plans
   async getPlans(): Promise<ApiResult<Plan[]>> {
     await mockDelay();
@@ -373,24 +382,53 @@ export const mockSubscriptionsHandlers = {
     planReq.updatedAt = mockStore.getTimestamp();
 
     if (req.status === 'APPROVED' && req.applySubscriptionChange !== false) {
-      // Apply subscription plan change directly
       const subIndex = mockStore.subscriptions.findIndex(
         (s) => s.organizationId === planReq.organizationId,
       );
-      if (subIndex !== -1) {
-        mockStore.subscriptions[subIndex].planId = planReq.requestedPlanId;
-        mockStore.subscriptions[subIndex].status = 'ACTIVE';
-        mockStore.subscriptions[subIndex].paymentStatus = 'SUCCESS';
-        mockStore.subscriptions[subIndex].updatedAt = mockStore.getTimestamp();
-      }
 
-      // Also update organization planId
-      const orgIndex = mockStore.organizations.findIndex(
-        (o) => o.id === planReq.organizationId,
-      );
-      if (orgIndex !== -1) {
-        mockStore.organizations[orgIndex].planId = planReq.requestedPlanId;
-        mockStore.organizations[orgIndex].updatedAt = mockStore.getTimestamp();
+      if (planReq.requestType === 'RENEWAL') {
+        if (subIndex !== -1) {
+          const sub = mockStore.subscriptions[subIndex];
+          const newEnd = new Date(new Date(sub.endDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+          mockStore.subscriptions[subIndex].status = 'ACTIVE';
+          mockStore.subscriptions[subIndex].paymentStatus = 'SUCCESS';
+          mockStore.subscriptions[subIndex].endDate = newEnd;
+          mockStore.subscriptions[subIndex].renewalDate = newEnd;
+          mockStore.subscriptions[subIndex].updatedAt = mockStore.getTimestamp();
+
+          // Log payment receipt
+          const plan = mockStore.plans.find((p) => p.id === sub.planId);
+          mockStore.subscriptionPayments.unshift({
+            id: mockStore.generateId('sub_pay'),
+            subscriptionId: sub.id,
+            organizationId: sub.organizationId,
+            amount: plan ? plan.price : 999,
+            currency: 'INR',
+            status: 'SUCCESS',
+            paymentMethod: 'DIRECT_BANK_TRANSFER',
+            paymentReference: `PAY-REN-${planReq.id.slice(0, 8).toUpperCase()}`,
+            verifiedBy: currentUser.name || 'Platform Super Admin',
+            verifiedAt: mockStore.getTimestamp(),
+            createdAt: mockStore.getTimestamp(),
+          });
+        }
+      } else {
+        // Apply subscription plan change directly
+        if (subIndex !== -1) {
+          mockStore.subscriptions[subIndex].planId = planReq.requestedPlanId;
+          mockStore.subscriptions[subIndex].status = 'ACTIVE';
+          mockStore.subscriptions[subIndex].paymentStatus = 'SUCCESS';
+          mockStore.subscriptions[subIndex].updatedAt = mockStore.getTimestamp();
+        }
+
+        // Also update organization planId
+        const orgIndex = mockStore.organizations.findIndex(
+          (o) => o.id === planReq.organizationId,
+        );
+        if (orgIndex !== -1) {
+          mockStore.organizations[orgIndex].planId = planReq.requestedPlanId;
+          mockStore.organizations[orgIndex].updatedAt = mockStore.getTimestamp();
+        }
       }
     }
 
@@ -449,7 +487,7 @@ export const mockSubscriptionsHandlers = {
   },
 
   // POST /api/v1/subscription/renew
-  async renewSubscription(): Promise<ApiResult<Subscription>> {
+  async renewSubscription(data?: { reason?: string }): Promise<ApiResult<any>> {
     await mockDelay();
     const currentUser = mockAuthHandlers.getCurrentSessionUser();
     if (!currentUser) {
@@ -457,24 +495,49 @@ export const mockSubscriptionsHandlers = {
     }
 
     const orgId = currentUser.organizationId || 'org_001';
+    const org = mockStore.organizations.find((o) => o.id === orgId);
     const subIndex = mockStore.subscriptions.findIndex((s) => s.organizationId === orgId);
     if (subIndex === -1) {
       return createMockError('SUBSCRIPTION_NOT_FOUND', 'Active subscription not found');
     }
 
     const sub = mockStore.subscriptions[subIndex];
-    const newEnd = new Date(new Date(sub.endDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const currentPlan = mockStore.plans.find((p) => p.id === sub.planId) || mockStore.plans[0];
 
-    mockStore.subscriptions[subIndex] = {
-      ...sub,
-      status: 'ACTIVE',
-      paymentStatus: 'SUCCESS',
-      endDate: newEnd,
-      renewalDate: newEnd,
+    const existingPending = mockStore.planRequests.find(
+      (r) => r.organizationId === orgId && r.status === 'PENDING',
+    );
+    if (existingPending) {
+      return createMockError(
+        'VALIDATION_ERROR',
+        'A subscription renewal or plan request is already pending review by Super Admin.',
+      );
+    }
+
+    const newRequest: PlanChangeRequest = {
+      id: mockStore.generateId('req'),
+      organizationId: orgId,
+      organizationName: org ? org.name : 'Organization',
+      currentPlanId: currentPlan.id,
+      currentPlanName: currentPlan.name,
+      requestedPlanId: currentPlan.id,
+      requestedPlanName: currentPlan.name,
+      requestType: 'RENEWAL',
+      reason:
+        data?.reason?.trim() ||
+        `Active subscription renewal requested for ${currentPlan.name}`,
+      status: 'PENDING',
+      createdAt: mockStore.getTimestamp(),
       updatedAt: mockStore.getTimestamp(),
     };
 
-    return createMockSuccess(mockStore.subscriptions[subIndex]);
+    mockStore.planRequests.unshift(newRequest);
+
+    return createMockSuccess({
+      message: 'Subscription renewal request submitted to Super Admin for review and approval.',
+      request: newRequest,
+      subscription: sub,
+    });
   },
 
   // Deprecated gateway checkout retained safely

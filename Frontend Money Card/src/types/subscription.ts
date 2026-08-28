@@ -19,7 +19,7 @@ export type SubscriptionPaymentStatus =
 export type BillingInterval = 'MONTHLY' | 'YEARLY';
 
 export type PlanRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'COMPLETED';
-export type PlanRequestType = 'UPGRADE' | 'DOWNGRADE' | 'CHANGE_PLAN' | 'ENTERPRISE';
+export type PlanRequestType = 'UPGRADE' | 'DOWNGRADE' | 'CHANGE_PLAN' | 'ENTERPRISE' | 'RENEWAL';
 
 export interface Plan {
   id: string;

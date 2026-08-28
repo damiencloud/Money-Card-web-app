@@ -28,7 +28,6 @@ import {
   Package,
   Warehouse,
   Plus,
-  Search,
   AlertCircle,
   Power,
   Building2,
@@ -181,10 +180,10 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
 
         return {
           ...item,
-          productName: prod?.itemName || item.productName || `Product ${item.productId}`,
-          category: prod?.category || item.category || ['General'],
-          price: prod?.price || item.price || 0,
-          branchName: br?.name || item.branchName || 'Main Branch',
+          productName: prod?.itemName || (item as any).productName || (item as any).product?.name || 'Product' || `Product ${item.productId}`,
+          category: prod?.category || (item as any).category || (item as any).product?.category || 'General' || ['General'],
+          price: prod?.price || (item as any).price || (item as any).product?.price || 0 || 0,
+          branchName: br?.name || (item as any).branchName || (item as any).branch?.name || 'Branch' || 'Main Branch',
         };
       });
 
@@ -395,7 +394,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
       header: 'Category',
       render: (product: ProductWithInventory) => (
         <div className="flex flex-wrap gap-1">
-          {(Array.isArray(product.category) ? product.category : [product.category || 'General']).map((c, idx) => {
+          {(Array.isArray(product.category) ? product.category : [product.category || 'General']).map((c: any, idx: number) => {
             const isVeg = c.toLowerCase() === 'veg';
             const isNonVeg = c.toLowerCase() === 'non-veg';
             return (
@@ -461,7 +460,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
             <Package className="h-4 w-4" />
           </div>
           <div>
-            <p className="font-semibold text-slate-100">{item.productName}</p>
+            <p className="font-semibold text-slate-100">{(item as any).productName || (item as any).product?.name || 'Product'}</p>
           </div>
         </div>
       ),
@@ -471,7 +470,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
       header: 'Category',
       render: (item: InventoryItemWithDetails) => (
         <div className="flex flex-wrap gap-1">
-          {(Array.isArray(item.category) ? item.category : [item.category || 'General']).map((c, idx) => (
+          {(Array.isArray((item as any).category || (item as any).product?.category || 'General') ? (item as any).category || (item as any).product?.category || 'General' : [(item as any).category || (item as any).product?.category || 'General' || 'General']).map((c: any, idx: number) => (
             <Badge key={idx} variant="outline" className="capitalize text-slate-300">
               {c}
             </Badge>
@@ -485,7 +484,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
       render: (item: InventoryItemWithDetails) => (
         <div className="flex items-center gap-1.5 text-xs text-slate-300">
           <Building2 className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-          <span>{item.branchName}</span>
+          <span>{(item as any).branchName || (item as any).branch?.name || 'Branch'}</span>
         </div>
       ),
     },
@@ -511,7 +510,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
       header: 'Stock Valuation',
       render: (item: InventoryItemWithDetails) => (
         <span className="font-mono text-xs font-semibold text-violet-300">
-          {formatCurrency(item.quantity * item.price)}
+          {formatCurrency(item.quantity * (item as any).price || (item as any).product?.price || 0)}
         </span>
       ),
     },
@@ -659,7 +658,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
                 placeholder="Search food or product item..."
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
-                leftIcon={<Search className="h-4 w-4 text-slate-400" />}
+                
               />
 
               <Select
@@ -774,7 +773,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
                 placeholder="Search stock records by product name..."
                 value={inventorySearch}
                 onChange={(e) => setInventorySearch(e.target.value)}
-                leftIcon={<Search className="h-4 w-4 text-slate-400" />}
+                
               />
 
               <Select

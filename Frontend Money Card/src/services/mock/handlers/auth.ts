@@ -13,6 +13,14 @@ import type {
 let currentSessionUser: AuthUser | null = mockStore.staffUsers[2]; // Default to staff_001 for convenience in dev
 
 export const mockAuthHandlers = {
+  async activateAccount(_req: any): Promise<ApiResult<any>> {
+    await mockDelay();
+    return createMockSuccess({ message: 'Account activated' });
+  },
+  async verifyActivationToken(_token: string): Promise<ApiResult<any>> {
+    await mockDelay();
+    return createMockSuccess({ valid: true, user: { id: 'usr_001', name: 'Demo User', email: 'user@example.com', role: 'STAFF', organizationName: 'Demo Org' } });
+  },
   async login(credentials: LoginCredentials): Promise<ApiResult<AuthResponseData>> {
     await mockDelay();
 

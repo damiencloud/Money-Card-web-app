@@ -1,3 +1,4 @@
+import { formatCurrency, formatDate, cn } from '@/utils';
 import { toast } from 'sonner';
 // ─── Cards Management Page (M7) ──────────────────────────────
 // External Bulk QR Import & Organization Card Number Management.
@@ -30,7 +31,6 @@ import {
   ErrorState,
 } from '@/components/ui';
 import { DataTable } from '@/components/tables';
-import { notify, formatDate, formatCurrency, cn } from '@/utils';
 import { UnauthorizedPage } from '@/features/auth';
 import {
   CreditCard,
@@ -41,23 +41,15 @@ import {
   Eye,
   RefreshCw,
   AlertCircle,
-  Building2,
-  Activity,
-  Receipt,
   Upload,
-  Download,
   FileSpreadsheet,
   CheckCircle2,
   AlertTriangle,
-  XCircle,
   QrCode,
-  Printer,
   Copy,
   Check,
   Tag,
-  ArrowRight,
   ShieldAlert,
-  Sparkles,
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 
@@ -95,9 +87,8 @@ export function CardsPage() {
 
   // Selected Card for Details, Assign, or Block
   const [selectedCard, setSelectedCard] = useState<CardEntity | null>(null);
+  const [_cardTransactions, setCardTransactions] = useState<Transaction[]>([]);
   const [cardHistorySessions, setCardHistorySessions] = useState<CardSession[]>([]);
-  const [cardTransactions, setCardTransactions] = useState<Transaction[]>([]);
-  const [detailsTab, setDetailsTab] = useState<'ACTIVE' | 'SETTLED' | 'TRANSACTIONS'>('ACTIVE');
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   // Individual Card Number Assignment Form State
@@ -114,7 +105,6 @@ export function CardsPage() {
   // External Bulk QR Import State
   const [importFileName, setImportFileName] = useState<string | null>(null);
   const [importPreview, setImportPreview] = useState<QrImportPreview | null>(null);
-  const [previewFilter, setPreviewFilter] = useState<'ALL' | 'VALID' | 'ERRORS'>('ALL');
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -190,10 +180,10 @@ export function CardsPage() {
   const totalCardsCount = allCards.length;
   const assignedCardsCount = allCards.filter((c) => !!c.physicalCardNumber && c.assignmentStatus !== 'UNASSIGNED').length;
   const unassignedQrCount = allCards.filter((c) => !c.physicalCardNumber || c.assignmentStatus === 'UNASSIGNED').length;
-  const activeSessionsCount = allCards.filter((c) => c.status === 'ACTIVE').length;
+  // const activeSessionsCount = allCards.filter((c) => c.status === 'ACTIVE').length;
   const blockedCardsCount = allCards.filter((c) => c.status === 'BLOCKED').length;
 
-  const effectiveCardLimit = orgOverview?.effectiveLimits?.cardLimit ?? 100;
+  const effectiveCardLimit = (orgOverview as any)?.effectiveLimits?.cardLimit ?? 100;
   const remainingQuota = Math.max(0, effectiveCardLimit - totalCardsCount);
 
   // ─── Handle File Parsing for QR Import ────────────────────────────
@@ -617,7 +607,7 @@ export function CardsPage() {
       render: (card: CardEntity) => {
         if (card.status === 'ACTIVE') return <Badge variant="success">Active</Badge>;
         if (card.status === 'BLOCKED') return <Badge variant="danger">Blocked</Badge>;
-        return <Badge variant="neutral">Available</Badge>;
+        return <Badge variant="outline">Available</Badge>;
       },
     },
     {
@@ -866,7 +856,7 @@ export function CardsPage() {
 
           <Select
             value={branchFilter}
-            onChange={(val) => setBranchFilter(val)}
+            onChange={(e) => setBranchFilter(e.target.value)}
             options={[
               { value: 'ALL', label: 'All Branches' },
               ...branches.map((b) => ({ value: b.id, label: b.name })),
@@ -1020,7 +1010,7 @@ export function CardsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
-                      {importPreview.entries.map((e, idx) => (
+                      {importPreview.entries.map((e: any, idx: number) => (
                         <tr key={idx} className={e.status === 'VALID' ? 'hover:bg-slate-900/40' : 'bg-rose-950/20'}>
                           <td className="p-2.5 font-mono text-slate-500">{e.rowNumber}</td>
                           <td className="p-2.5 font-mono font-semibold text-slate-200">{e.qrCode || '—'}</td>
@@ -1395,7 +1385,7 @@ export function CardsPage() {
                           <td className="p-2 font-mono">#{s.cycleNumber || 1}</td>
                           <td className="p-2 font-semibold text-slate-200">{s.customerName || 'Walk-in'}</td>
                           <td className="p-2 font-mono font-bold text-emerald-400">{formatCurrency(s.balance)}</td>
-                          <td className="p-2"><Badge variant={s.status === 'ACTIVE' ? 'success' : 'neutral'}>{s.status}</Badge></td>
+                          <td className="p-2"><Badge variant={s.status === 'ACTIVE' ? 'success' : 'outline'}>{s.status}</Badge></td>
                           <td className="p-2 text-slate-400">{formatDate(s.startedAt)}</td>
                         </tr>
                       ))}

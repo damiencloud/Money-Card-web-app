@@ -88,8 +88,11 @@ export async function getOrgPlanRequests(req: Request, res: Response) {
     currentPlanId: r.currentPlanId,
     currentPlanName: planMap.get(r.currentPlanId) || 'Standard Plan',
     requestedPlanId: r.requestedPlanId,
-    requestedPlanName: r.requestedPlan?.name || 'Enterprise Plan',
-    requestType: 'UPGRADE',
+    requestedPlanName: r.requestedPlan?.name || 'Standard Plan',
+    requestType:
+      r.currentPlanId === r.requestedPlanId || r.reason?.toLowerCase().includes('renewal')
+        ? 'RENEWAL'
+        : 'UPGRADE',
     reason: r.reason || '',
     status: r.status,
     adminNotes: r.adminNotes || '',
@@ -151,11 +154,51 @@ export async function renewOrgSubscription(req: Request, res: Response) {
   });
 
   if (!subscription) {
-    return sendError(res, 404, 'NOT_FOUND', 'Subscription not found');
+    return sendError(res, 404, 'NOT_FOUND', 'Subscription not found for this organization');
   }
 
-  return sendSuccess(res, {
-    message: 'Renewal request recorded. Please contact Super Admin for invoice clearance.',
-    subscription: formatSubscription(subscription),
+  // Check if a pending request already exists
+  const existingPending = await prisma.planChangeRequest.findFirst({
+    where: {
+      organizationId: orgId,
+      status: 'PENDING',
+    },
   });
+
+  if (existingPending) {
+    return sendError(
+      res,
+      400,
+      'REQUEST_ALREADY_PENDING',
+      'A subscription renewal or plan change request is already pending review by Super Admin.',
+    );
+  }
+
+  const reason =
+    req.body?.reason?.trim() ||
+    `Active subscription renewal requested for ${subscription.plan?.name || 'Active Plan'}`;
+
+  const newRequest = await prisma.planChangeRequest.create({
+    data: {
+      organizationId: orgId,
+      currentPlanId: subscription.planId,
+      requestedPlanId: subscription.planId,
+      reason,
+      status: 'PENDING',
+    },
+    include: {
+      organization: true,
+      requestedPlan: true,
+    },
+  });
+
+  return sendSuccess(
+    res,
+    {
+      message: 'Subscription renewal request submitted to Super Admin for review and approval.',
+      request: newRequest,
+      subscription: formatSubscription(subscription),
+    },
+    201,
+  );
 }

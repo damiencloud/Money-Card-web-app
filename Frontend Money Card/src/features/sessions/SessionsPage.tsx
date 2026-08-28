@@ -1,3 +1,4 @@
+
 // ─── Customer History & Card Lifecycle Page ──────────────────────────────
 // Real Customer Session History & Permanent Card Status Audit Trail.
 // Multi-field Global Search by Customer Name, Phone Number, Physical Card (e.g. MC 105),
@@ -30,7 +31,6 @@ import {
 import { DataTable } from '@/components/tables';
 import { formatDate, formatCurrency } from '@/utils';
 import {
-  Clock,
   CreditCard,
   Building2,
   Search,
@@ -40,17 +40,13 @@ import {
   ArrowUpRight,
   ShoppingBag,
   RotateCcw,
-  CheckCircle2,
   User,
   Phone,
   History,
-  X,
-  Sparkles,
   ShieldAlert,
   ShieldCheck,
   Lock,
   Unlock,
-  AlertCircle,
   FileText,
 } from 'lucide-react';
 
@@ -124,7 +120,7 @@ export function SessionsPage() {
         return;
       }
 
-      setRawSessions(extractArray<CardSessionOverview>(sessionsRes.data));
+      setRawSessions(extractArray<CardSession>(sessionsRes.data));
       if (cardsRes.success) {
         setRawCards(extractArray<CardEntity>(cardsRes.data));
       }
@@ -160,7 +156,7 @@ export function SessionsPage() {
           return;
         }
 
-        setRawSessions(extractArray<CardSessionOverview>(sessionsRes.data));
+        setRawSessions(extractArray<CardSession>(sessionsRes.data));
         if (cardsRes.success) {
           setRawCards(extractArray<CardEntity>(cardsRes.data));
         }
@@ -188,7 +184,7 @@ export function SessionsPage() {
   }, []);
 
   // ─── Build Customer History Records ──────────────────────────────
-  const customerHistoryItems = useMemo<CustomerHistoryItem[]>(() => {
+  const customerHistoryItems = useMemo<any[]>(() => {
     return rawSessions.map((s) => {
       const card = rawCards.find((c) => c.id === s.cardId || c.physicalCardNumber === s.physicalCardNumber);
       const branch = branches.find((b) => b.id === s.branchId);
@@ -209,7 +205,7 @@ export function SessionsPage() {
         sessionStatus: s.status,
         balance: Number(s.balance) || 0,
         branchId: s.branchId,
-        branchName: branch ? branch.name : (s.branchName || 'Main Cafeteria'),
+        branchName: branch ? branch.name : (((s as any).branchName || (s as any).branch?.name || 'Branch') || 'Main Cafeteria'),
         startedAt: s.startedAt || s.createdAt,
         settledAt: s.settledAt || null,
         issuedByName: (s as any).issuedBy?.name,
@@ -422,7 +418,7 @@ export function SessionsPage() {
       key: 'sessionStatus',
       header: 'Status',
       render: (item: CustomerHistoryItem) => (
-        <Badge variant={item.sessionStatus === 'ACTIVE' ? 'success' : 'neutral'}>
+        <Badge variant={item.sessionStatus === 'ACTIVE' ? 'success' : 'outline'}>
           {item.sessionStatus}
         </Badge>
       ),
@@ -674,7 +670,7 @@ export function SessionsPage() {
           ) : (
             <Select
               value={actionFilter}
-              onChange={(val) => setActionFilter(val as any)}
+            onChange={(e) => setActionFilter(e.target.value as any)}
               options={[
                 { value: 'ALL', label: 'All Card Actions' },
                 { value: 'CARD_BLOCKED', label: 'Card Blocked Events' },
@@ -685,7 +681,7 @@ export function SessionsPage() {
 
           <Select
             value={branchFilter}
-            onChange={setBranchFilter}
+            onChange={(e) => setBranchFilter(e.target.value)}
             options={[
               { value: 'ALL', label: 'All Branches' },
               ...branches.map((b) => ({ value: b.id, label: b.name })),
@@ -694,7 +690,7 @@ export function SessionsPage() {
 
           <Select
             value={dateRangeFilter}
-            onChange={(val) => setDateRangeFilter(val as any)}
+            onChange={(e) => setDateRangeFilter(e.target.value as any)}
             options={[
               { value: 'ALL', label: 'All Time' },
               { value: 'today', label: 'Today' },
@@ -756,7 +752,7 @@ export function SessionsPage() {
                 <p className="text-xl font-bold font-mono text-emerald-600">
                   {formatCurrency(selectedItem.balance)}
                 </p>
-                <Badge variant={selectedItem.sessionStatus === 'ACTIVE' ? 'success' : 'neutral'}>
+                <Badge variant={selectedItem.sessionStatus === 'ACTIVE' ? 'success' : 'outline'}>
                   {selectedItem.sessionStatus}
                 </Badge>
               </div>

@@ -11,6 +11,10 @@ import type {
 } from '@/types';
 
 export const mockOrganizationsHandlers = {
+  async resendAdminInvite(_orgId: string): Promise<ApiResult<any>> {
+    await mockDelay();
+    return createMockSuccess({ message: 'Invite resent' });
+  },
   // GET /api/v1/organization (Current org profile for ORG_ADMIN)
   async getOrganization(): Promise<ApiResult<OrganizationOverview>> {
     await mockDelay();

@@ -94,7 +94,8 @@ export interface Payment {
 
 export interface CreateCardRequest {
   physicalCardNumber: string;
-  branchId: string;
+  branchId?: string;
+  qrToken?: string;
 }
 
 export interface ResolveQrRequest {
@@ -195,14 +196,33 @@ export interface CustomerHistoryEvent {
   customerPhone?: string | null;
   physicalCardNumber: string;
   action: CardHistoryAction;
-  previousStatus: CardStatus;
-  newStatus: CardStatus;
+  previousStatus?: CardStatus;
+  newStatus?: CardStatus;
   performedByName?: string | null;
   performedByUserId?: string | null;
   branchId?: string | null;
   branchName?: string | null;
+  organizationId?: string;
   reason?: string | null;
   createdAt: string;
+}
+
+export interface CustomerHistoryItem {
+  id: string;
+  cardId: string;
+  physicalCardNumber: string;
+  sessionCardNumber: string;
+  cycleNumber: number;
+  customerName: string | null;
+  customerPhone: string | null;
+  session: any;
+  sessionStatus: string;
+  balance: number;
+  branchId: string;
+  branchName: string;
+  startedAt: string;
+  settledAt: string | null;
+  lastActivityAt: string;
 }
 
 
@@ -254,3 +274,5 @@ export interface BulkAssignCardNumbersResponseData {
   assignedCount: number;
   cards: Card[];
 }
+
+export type CardSessionOverview = CardSession;

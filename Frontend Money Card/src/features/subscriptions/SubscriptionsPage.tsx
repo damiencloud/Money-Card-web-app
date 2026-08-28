@@ -76,6 +76,7 @@ function OrgAdminSubscriptionsView() {
   const [formRequestedPlanId, setFormRequestedPlanId] = useState('');
   const [formRequestType, setFormRequestType] = useState<PlanRequestType>('UPGRADE');
   const [formReason, setFormReason] = useState('');
+  const [renewReason, setRenewReason] = useState('');
   const [formValidationError, setFormValidationError] = useState<string | null>(null);
   const [modalApiError, setModalApiError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -245,18 +246,24 @@ function OrgAdminSubscriptionsView() {
   };
 
   // ── Renew Subscription Handler ────────────────────────────
-  const handleRenewSubmit = async () => {
+  const handleRenewSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setIsSubmitting(true);
     setModalApiError(null);
     try {
-      const res = await apiService.subscriptions.renewSubscription();
+      const res = await apiService.subscriptions.renewSubscription({
+        reason:
+          renewReason.trim() ||
+          `Active subscription renewal requested for ${currentPlan?.name || 'Active Plan'}`,
+      });
       if (!res.success) {
-        setModalApiError(res.error.message || 'Renewal failed');
+        setModalApiError(res.error.message || 'Renewal request submission failed');
         return;
       }
 
-      notify.success('Subscription renewed successfully');
+      notify.success('Subscription renewal request submitted to Super Admin for review and approval.');
       setShowRenewModal(false);
+      setRenewReason('');
       fetchOrgSubscriptionData();
     } catch {
       setModalApiError('An unexpected error occurred.');
@@ -343,11 +350,20 @@ function OrgAdminSubscriptionsView() {
     {
       key: 'requestType',
       header: 'Type',
-      render: (req: PlanChangeRequest) => (
-        <Badge variant="outline" className="text-violet-300 border-violet-500/30">
-          {req.requestType.replace('_', ' ')}
-        </Badge>
-      ),
+      render: (req: PlanChangeRequest) => {
+        if (req.requestType === 'RENEWAL') {
+          return (
+            <Badge variant="success" className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 font-semibold">
+              Subscription Renewal
+            </Badge>
+          );
+        }
+        return (
+          <Badge variant="outline" className="text-violet-300 border-violet-500/30">
+            {req.requestType.replace('_', ' ')}
+          </Badge>
+        );
+      },
     },
     {
       key: 'reason',
@@ -416,18 +432,30 @@ function OrgAdminSubscriptionsView() {
         </div>
       </div>
 
-      {/* Pending Plan Change Request Banner */}
+      {/* Pending Plan Change / Renewal Request Banner */}
       {pendingRequest && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-start gap-3">
             <Clock className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-bold text-slate-100 text-sm">Plan Change Request Submitted</span>
+                <span className="font-bold text-slate-100 text-sm">
+                  {pendingRequest.requestType === 'RENEWAL'
+                    ? 'Subscription Renewal Request Submitted'
+                    : 'Plan Change Request Submitted'}
+                </span>
                 <Badge variant="warning" className="text-[10px]">PENDING SUPER ADMIN REVIEW</Badge>
               </div>
               <p className="mt-1 text-slate-300">
-                Your request to transition to <strong className="text-amber-300">{pendingRequest.requestedPlanName}</strong> ({pendingRequest.requestType.replace('_', ' ')}) was submitted on {formatDate(pendingRequest.createdAt)}. Pay Super Admin directly via offline invoice / bank transfer for activation.
+                {pendingRequest.requestType === 'RENEWAL' ? (
+                  <>
+                    Your request to renew your active subscription for <strong className="text-amber-300">{pendingRequest.requestedPlanName}</strong> was submitted on {formatDate(pendingRequest.createdAt)}. Super Admin has been alerted to review and accept the renewal.
+                  </>
+                ) : (
+                  <>
+                    Your request to transition to <strong className="text-amber-300">{pendingRequest.requestedPlanName}</strong> ({pendingRequest.requestType.replace('_', ' ')}) was submitted on {formatDate(pendingRequest.createdAt)}. Pay Super Admin directly via offline invoice / bank transfer for activation.
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -833,8 +861,15 @@ function OrgAdminSubscriptionsView() {
       </Modal>
 
       {/* ── Renew Modal ── */}
-      <Modal isOpen={showRenewModal} onClose={() => setShowRenewModal(false)} title="Renew Active Subscription">
-        <div className="space-y-4 py-2">
+      <Modal
+        isOpen={showRenewModal}
+        onClose={() => {
+          setShowRenewModal(false);
+          setModalApiError(null);
+        }}
+        title="Renew Active Subscription"
+      >
+        <form onSubmit={handleRenewSubmit} className="space-y-4 py-2">
           {modalApiError && (
             <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
@@ -842,19 +877,58 @@ function OrgAdminSubscriptionsView() {
             </div>
           )}
 
-          <p className="text-sm text-slate-300">
-            Extend your organization subscription for <strong className="text-violet-300">{currentPlan?.name}</strong> by 30 days upon offline payment verification by Super Admin.
+          <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 p-4 space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Plan</span>
+              <Badge variant="success" className="text-[10px]">CURRENTLY ACTIVE</Badge>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-base font-bold text-slate-100">{currentPlan?.name || 'Active Plan'}</span>
+              <span className="font-mono font-bold text-violet-300">
+                {formatCurrency(currentPlan?.price || 0)} / {currentPlan?.billingInterval.toLowerCase()}
+              </span>
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-300 leading-relaxed">
+            Clicking <strong>Submit Renewal Request</strong> will send an <strong className="text-amber-300">Alert to Super Admin</strong> to review and accept your subscription renewal for <strong>{currentPlan?.name}</strong>. Upon approval, your subscription will be extended by 1 billing cycle ({currentPlan?.billingInterval.toLowerCase()}).
           </p>
 
+          <div className="space-y-1 text-xs">
+            <label className="font-semibold text-slate-300">Renewal Notes / Reference (Optional)</label>
+            <textarea
+              value={renewReason}
+              onChange={(e) => setRenewReason(e.target.value)}
+              placeholder="e.g. Offline payment made via Bank Transfer Ref #12345, please approve renewal..."
+              rows={3}
+              disabled={isSubmitting}
+              className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-violet-500 focus:outline-none"
+            />
+          </div>
+
           <ModalFooter>
-            <Button variant="outline" onClick={() => setShowRenewModal(false)} disabled={isSubmitting}>
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => {
+                setShowRenewModal(false);
+                setModalApiError(null);
+              }}
+              disabled={isSubmitting}
+            >
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleRenewSubmit} isLoading={isSubmitting} disabled={isSubmitting}>
-              Confirm Renewal
+            <Button
+              variant="primary"
+              type="submit"
+              isLoading={isSubmitting}
+              disabled={isSubmitting}
+              leftIcon={<Send className="h-4 w-4" />}
+            >
+              Submit Renewal Request
             </Button>
           </ModalFooter>
-        </div>
+        </form>
       </Modal>
     </div>
   );

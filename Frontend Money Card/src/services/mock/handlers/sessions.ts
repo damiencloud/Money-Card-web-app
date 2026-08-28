@@ -66,7 +66,7 @@ export const mockSessionsHandlers = {
       const branch = mockStore.branches.find((b) => b.id === s.branchId);
       return {
         ...s,
-        physicalCardNumber: card ? card.physicalCardNumber : 'MC-000',
+        physicalCardNumber: (card?.physicalCardNumber || 'MC-000') as string,
         branchName: branch ? branch.name : 'Branch',
       };
     });
@@ -101,7 +101,7 @@ export const mockSessionsHandlers = {
 
     return createMockSuccess({
       ...session,
-      physicalCardNumber: card ? card.physicalCardNumber : 'MC-000',
+      physicalCardNumber: (card?.physicalCardNumber || 'MC-000') as string,
       branchName: branch ? branch.name : 'Branch',
     });
   },

@@ -98,7 +98,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isRefreshing.current = true;
 
       apiService.auth
-        .refresh()
+        .refresh(_currentToken)
         .then((refreshResult: ApiResult<{ accessToken: string }>) => {
           if (refreshResult.success) {
             const newToken = refreshResult.data.accessToken;

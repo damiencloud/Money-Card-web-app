@@ -12,6 +12,10 @@ import type {
 } from '@/types';
 
 export const mockStaffHandlers = {
+  async resendInvite(_id: string): Promise<ApiResult<any>> {
+    await mockDelay();
+    return createMockSuccess({ message: 'Invitation email resent successfully' });
+  },
   async getStaff(params?: PaginationParams): Promise<ApiResult<PaginatedData<Staff>>> {
     await mockDelay();
     const currentUser = mockAuthHandlers.getCurrentSessionUser();

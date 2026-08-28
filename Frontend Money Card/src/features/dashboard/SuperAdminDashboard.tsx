@@ -9,6 +9,7 @@ import type {
   OrganizationOverview,
   Plan,
   AnalyticsOverview,
+  PlanChangeRequest,
 } from '@/types';
 import {
   Button,
@@ -78,6 +79,7 @@ export function SuperAdminDashboard() {
   const [orgs, setOrgs] = useState<OrganizationOverview[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
+  const [planRequests, setPlanRequests] = useState<PlanChangeRequest[]>([]);
 
   // Organization Filter State
   const [selectedOrgId, setSelectedOrgId] = useState<string>('');
@@ -116,7 +118,7 @@ export function SuperAdminDashboard() {
     setIsRefreshing(true);
     setError(null);
     try {
-      const [orgsRes, plansRes, analyticsRes] = await Promise.all([
+      const [orgsRes, plansRes, analyticsRes, reqsRes] = await Promise.all([
         apiService.organizations.getOrganizations(),
         apiService.plans.getPlans(),
         apiService.analytics.getAnalyticsOverview({
@@ -124,6 +126,7 @@ export function SuperAdminDashboard() {
           startDate: startDate || undefined,
           endDate: endDate || undefined,
         }),
+        apiService.subscriptions.getPlanRequests(),
       ]);
 
       if (!orgsRes.success) {
@@ -134,6 +137,7 @@ export function SuperAdminDashboard() {
       setOrgs(orgsRes.data.items);
       if (plansRes.success) setPlans(plansRes.data);
       if (analyticsRes.success) setAnalytics(analyticsRes.data);
+      if (reqsRes.success) setPlanRequests(reqsRes.data || []);
     } catch {
       setError('Unable to connect to server. Please try again.');
     } finally {
@@ -147,7 +151,7 @@ export function SuperAdminDashboard() {
     const load = async () => {
       setError(null);
       try {
-        const [orgsRes, plansRes, analyticsRes] = await Promise.all([
+        const [orgsRes, plansRes, analyticsRes, reqsRes] = await Promise.all([
           apiService.organizations.getOrganizations(),
           apiService.plans.getPlans(),
           apiService.analytics.getAnalyticsOverview({
@@ -155,6 +159,7 @@ export function SuperAdminDashboard() {
             startDate: startDate || undefined,
             endDate: endDate || undefined,
           }),
+          apiService.subscriptions.getPlanRequests(),
         ]);
         if (isCancelled) return;
 
@@ -166,6 +171,7 @@ export function SuperAdminDashboard() {
         setOrgs(orgsRes.data.items);
         if (plansRes.success) setPlans(plansRes.data);
         if (analyticsRes.success) setAnalytics(analyticsRes.data);
+        if (reqsRes.success) setPlanRequests(reqsRes.data || []);
       } catch {
         if (!isCancelled) setError('Unable to connect to server. Please try again.');
       } finally {
@@ -285,6 +291,45 @@ export function SuperAdminDashboard() {
           </Button>
         </div>
       </div>
+
+      {/* Pending Renewal / Plan Change Alert Banner for Super Admin */}
+      {planRequests.filter((r) => r.status === 'PENDING').length > 0 && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
+          <div className="flex items-start sm:items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-bold text-slate-100 text-sm">
+                  {planRequests.filter((r) => r.status === 'PENDING').length} Pending Subscription & Plan Alert
+                  {planRequests.filter((r) => r.status === 'PENDING').length > 1 ? 's' : ''}
+                </span>
+                {planRequests.some((r) => r.status === 'PENDING' && r.requestType === 'RENEWAL') && (
+                  <Badge variant="success" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px]">
+                    Subscription Renewal Pending
+                  </Badge>
+                )}
+                <Badge variant="warning" className="text-[10px]">ACTION REQUIRED</Badge>
+              </div>
+              <p className="text-slate-300 mt-1">
+                {planRequests.some((r) => r.status === 'PENDING' && r.requestType === 'RENEWAL')
+                  ? `${
+                      planRequests.find((r) => r.status === 'PENDING' && r.requestType === 'RENEWAL')
+                        ?.organizationName || 'An organization'
+                    } has requested active subscription renewal. Review and accept in Subscriptions.`
+                  : 'Organizations have requested plan changes requiring Super Admin review and approval.'}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => navigate('/subscriptions')}
+            rightIcon={<ArrowRight className="h-4 w-4" />}
+          >
+            Review & Accept Requests
+          </Button>
+        </div>
+      )}
 
       {/* Quick Actions Bar */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
