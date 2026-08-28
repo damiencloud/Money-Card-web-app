@@ -20,6 +20,14 @@ enum CardStatus {
 
 /// Physical card entity according to M0 V10 specification.
 class Card {
+  /// Clean user-facing card display number without internal cycle suffixes.
+  String get displayCardNumber {
+    if (physicalCardNumber.trim().isNotEmpty) {
+      return cleanDisplayCardNumber(physicalCardNumber);
+    }
+    return 'Card';
+  }
+
   final String id;
   final String organizationId;
   final String qrToken;

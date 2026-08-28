@@ -165,7 +165,7 @@ class _PosScanPurchaseScreenState extends ConsumerState<PosScanPurchaseScreen> {
 
     AppBottomSheet.show(
       context,
-      title: 'Session Transactions (${card.physicalCardNumber})',
+      title: 'Session Transactions (${card.displayCardNumber})',
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -328,7 +328,7 @@ class _PosScanPurchaseScreenState extends ConsumerState<PosScanPurchaseScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: items.map((it) {
-                              final name = it.itemName ?? it.productId;
+                              final name = (it.itemName != null && it.itemName!.isNotEmpty) ? it.itemName! : 'Cafeteria Item';
                               final subtotal = it.totalAmount ?? ((it.unitPrice ?? 0) * it.quantity);
                               return Padding(
                                 padding: const EdgeInsets.symmetric(vertical: 2),
@@ -379,7 +379,7 @@ class _PosScanPurchaseScreenState extends ConsumerState<PosScanPurchaseScreen> {
       title: 'Confirm Card Return & Settlement',
       message: session.balance > 0
           ? 'Refund remaining balance of ₹${session.balance.toStringAsFixed(2)} to customer and settle this card session?'
-          : 'Settle this card session and return card ${card.physicalCardNumber} to AVAILABLE state?',
+          : 'Settle this card session and return card ${card.displayCardNumber} to AVAILABLE state?',
       confirmLabel: 'Confirm & Settle',
       isDestructive: session.balance > 0,
     );
@@ -473,7 +473,7 @@ class _PosScanPurchaseScreenState extends ConsumerState<PosScanPurchaseScreen> {
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  'Card: ${_resolvedCard!.physicalCardNumber.toUpperCase().startsWith("MC-") ? _resolvedCard!.physicalCardNumber : "MC-${_resolvedCard!.physicalCardNumber}"}',
+                  'Card: ${_resolvedCard!.displayCardNumber.toUpperCase().startsWith("MC-") ? _resolvedCard!.displayCardNumber : "MC-${_resolvedCard!.displayCardNumber}"}',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -646,7 +646,7 @@ class _PosScanPurchaseScreenState extends ConsumerState<PosScanPurchaseScreen> {
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
-                _resolvedCard!.physicalCardNumber,
+                _resolvedCard!.displayCardNumber,
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: AppSpacing.xs),
@@ -715,7 +715,7 @@ class _PosScanPurchaseScreenState extends ConsumerState<PosScanPurchaseScreen> {
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
-                _resolvedCard!.physicalCardNumber,
+                _resolvedCard!.displayCardNumber,
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: AppSpacing.xs),
@@ -854,7 +854,7 @@ class _PosScanPurchaseScreenState extends ConsumerState<PosScanPurchaseScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Card: ${card.physicalCardNumber}'),
+        title: Text('Card: ${card.displayCardNumber}'),
         actions: [
           IconButton(
             icon: const Icon(Icons.qr_code_scanner),
@@ -883,7 +883,7 @@ class _PosScanPurchaseScreenState extends ConsumerState<PosScanPurchaseScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          card.physicalCardNumber,
+                          card.displayCardNumber,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 18,

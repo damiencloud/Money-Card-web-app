@@ -14,6 +14,7 @@ import {
   SEED_SUBSCRIPTION_PAYMENTS,
   SEED_PLAN_REQUESTS,
   SEED_AUDIT_LOGS,
+  SEED_CUSTOMER_HISTORY_EVENTS,
 } from './data/seed';
 
 import type {
@@ -32,6 +33,7 @@ import type {
   PlanChangeRequest,
   AuditLog,
   AuthUser,
+  CustomerHistoryEvent,
 } from '@/types';
 
 class MockStore {
@@ -50,6 +52,7 @@ class MockStore {
   public subscriptionPayments: SubscriptionPayment[] = [];
   public planRequests: PlanChangeRequest[] = [];
   public auditLogs: AuditLog[] = [];
+  public customerHistoryEvents: CustomerHistoryEvent[] = [];
 
   constructor() {
     this.resetStore();
@@ -75,6 +78,7 @@ class MockStore {
     this.subscriptionPayments = JSON.parse(JSON.stringify(SEED_SUBSCRIPTION_PAYMENTS));
     this.planRequests = JSON.parse(JSON.stringify(SEED_PLAN_REQUESTS));
     this.auditLogs = JSON.parse(JSON.stringify(SEED_AUDIT_LOGS));
+    this.customerHistoryEvents = JSON.parse(JSON.stringify(SEED_CUSTOMER_HISTORY_EVENTS));
   }
 
   // ── Helpers for UUID & Timestamp ──

@@ -406,5 +406,67 @@ void main() {
       expect(find.text('ACTIVE'), findsOneWidget);
       expect(find.text('₹0.00'), findsOneWidget);
     });
+    testWidgets('CardDetailsScreen allows Staff to Block and Unblock card with state synchronization', (tester) async {
+      const mockUser = AuthUser(
+        id: 'staff-1',
+        email: 'staff@moneycard.io',
+        name: 'Alex Morgan',
+        role: 'STAFF',
+        organizationId: 'org-demo-001',
+        permissions: [AppPermission.cardIssue, AppPermission.cardBlock, AppPermission.cardUnblock],
+        assignedBranchIds: ['branch-001'],
+      );
+
+      const mockBranch = Branch(
+        id: 'branch-001',
+        organizationId: 'org-demo-001',
+        name: 'Main Cafeteria',
+      );
+
+      final detailsNotifier = CardDetailsNotifier(fakeCardRepo, fakeSessionRepo);
+      await detailsNotifier.loadCardById('CARD001');
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            currentUserProvider.overrideWithValue(mockUser),
+            currentBranchProvider.overrideWithValue(mockBranch),
+            sessionRepositoryProvider.overrideWithValue(fakeSessionRepo),
+            cardDetailsNotifierProvider.overrideWith((ref) => detailsNotifier),
+          ],
+          child: const MaterialApp(
+            home: CardDetailsScreen(cardId: 'CARD001'),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+      expect(find.text('Block Card'), findsOneWidget);
+
+      // Staff taps Block Card
+      await tester.tap(find.text('Block Card'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Are you sure you want to block this card? It will be disabled for purchases.'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Block'));
+      await tester.pumpAndSettle();
+
+      // Card status becomes BLOCKED
+      expect(find.text('BLOCKED'), findsWidgets);
+      expect(detailsNotifier.state.card?.status, CardStatus.blocked);
+      expect(find.text('Unblock Card'), findsOneWidget);
+
+      // Staff taps Unblock Card
+      await tester.tap(find.text('Unblock Card'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Unblocking this card will make it available for transactions again.'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Unblock'));
+      await tester.pumpAndSettle();
+
+      // Card returns to AVAILABLE/ACTIVE
+      expect(detailsNotifier.state.card?.status, CardStatus.available);
+      expect(find.text('AVAILABLE'), findsWidgets);
+    });
   });
 }

@@ -1,3 +1,4 @@
+import { customerHistoryRouter } from './customer-history.routes.js';
 import { Router } from 'express';
 import authRoutes from './auth.routes.js';
 import adminRoutes from './admin.routes.js';
@@ -50,6 +51,7 @@ apiRouter.use('/permissions', permissionsRouter);
 apiRouter.use('/staff', staffRouter);
 apiRouter.use('/cards', cardsRouter);
 apiRouter.use('/card-sessions', sessionsRouter);
+apiRouter.use('/customer-history', customerHistoryRouter);
 apiRouter.use('/products', productsRouter);
 apiRouter.use('/inventory', inventoryRouter);
 apiRouter.use('/analytics', analyticsRoutes);

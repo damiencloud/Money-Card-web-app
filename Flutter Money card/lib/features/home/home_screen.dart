@@ -491,7 +491,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Column(
       children: previewSessions.map((session) {
-        final cardIdentifier = session.physicalCardNumber ?? session.cardId;
+        final cardIdentifier = session.displayCardNumber;
 
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),

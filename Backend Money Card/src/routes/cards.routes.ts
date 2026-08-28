@@ -1,3 +1,4 @@
+import { listCustomerHistoryEvents } from '../controllers/customer-history.controller.js';
 import { Router } from 'express';
 import {
   getCards,
@@ -18,6 +19,7 @@ cardsRouter.get('/', requirePermission(PermissionCode.CARD_VIEW), getCards);
 cardsRouter.post('/', requirePermission(PermissionCode.CARD_ISSUE), createCard);
 cardsRouter.post('/resolve', requirePermission(PermissionCode.CARD_VIEW), resolveCard);
 cardsRouter.post('/batch', requirePermission(PermissionCode.CARD_ISSUE), createCardBatch);
+cardsRouter.get('/history', requirePermission(PermissionCode.CARD_VIEW), listCustomerHistoryEvents);
 cardsRouter.get('/:id', requirePermission(PermissionCode.CARD_VIEW), getCardById);
 cardsRouter.post('/:id/block', requirePermission(PermissionCode.CARD_BLOCK), blockCard);
 cardsRouter.post('/:id/unblock', requirePermission(PermissionCode.CARD_UNBLOCK), unblockCard);

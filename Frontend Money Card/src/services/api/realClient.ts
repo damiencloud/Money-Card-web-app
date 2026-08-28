@@ -49,6 +49,7 @@ import type {
   RechargeResponseData,
   PurchaseRequest,
   PurchaseResponseData,
+  CustomerHistoryEvent,
 } from '@/types';
 import { mockClient } from '../mock/mockClient';
 
@@ -310,6 +311,18 @@ export const realClient: typeof mockClient = {
 
     async blockCard(id: string): Promise<ApiResult<Card>> {
       return handleApiCall(() => apiClient.post<Card>(`/v1/cards/${id}/block`));
+    },
+
+    async getCustomerHistoryEvents(params?: any): Promise<ApiResult<PaginatedData<CustomerHistoryEvent>>> {
+      const query = new URLSearchParams(params || {}).toString();
+      const res = await handleApiCall<any>(() =>
+        apiClient.get<any>(`/v1/customer-history${query ? `?${query}` : ''}`),
+      );
+      if (res.success) {
+        const items = Array.isArray(res.data) ? res.data : (res.data?.items || []);
+        return { success: true, data: toPaginated(items, params?.page || 1, params?.limit || 50, res.data?.total) };
+      }
+      return res as any;
     },
 
     async unblockCard(id: string): Promise<ApiResult<Card>> {

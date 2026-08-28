@@ -1,5 +1,17 @@
 import 'transaction.dart';
 
+/// Cleans internal cycle suffixes like `_1`, `_2`, `_10` from a card number for user-facing display.
+/// Example: "MC 105_2" -> "MC 105", "MC-104_1" -> "MC-104".
+/// Uses a regex `r'_\d+$'` to safely strip only trailing numeric cycle suffixes.
+String cleanDisplayCardNumber(String? raw) {
+  if (raw == null || raw.trim().isEmpty) return '';
+  final trimmed = raw.trim();
+  return trimmed.replaceAll(RegExp(r'_\d+$'), '');
+}
+
+
+
+
 enum SessionStatus {
   active('ACTIVE'),
   settled('SETTLED');
@@ -19,6 +31,17 @@ enum SessionStatus {
 
 /// Active or settled wallet session for a card according to M0 V10.
 class CardSession {
+  /// Clean user-facing card display number without internal cycle suffixes (e.g. "MC 105" instead of "MC 105_2").
+  String get displayCardNumber {
+    if (physicalCardNumber != null && physicalCardNumber!.trim().isNotEmpty) {
+      return cleanDisplayCardNumber(physicalCardNumber);
+    }
+    if (sessionCardNumber != null && sessionCardNumber!.trim().isNotEmpty) {
+      return cleanDisplayCardNumber(sessionCardNumber);
+    }
+    return 'Card';
+  }
+
   final String id;
   final String cardId;
   final String? physicalCardNumber;

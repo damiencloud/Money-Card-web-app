@@ -86,9 +86,9 @@ class _RechargeScreenState extends ConsumerState<RechargeScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Card: ${session.physicalCardNumber ?? widget.sessionId}'),
-            if (widget.physicalCardNumber != null)
-              Text('Card: ${widget.physicalCardNumber}'),
+            Text('Card: ${session.displayCardNumber}'),
+            if (session.customerName != null && session.customerName!.isNotEmpty)
+              Text('Customer: ${session.customerName}'),
             const SizedBox(height: AppSpacing.sm),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -172,7 +172,7 @@ class _RechargeScreenState extends ConsumerState<RechargeScreen> {
     final branch = ref.read(currentBranchProvider);
     final user = ref.read(currentUserProvider);
     final session = ref.read(sessionDetailsNotifierProvider).session;
-    final cardNum = widget.physicalCardNumber ?? session?.physicalCardNumber ?? widget.sessionId;
+    final cardNum = widget.physicalCardNumber != null ? cleanDisplayCardNumber(widget.physicalCardNumber) : (session?.displayCardNumber ?? 'Card');
     final rechargeState = ref.read(rechargeNotifierProvider);
 
     final itemsList = [
@@ -256,7 +256,7 @@ class _RechargeScreenState extends ConsumerState<RechargeScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          widget.physicalCardNumber ?? 'Active Session',
+                          widget.physicalCardNumber != null ? cleanDisplayCardNumber(widget.physicalCardNumber) : session.displayCardNumber,
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,

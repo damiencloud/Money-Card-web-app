@@ -37,8 +37,8 @@ export const mockSessionsHandlers = {
       return createMockError('UNAUTHORIZED', 'Authentication required');
     }
 
-    if (currentUser.role === 'STAFF' && !currentUser.permissions.includes('PURCHASE')) {
-      return createMockError('FORBIDDEN', 'Permission denied: Cannot perform purchase');
+    if (currentUser.role === 'STAFF' && !currentUser.permissions.includes('SESSION_VIEW')) {
+      return createMockError('FORBIDDEN', 'Permission denied: Cannot view customer sessions');
     }
 
     const orgId = currentUser.organizationId || 'org_001';
@@ -113,8 +113,8 @@ export const mockSessionsHandlers = {
       return createMockError('UNAUTHORIZED', 'Authentication required');
     }
 
-    if (currentUser.role === 'STAFF' && !currentUser.permissions.includes('PURCHASE')) {
-      return createMockError('FORBIDDEN', 'Permission denied: Cannot perform purchase');
+    if (currentUser.role === 'STAFF' && !currentUser.permissions.includes('SESSION_VIEW')) {
+      return createMockError('FORBIDDEN', 'Permission denied: Cannot view customer sessions');
     }
 
     const txns = mockStore.transactions.filter((t) => t.sessionId === sessionId);
@@ -128,8 +128,8 @@ export const mockSessionsHandlers = {
       return createMockError('UNAUTHORIZED', 'Authentication required');
     }
 
-    if (currentUser.role === 'STAFF' && !currentUser.permissions.includes('PURCHASE')) {
-      return createMockError('FORBIDDEN', 'Permission denied: Cannot perform purchase');
+    if (currentUser.role === 'STAFF' && !currentUser.permissions.includes('SESSION_VIEW')) {
+      return createMockError('FORBIDDEN', 'Permission denied: Cannot view customer sessions');
     }
 
     const card = mockStore.cards.find((c) => c.id === req.cardId);
@@ -184,8 +184,8 @@ export const mockSessionsHandlers = {
       return createMockError('UNAUTHORIZED', 'Authentication required');
     }
 
-    if (currentUser.role === 'STAFF' && !currentUser.permissions.includes('PURCHASE')) {
-      return createMockError('FORBIDDEN', 'Permission denied: Cannot perform purchase');
+    if (currentUser.role === 'STAFF' && !currentUser.permissions.includes('SESSION_VIEW')) {
+      return createMockError('FORBIDDEN', 'Permission denied: Cannot view customer sessions');
     }
 
     if (!req.amount || req.amount <= 0) {
@@ -280,8 +280,8 @@ export const mockSessionsHandlers = {
       return createMockError('UNAUTHORIZED', 'Authentication required');
     }
 
-    if (currentUser.role === 'STAFF' && !currentUser.permissions.includes('PURCHASE')) {
-      return createMockError('FORBIDDEN', 'Permission denied: Cannot perform purchase');
+    if (currentUser.role === 'STAFF' && !currentUser.permissions.includes('SESSION_VIEW')) {
+      return createMockError('FORBIDDEN', 'Permission denied: Cannot view customer sessions');
     }
 
     if (!req.items || req.items.length === 0) {
@@ -420,8 +420,8 @@ export const mockSessionsHandlers = {
       return createMockError('UNAUTHORIZED', 'Authentication required');
     }
 
-    if (currentUser.role === 'STAFF' && !currentUser.permissions.includes('PURCHASE')) {
-      return createMockError('FORBIDDEN', 'Permission denied: Cannot perform purchase');
+    if (currentUser.role === 'STAFF' && !currentUser.permissions.includes('SESSION_VIEW')) {
+      return createMockError('FORBIDDEN', 'Permission denied: Cannot view customer sessions');
     }
 
     const sessionIndex = mockStore.sessions.findIndex((s) => s.id === sessionId);

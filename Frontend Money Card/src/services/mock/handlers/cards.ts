@@ -10,6 +10,7 @@ import type {
   ResolveQrResponseData,
   ImportCardsRequest,
   ImportCardsResponseData,
+  CustomerHistoryEvent,
 } from '@/types';
 
 export const mockCardsHandlers = {
@@ -137,14 +138,18 @@ export const mockCardsHandlers = {
     });
   },
 
-  async blockCard(id: string): Promise<ApiResult<Card>> {
+  async blockCard(id: string, reason = 'Blocked by Staff'): Promise<ApiResult<Card>> {
     await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
     const index = mockStore.cards.findIndex((c) => c.id === id);
     if (index === -1) {
       return createMockError('CARD_NOT_FOUND', `Card '${id}' not found`);
     }
 
     const existing = mockStore.cards[index];
+    const activeSession = mockStore.sessions.find((s) => s.cardId === id && s.status === 'ACTIVE');
+    const branch = mockStore.branches.find((b) => b.id === (activeSession?.branchId || existing.currentBranchId));
+
     const updated: Card = {
       ...existing,
       status: 'BLOCKED',
@@ -152,29 +157,101 @@ export const mockCardsHandlers = {
     };
 
     mockStore.cards[index] = updated;
+
+    // Record audit event in Customer History
+    const historyEvent: CustomerHistoryEvent = {
+      id: `evt_block_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      cardId: existing.id,
+      sessionId: activeSession?.id || null,
+      customerName: activeSession?.customerName || null,
+      customerPhone: activeSession?.customerPhone || null,
+      physicalCardNumber: existing.physicalCardNumber,
+      action: 'CARD_BLOCKED',
+      previousStatus: existing.status,
+      newStatus: 'BLOCKED',
+      performedByName: currentUser?.name || 'Staff User',
+      performedByUserId: currentUser?.id || null,
+      branchId: branch?.id || null,
+      branchName: branch?.name || 'Main Cafeteria',
+      reason,
+      createdAt: new Date().toISOString(),
+    };
+    mockStore.customerHistoryEvents.unshift(historyEvent);
+
     return createMockSuccess(updated);
   },
 
-  async unblockCard(id: string): Promise<ApiResult<Card>> {
+  async unblockCard(id: string, reason = 'Unblocked by Staff'): Promise<ApiResult<Card>> {
     await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
     const index = mockStore.cards.findIndex((c) => c.id === id);
     if (index === -1) {
       return createMockError('CARD_NOT_FOUND', `Card '${id}' not found`);
     }
 
     const existing = mockStore.cards[index];
-    const activeSessionExists = mockStore.sessions.some(
+    const activeSession = mockStore.sessions.find(
       (s) => s.cardId === id && s.status === 'ACTIVE',
     );
+    const branch = mockStore.branches.find((b) => b.id === (activeSession?.branchId || existing.currentBranchId));
+    const newStatus = activeSession ? 'ACTIVE' : 'AVAILABLE';
 
     const updated: Card = {
       ...existing,
-      status: activeSessionExists ? 'ACTIVE' : 'AVAILABLE',
+      status: newStatus,
       updatedAt: mockStore.getTimestamp(),
     };
 
     mockStore.cards[index] = updated;
+
+    // Record new unblock audit event in Customer History (preserving previous events)
+    const historyEvent: CustomerHistoryEvent = {
+      id: `evt_unblock_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      cardId: existing.id,
+      sessionId: activeSession?.id || null,
+      customerName: activeSession?.customerName || null,
+      customerPhone: activeSession?.customerPhone || null,
+      physicalCardNumber: existing.physicalCardNumber,
+      action: 'CARD_UNBLOCKED',
+      previousStatus: existing.status,
+      newStatus,
+      performedByName: currentUser?.name || 'Staff User',
+      performedByUserId: currentUser?.id || null,
+      branchId: branch?.id || null,
+      branchName: branch?.name || 'Main Cafeteria',
+      reason,
+      createdAt: new Date().toISOString(),
+    };
+    mockStore.customerHistoryEvents.unshift(historyEvent);
+
     return createMockSuccess(updated);
+  },
+
+  async getCustomerHistoryEvents(params?: any): Promise<ApiResult<PaginatedData<CustomerHistoryEvent>>> {
+    await mockDelay();
+    let events = [...mockStore.customerHistoryEvents];
+
+    if (params?.action && params.action !== 'ALL') {
+      events = events.filter((e) => e.action === params.action);
+    }
+    if (params?.cardId) {
+      events = events.filter((e) => e.cardId === params.cardId);
+    }
+    if (params?.search) {
+      const q = String(params.search).toLowerCase();
+      events = events.filter((e) =>
+        (e.customerName?.toLowerCase().includes(q) ?? false) ||
+        (e.customerPhone?.toLowerCase().includes(q) ?? false) ||
+        e.physicalCardNumber.toLowerCase().includes(q) ||
+        (e.performedByName?.toLowerCase().includes(q) ?? false) ||
+        (e.reason?.toLowerCase().includes(q) ?? false) ||
+        (e.branchName?.toLowerCase().includes(q) ?? false)
+      );
+    }
+
+    const page = params?.page ?? 1;
+    const limit = params?.limit ?? 50;
+    return createMockSuccess(paginateArray(events, page, limit));
   },
 
   async importCards(req: ImportCardsRequest): Promise<ApiResult<ImportCardsResponseData>> {

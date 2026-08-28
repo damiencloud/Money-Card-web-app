@@ -71,7 +71,7 @@ class _ReturnCardScreenState extends ConsumerState<ReturnCardScreen> {
     final user = ref.read(currentUserProvider);
     final session = ref.read(sessionDetailsNotifierProvider).session;
 
-    final rawCard = widget.physicalCardNumber ?? session?.physicalCardNumber ?? session?.cardId ?? session?.id ?? widget.sessionId;
+    final rawCard = widget.physicalCardNumber != null ? cleanDisplayCardNumber(widget.physicalCardNumber) : (session?.displayCardNumber ?? 'Card');
     final cleanCard = rawCard.replaceAll('-', '');
     final cardNum = rawCard.toUpperCase().startsWith('MC-')
         ? rawCard
@@ -155,7 +155,7 @@ class _ReturnCardScreenState extends ConsumerState<ReturnCardScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        widget.physicalCardNumber ?? 'Active Session',
+                        widget.physicalCardNumber != null ? cleanDisplayCardNumber(widget.physicalCardNumber) : session.displayCardNumber,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,

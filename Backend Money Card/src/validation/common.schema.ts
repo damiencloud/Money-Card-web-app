@@ -35,20 +35,25 @@ export const safeId = z
 export const safeEmail = z
   .string({ required_error: 'Email is required' })
   .trim()
-  .min(3, 'Email is too short')
-  .max(254, 'Email cannot exceed 254 characters')
-  .email('Please provide a valid email address')
-  .toLowerCase()
-  .refine((val) => {
-    const parts = val.split('@');
-    if (parts.length !== 2) return false;
-    const [local, domain] = parts;
-    if (!local || !domain) return false;
-    if (domain.indexOf('.') === -1) return false;
-    const domainParts = domain.split('.');
-    const tld = domainParts[domainParts.length - 1];
-    return !!tld && tld.length >= 2 && !domain.startsWith('.') && !domain.endsWith('.');
-  }, { message: 'Please provide a valid email domain' });
+  .transform((val) => val.replace(/\s+/g, ''))
+  .pipe(
+    z
+      .string()
+      .min(3, 'Email is too short')
+      .max(254, 'Email cannot exceed 254 characters')
+      .email('Please provide a valid email address')
+      .toLowerCase()
+      .refine((val) => {
+        const parts = val.split('@');
+        if (parts.length !== 2) return false;
+        const [local, domain] = parts;
+        if (!local || !domain) return false;
+        if (domain.indexOf('.') === -1) return false;
+        const domainParts = domain.split('.');
+        const tld = domainParts[domainParts.length - 1];
+        return !!tld && tld.length >= 2 && !domain.startsWith('.') && !domain.endsWith('.');
+      }, { message: 'Please provide a valid email domain' })
+  );
 
 /**
  * Strong password schema for signup, password change, and password reset:

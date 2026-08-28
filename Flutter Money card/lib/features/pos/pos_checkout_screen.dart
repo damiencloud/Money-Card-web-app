@@ -291,7 +291,7 @@ class _PosCheckoutScreenState extends ConsumerState<PosCheckoutScreen> {
           ? result.transactionId
           : 'TXN-${DateTime.now().millisecondsSinceEpoch}',
       timestamp: DateTime.now(),
-      cardIdentifier: session?.physicalCardNumber ?? widget.sessionId,
+      cardIdentifier: session?.displayCardNumber ?? 'Active Card',
       sessionId: session?.id ?? widget.sessionId,
       staffName: user?.name,
       items: billItems,

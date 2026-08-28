@@ -12,8 +12,13 @@ import '../../widgets/common/app_button.dart';
 import '../../widgets/common/app_card.dart';
 import '../../widgets/common/section_header.dart';
 import '../../widgets/guards/permission_guard.dart';
+import '../../widgets/states/app_error_state.dart';
 import '../../widgets/states/app_loading_view.dart';
 
+/// Authoritative Session Details & Activity Timeline Screen.
+/// Displays live balance, customer profile, operational action buttons,
+/// and the complete chronological activity timeline (Purchases, Recharges, Issuance)
+/// strictly for the CURRENT active card cycle/session.
 class SessionDetailsScreen extends ConsumerStatefulWidget {
   final String sessionId;
 
@@ -62,15 +67,20 @@ class _SessionDetailsScreenState extends ConsumerState<SessionDetailsScreen> {
       );
     }
 
+    if (sessionState.errorMessage != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Session Details')),
+        body: AppErrorState(
+          message: sessionState.errorMessage!,
+          onRetry: () => ref.read(sessionDetailsNotifierProvider.notifier).loadSessionById(widget.sessionId),
+        ),
+      );
+    }
+
     if (session == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Session Details')),
-        body: Center(
-          child: Text(
-            sessionState.errorMessage ?? 'Session not found.',
-            style: const TextStyle(color: AppColors.error),
-          ),
-        ),
+        body: const Center(child: Text('Session not found')),
       );
     }
 
@@ -79,12 +89,19 @@ class _SessionDetailsScreenState extends ConsumerState<SessionDetailsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Card ${session.physicalCardNumber ?? session.cardId}'),
+        title: Text('Card ${session.displayCardNumber}'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh Session',
+            onPressed: () => ref.read(sessionDetailsNotifierProvider.notifier).loadSessionById(widget.sessionId),
+          ),
+        ],
       ),
       body: ListView(
         padding: AppSpacing.paddingMd,
         children: [
-          // Authoritative Balance Card
+          // ─── Authoritative Balance Card ──────────────────────────────
           AppCard(
             padding: AppSpacing.paddingLg,
             child: Column(
@@ -121,16 +138,10 @@ class _SessionDetailsScreenState extends ConsumerState<SessionDetailsScreen> {
                     const Icon(Icons.credit_card, size: 16, color: AppColors.textSecondaryLight),
                     const SizedBox(width: AppSpacing.xs),
                     Text(
-                      'Card: ${session.physicalCardNumber ?? session.cardId}',
+                      'Card: ${session.displayCardNumber}',
                       style: const TextStyle(fontSize: 13, color: AppColors.textSecondaryLight),
                     ),
-                    if (session.sessionCardNumber != null) ...[
-                      const SizedBox(width: AppSpacing.xs),
-                      Text(
-                        '(${session.sessionCardNumber})',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary),
-                      ),
-                    ],
+
                   ],
                 ),
                 if (session.customerName != null && session.customerName!.isNotEmpty) ...[
@@ -139,12 +150,14 @@ class _SessionDetailsScreenState extends ConsumerState<SessionDetailsScreen> {
                     children: [
                       const Icon(Icons.person_outline, size: 16, color: AppColors.primary),
                       const SizedBox(width: AppSpacing.xs),
-                      Text(
-                        'Customer: ${session.customerName}${session.customerPhone != null && session.customerPhone!.isNotEmpty ? " (${session.customerPhone})" : ""}',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimaryLight,
+                      Expanded(
+                        child: Text(
+                          'Customer: ${session.customerName}${session.customerPhone != null && session.customerPhone!.isNotEmpty ? " (${session.customerPhone})" : ""}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimaryLight,
+                          ),
                         ),
                       ),
                     ],
@@ -179,7 +192,7 @@ class _SessionDetailsScreenState extends ConsumerState<SessionDetailsScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
 
-          // Operational Actions
+          // ─── Operational Actions ─────────────────────────────────────
           if (isActive) ...[
             const SectionHeader(title: 'Session Operations'),
             const SizedBox(height: AppSpacing.sm),
@@ -215,28 +228,40 @@ class _SessionDetailsScreenState extends ConsumerState<SessionDetailsScreen> {
             const SizedBox(height: AppSpacing.lg),
           ],
 
-          // ─── Transaction History & Purchased Products ─────────────────
+          // ─── Activity & Transactions Timeline ────────────────────────
           const SectionHeader(title: 'Transactions & Purchased Products'),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.xs),
 
-          if (transactions.isEmpty)
-            AppCard(
-              padding: AppSpacing.paddingLg,
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.receipt_long_outlined, size: 36, color: Colors.grey.shade400),
-                    const SizedBox(height: AppSpacing.xs),
-                    const Text(
-                      'No transactions in this session yet.',
+          // Render Transactions (Purchases, Recharges, Settlement)
+          if (transactions.isNotEmpty)
+            ...transactions.map((txn) => _buildTransactionCard(txn)),
+
+          // Render Card Issuance Base Timeline Event
+          _buildCardIssuedTimelineCard(session),
+
+          if (transactions.isEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 18, color: Colors.grey.shade500),
+                  const SizedBox(width: AppSpacing.sm),
+                  const Expanded(
+                    child: Text(
+                      'No additional transactions in this card session yet.',
                       style: TextStyle(fontSize: 13, color: AppColors.textSecondaryLight),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            )
-          else
-            ...transactions.map((txn) => _buildTransactionCard(txn)),
+            ),
+          ],
 
           const SizedBox(height: AppSpacing.xl),
         ],
@@ -244,6 +269,7 @@ class _SessionDetailsScreenState extends ConsumerState<SessionDetailsScreen> {
     );
   }
 
+  /// Builds a timeline card for a Purchase, Recharge, or Refund transaction.
   Widget _buildTransactionCard(Transaction txn) {
     final isPurchase = txn.type == TransactionType.purchase;
     final isRecharge = txn.type == TransactionType.recharge;
@@ -259,7 +285,8 @@ class _SessionDetailsScreenState extends ConsumerState<SessionDetailsScreen> {
       badgeBg = AppColors.successLight;
       badgeFg = AppColors.success;
       icon = Icons.arrow_upward;
-      typeLabel = 'Wallet Recharge (${txn.paymentMethod?.value ?? "CASH"})';
+      final payMethodStr = txn.paymentMethod == PaymentMethod.upi ? 'UPI' : 'Cash';
+      typeLabel = 'Wallet Recharge ($payMethodStr)';
     } else if (isPurchase) {
       badgeBg = AppColors.primaryLight;
       badgeFg = AppColors.primary;
@@ -273,6 +300,7 @@ class _SessionDetailsScreenState extends ConsumerState<SessionDetailsScreen> {
     }
 
     return Container(
+      key: ValueKey('txn-${txn.id}'),
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
       decoration: BoxDecoration(
         color: AppColors.surfaceLight,
@@ -280,7 +308,7 @@ class _SessionDetailsScreenState extends ConsumerState<SessionDetailsScreen> {
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),
@@ -387,7 +415,7 @@ class _SessionDetailsScreenState extends ConsumerState<SessionDetailsScreen> {
                   ),
                   const Divider(height: 12),
                   ...items.map((it) {
-                    final itemName = it.itemName ?? it.productId;
+                    final itemName = (it.itemName != null && it.itemName!.isNotEmpty) ? it.itemName! : 'Cafeteria Item';
                     final qty = it.quantity;
                     final unitPrice = it.unitPrice ?? 0.0;
                     final total = it.totalAmount ?? (unitPrice * qty);
@@ -445,7 +473,117 @@ class _SessionDetailsScreenState extends ConsumerState<SessionDetailsScreen> {
             ),
             const SizedBox(height: AppSpacing.sm),
           ],
+
+          // Footer details (Payment method & Balance after line)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.sm),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  isPurchase
+                      ? 'Paid via: Money Card Balance'
+                      : isRecharge
+                          ? 'Payment: ${txn.paymentMethod == PaymentMethod.upi ? "UPI" : "Cash"}'
+                          : 'Refund via: Cash Return',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondaryLight,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (txn.balanceAfter != null)
+                  Text(
+                    'Balance after: ₹${txn.balanceAfter!.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimaryLight,
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  /// Builds the Card Issuance timeline card representing the start of this cycle.
+  Widget _buildCardIssuedTimelineCard(CardSession session) {
+    return Container(
+      key: const ValueKey('timeline-card-issued'),
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Padding(
+        padding: AppSpacing.paddingMd,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.credit_card, color: Colors.blue.shade700, size: 20),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Card Issued',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimaryLight,
+                        ),
+                      ),
+                      const AppBadge(
+                        label: 'SESSION START',
+                        variant: AppBadgeVariant.neutral,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _formatDateTime(session.startedAt),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondaryLight,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Card: ${session.displayCardNumber}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimaryLight,
+                    ),
+                  ),
+                  if (session.customerName != null && session.customerName!.isNotEmpty)
+                    Text(
+                      'Customer: ${session.customerName}${session.customerPhone != null && session.customerPhone!.isNotEmpty ? " (${session.customerPhone})" : ""}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondaryLight,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

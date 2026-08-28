@@ -1,3 +1,4 @@
+import 'card_session.dart';
 import 'transaction.dart';
 
 class ReceiptBillItem {
@@ -82,12 +83,15 @@ class ReceiptBill {
   String get displayCardId {
     final raw = cardIdentifier.trim();
     if (raw.isEmpty) return 'MC-CARD';
-    if (raw.toUpperCase().startsWith('MC-')) return raw.toUpperCase();
-    if (raw.contains('-') && raw.length > 20) {
-      final clean = raw.replaceAll('-', '');
+    final cleaned = cleanDisplayCardNumber(raw);
+    if (cleaned.toUpperCase().startsWith('MC-') || cleaned.toUpperCase().startsWith('MC ')) {
+      return cleaned.toUpperCase();
+    }
+    if (cleaned.contains('-') && cleaned.length > 20) {
+      final clean = cleaned.replaceAll('-', '');
       return 'MC-${clean.length > 6 ? clean.substring(0, 6).toUpperCase() : clean.toUpperCase()}';
     }
-    return raw.toUpperCase().startsWith('MC-') ? raw.toUpperCase() : 'MC-$raw';
+    return cleaned.toUpperCase().startsWith('MC') ? cleaned.toUpperCase() : 'MC-$cleaned';
   }
 
   String get displayBillNo {

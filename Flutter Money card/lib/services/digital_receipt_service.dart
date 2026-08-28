@@ -130,8 +130,7 @@ class DigitalReceiptService {
                 _buildMetaRow('Payment Method:', bill.paymentMethod.toUpperCase()),
                 if (bill.paymentReference != null && bill.paymentReference!.trim().isNotEmpty)
                   _buildMetaRow('UPI Reference:', bill.paymentReference!.trim()),
-                if (bill.sessionId != null && bill.sessionId!.isNotEmpty)
-                  _buildMetaRow('Session:', bill.sessionId!),
+
 
                 pw.SizedBox(height: 4),
                 _buildDashedDivider(),

@@ -64,6 +64,39 @@ class MockApiInterceptor extends Interceptor {
       'createdAt': '2026-08-14T08:00:00Z',
       'updatedAt': '2026-08-14T08:00:00Z',
     },
+    'eros@staff.com': {
+      'id': 'usr-staff-eros',
+      'email': 'eros@staff.com',
+      'name': 'Eros Counter Staff',
+      'role': 'STAFF',
+      'organizationId': 'org-demo-001',
+      'assignedBranchIds': ['branch-001', 'branch-002'],
+      'permissions': AppPermission.values.map((p) => p.value).toList(),
+      'createdAt': '2026-08-14T08:00:00Z',
+      'updatedAt': '2026-08-14T08:00:00Z',
+    },
+    'staff@maincafe.com': {
+      'id': 'usr-staff-001',
+      'email': 'staff@maincafe.com',
+      'name': 'Rahul Counter Staff',
+      'role': 'STAFF',
+      'organizationId': 'org-demo-001',
+      'assignedBranchIds': ['branch-001', 'branch-002'],
+      'permissions': AppPermission.values.map((p) => p.value).toList(),
+      'createdAt': '2026-08-14T08:00:00Z',
+      'updatedAt': '2026-08-14T08:00:00Z',
+    },
+    'staff@example.com': {
+      'id': 'staff-user-001',
+      'email': 'staff@example.com',
+      'name': 'John Staff',
+      'role': 'STAFF',
+      'organizationId': 'org-demo-001',
+      'assignedBranchIds': ['branch-001', 'branch-002'],
+      'permissions': AppPermission.values.map((p) => p.value).toList(),
+      'createdAt': '2026-08-14T08:00:00Z',
+      'updatedAt': '2026-08-14T08:00:00Z',
+    },
     // Default fallback user for backward test compatibility
     'staff@moneycard.io': {
       'id': 'staff-user-001',
@@ -397,6 +430,42 @@ class MockApiInterceptor extends Interceptor {
     },
   ];
 
+  static final List<Map<String, dynamic>> initialTransactions = [
+    {
+      'id': 'tx-mock-001',
+      'sessionId': 'session-001',
+      'branchId': 'branch-001',
+      'type': 'PURCHASE',
+      'amount': 150.0,
+      'balanceBefore': 900.0,
+      'balanceAfter': 750.0,
+      'status': 'SUCCESS',
+      'paymentMethod': 'CARD_BALANCE',
+      'items': [
+        {
+          'productId': 'prod-002',
+          'itemName': 'Chicken Burger',
+          'unitPrice': 150.0,
+          'quantity': 1,
+          'totalAmount': 150.0,
+        },
+      ],
+      'createdAt': '2026-08-14T09:30:00Z',
+    },
+    {
+      'id': 'tx-mock-002',
+      'sessionId': 'session-001',
+      'branchId': 'branch-001',
+      'type': 'RECHARGE',
+      'amount': 500.0,
+      'balanceBefore': 400.0,
+      'balanceAfter': 900.0,
+      'status': 'SUCCESS',
+      'paymentMethod': 'UPI',
+      'createdAt': '2026-08-14T08:30:00Z',
+    },
+  ];
+
   // In-memory runtime state
   static List<Map<String, dynamic>> mockBranches = List.from(initialBranches);
   static List<Map<String, dynamic>> mockCards = List.from(initialCards);
@@ -404,7 +473,7 @@ class MockApiInterceptor extends Interceptor {
   static List<Map<String, dynamic>> mockProducts = List.from(initialProducts);
   static List<Map<String, dynamic>> mockInventory = List.from(initialInventory);
   static List<Map<String, dynamic>> mockMovements = List.from(initialMovements);
-  static List<Map<String, dynamic>> mockTransactions = [];
+  static List<Map<String, dynamic>> mockTransactions = List.from(initialTransactions.map((t) => Map<String, dynamic>.from(t)));
 
   /// Reset all in-memory mock data to seed state for development testing
   static void resetMockData() {
@@ -414,7 +483,7 @@ class MockApiInterceptor extends Interceptor {
     mockProducts = List.from(initialProducts.map((p) => Map<String, dynamic>.from(p)));
     mockInventory = List.from(initialInventory.map((i) => Map<String, dynamic>.from(i)));
     mockMovements = List.from(initialMovements.map((m) => Map<String, dynamic>.from(m)));
-    mockTransactions = [];
+    mockTransactions = List.from(initialTransactions.map((t) => Map<String, dynamic>.from(t)));
     simulatedError = MockErrorSimulation.none;
     currentActiveUser = mockUsersByEmail['staffa@demo.local']!;
   }
@@ -1058,9 +1127,22 @@ class MockApiInterceptor extends Interceptor {
       card['currentBranchId'] = branchId;
       card['updatedAt'] = DateTime.now().toIso8601String();
 
+      final customerName = data?['customerName'] as String?;
+      final customerPhone = data?['customerPhone'] as String?;
+      final paymentMethod = data?['paymentMethod'] as String? ?? 'CASH';
+
+      final prevCyclesCount = mockSessions.where((s) => s['cardId'] == card['id'] || s['cardId'] == card['physicalCardNumber']).length;
+      final cycleNumber = prevCyclesCount + 1;
+      final sessionCardNumber = '${card['physicalCardNumber']}_$cycleNumber';
+
       final session = {
         'id': 'session-${DateTime.now().millisecondsSinceEpoch}',
         'cardId': card['id'],
+        'physicalCardNumber': card['physicalCardNumber'],
+        'sessionCardNumber': sessionCardNumber,
+        'cycleNumber': cycleNumber,
+        'customerName': customerName,
+        'customerPhone': customerPhone,
         'branchId': branchId,
         'status': 'ACTIVE',
         'balance': initialBalance,
@@ -1070,7 +1152,26 @@ class MockApiInterceptor extends Interceptor {
       };
       mockSessions.insert(0, session);
 
-      return _resolve(handler, options, session);
+      if (initialBalance > 0) {
+        final tx = {
+          'id': 'tx-init-${DateTime.now().millisecondsSinceEpoch}',
+          'sessionId': session['id'],
+          'branchId': branchId,
+          'type': 'RECHARGE',
+          'paymentMethod': paymentMethod,
+          'amount': initialBalance,
+          'balanceBefore': 0.0,
+          'balanceAfter': initialBalance,
+          'status': 'SUCCESS',
+          'createdAt': DateTime.now().toIso8601String(),
+        };
+        mockTransactions.insert(0, tx);
+      }
+
+      final enriched = Map<String, dynamic>.from(session);
+      enriched['transactions'] = mockTransactions.where((t) => t['sessionId'] == session['id']).toList();
+
+      return _resolve(handler, options, enriched);
     }
 
     // ==========================================

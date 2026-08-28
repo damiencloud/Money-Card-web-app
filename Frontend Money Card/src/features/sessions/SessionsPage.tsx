@@ -1,7 +1,7 @@
-// ─── Customer History & Session Lifecycle Page ───────────────────────────
-// Real Customer Session History Only — Unissued idle stock belongs to Cards Management.
-// Multi-field Global Search by Customer Name, Phone Number, Physical Card (e.g. MC-104),
-// and Internal Session Cycle ID (e.g. MC-104_1, MC-104_2).
+// ─── Customer History & Card Lifecycle Page ──────────────────────────────
+// Real Customer Session History & Permanent Card Status Audit Trail.
+// Multi-field Global Search by Customer Name, Phone Number, Physical Card (e.g. MC 105),
+// and Event Action (Card Blocked, Card Unblocked).
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiService } from '@/services/api';
@@ -12,6 +12,8 @@ import type {
   Transaction,
   Branch,
   CardSession,
+  CustomerHistoryEvent,
+  CardHistoryAction,
 } from '@/types';
 import {
   Button,
@@ -44,9 +46,15 @@ import {
   History,
   X,
   Sparkles,
+  ShieldAlert,
+  ShieldCheck,
+  Lock,
+  Unlock,
+  AlertCircle,
+  FileText,
 } from 'lucide-react';
 
-// ─── Customer Session Record Model ────────────────────────────────────
+// ─── Customer Session Record Model ──────────────────────────────────
 export interface CustomerHistoryItem {
   id: string; // Session UUID
   cardId: string;
@@ -69,34 +77,39 @@ export interface CustomerHistoryItem {
 export function SessionsPage() {
   const { hasPermission } = usePermissions();
 
+  const [activeTab, setActiveTab] = useState<'sessions' | 'card_events'>('sessions');
+
   const [rawCards, setRawCards] = useState<CardEntity[]>([]);
   const [rawSessions, setRawSessions] = useState<CardSession[]>([]);
+  const [historyEvents, setHistoryEvents] = useState<CustomerHistoryEvent[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ─── Filters State ──────────────────────────────────────────────────
+  // ─── Filters State ────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
   const [sessionStatusFilter, setSessionStatusFilter] = useState<SessionStatus | 'ALL'>('ALL');
+  const [actionFilter, setActionFilter] = useState<CardHistoryAction | 'ALL'>('ALL');
   const [branchFilter, setBranchFilter] = useState<string>('ALL');
   const [dateRangeFilter, setDateRangeFilter] = useState<'ALL' | 'today' | 'yesterday' | '7d' | '30d'>('ALL');
 
-  // ─── Session Details Inspection Modal ──────────────────────────────
+  // ─── Session Details Inspection Modal ─────────────────────────────
   const [selectedItem, setSelectedItem] = useState<CustomerHistoryItem | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [sessionTxns, setSessionTxns] = useState<Transaction[]>([]);
   const [isLoadingTxns, setIsLoadingTxns] = useState(false);
-  const [detailTab, setDetailTab] = useState<'overview' | 'timeline' | 'purchases' | 'recharges'>('overview');
+  const [detailTab, setDetailTab] = useState<'overview' | 'timeline' | 'purchases' | 'recharges' | 'card_status'>('overview');
 
-  // ─── Fetch Sessions, Cards & Branches ──────────────────────────────
+  // ─── Fetch Sessions, Cards, History Events & Branches ─────────────
   const fetchCustomerHistoryData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const [sessionsRes, cardsRes, branchesRes] = await Promise.all([
+      const [sessionsRes, cardsRes, branchesRes, eventsRes] = await Promise.all([
         apiService.sessions.getSessions({ limit: 300 }),
         apiService.cards.getCards(),
         apiService.branches.getBranches(),
+        apiService.cards.getCustomerHistoryEvents ? apiService.cards.getCustomerHistoryEvents({ limit: 200 }) : Promise.resolve({ success: true, data: { items: [] } } as any),
       ]);
 
       if (!sessionsRes.success) {
@@ -111,6 +124,9 @@ export function SessionsPage() {
       if (branchesRes.success) {
         setBranches(branchesRes.data.items);
       }
+      if (eventsRes?.success && eventsRes.data?.items) {
+        setHistoryEvents(eventsRes.data.items);
+      }
     } catch {
       setError('Unable to connect to the server. Please try again.');
     } finally {
@@ -123,10 +139,11 @@ export function SessionsPage() {
     const load = async () => {
       setError(null);
       try {
-        const [sessionsRes, cardsRes, branchesRes] = await Promise.all([
+        const [sessionsRes, cardsRes, branchesRes, eventsRes] = await Promise.all([
           apiService.sessions.getSessions({ limit: 300 }),
           apiService.cards.getCards(),
           apiService.branches.getBranches(),
+          apiService.cards.getCustomerHistoryEvents ? apiService.cards.getCustomerHistoryEvents({ limit: 200 }) : Promise.resolve({ success: true, data: { items: [] } } as any),
         ]);
 
         if (isCancelled) return;
@@ -142,6 +159,9 @@ export function SessionsPage() {
         }
         if (branchesRes.success) {
           setBranches(branchesRes.data.items);
+        }
+        if (eventsRes?.success && eventsRes.data?.items) {
+          setHistoryEvents(eventsRes.data.items);
         }
       } catch {
         if (!isCancelled) {
@@ -160,7 +180,7 @@ export function SessionsPage() {
     };
   }, []);
 
-  // ─── Build Customer History Records (ONLY real customer sessions) ──
+  // ─── Build Customer History Records ──────────────────────────────
   const customerHistoryItems = useMemo<CustomerHistoryItem[]>(() => {
     return rawSessions.map((s) => {
       const card = rawCards.find((c) => c.id === s.cardId);
@@ -191,17 +211,15 @@ export function SessionsPage() {
     });
   }, [rawSessions, rawCards, branches]);
 
-  // ─── Multi-criteria Global Search & Filter ──────────────────────────
-  const filteredItems = useMemo(() => {
+  // ─── Filter Customer Sessions ────────────────────────────────────
+  const filteredSessions = useMemo(() => {
     return customerHistoryItems.filter((item) => {
-      // 1. Global Search Filter (Customer Name, Phone Number, Physical Card Number, Internal Session ID)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchesCustomerName = item.customerName?.toLowerCase().includes(q) ?? false;
         const matchesCustomerPhone = item.customerPhone?.toLowerCase().includes(q) ?? false;
         const matchesPhysicalNumber = item.physicalCardNumber.toLowerCase().includes(q);
         const matchesInternalNumber = item.sessionCardNumber.toLowerCase().includes(q);
-        const matchesSessionId = item.id.toLowerCase().includes(q);
         const matchesBranch = item.branchName.toLowerCase().includes(q);
 
         if (
@@ -209,39 +227,36 @@ export function SessionsPage() {
           !matchesCustomerPhone &&
           !matchesPhysicalNumber &&
           !matchesInternalNumber &&
-          !matchesSessionId &&
           !matchesBranch
         ) {
           return false;
         }
       }
 
-      // 2. Session Status filter
-      if (sessionStatusFilter !== 'ALL') {
-        if (item.sessionStatus !== sessionStatusFilter) return false;
+      if (sessionStatusFilter !== 'ALL' && item.sessionStatus !== sessionStatusFilter) {
+        return false;
       }
 
-      // 3. Branch filter
-      if (branchFilter !== 'ALL') {
-        if (item.branchId !== branchFilter) return false;
+      if (branchFilter !== 'ALL' && item.branchId !== branchFilter) {
+        return false;
       }
 
-      // 4. Date Range filter
       if (dateRangeFilter !== 'ALL' && item.startedAt) {
         const itemDate = new Date(item.startedAt);
         const now = new Date();
         const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
         const itemTime = itemDate.getTime();
 
-        if (dateRangeFilter === 'today') {
-          if (itemTime < startOfToday) return false;
-        } else if (dateRangeFilter === 'yesterday') {
+        if (dateRangeFilter === 'today' && itemTime < startOfToday) return false;
+        if (dateRangeFilter === 'yesterday') {
           const startOfYesterday = startOfToday - 24 * 60 * 60 * 1000;
           if (itemTime < startOfYesterday || itemTime >= startOfToday) return false;
-        } else if (dateRangeFilter === '7d') {
+        }
+        if (dateRangeFilter === '7d') {
           const sevenDaysAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
           if (itemTime < sevenDaysAgo) return false;
-        } else if (dateRangeFilter === '30d') {
+        }
+        if (dateRangeFilter === '30d') {
           const thirtyDaysAgo = now.getTime() - 30 * 24 * 60 * 60 * 1000;
           if (itemTime < thirtyDaysAgo) return false;
         }
@@ -251,28 +266,68 @@ export function SessionsPage() {
     });
   }, [customerHistoryItems, searchQuery, sessionStatusFilter, branchFilter, dateRangeFilter]);
 
-  // ─── KPI Metrics ────────────────────────────────────────────────────
+  // ─── Filter Card Status Events ───────────────────────────────────
+  const filteredEvents = useMemo(() => {
+    return historyEvents.filter((event) => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchesCustomer = event.customerName?.toLowerCase().includes(q) ?? false;
+        const matchesPhone = event.customerPhone?.toLowerCase().includes(q) ?? false;
+        const matchesCard = event.physicalCardNumber.toLowerCase().includes(q);
+        const matchesStaff = event.performedByName?.toLowerCase().includes(q) ?? false;
+        const matchesReason = event.reason?.toLowerCase().includes(q) ?? false;
+        const matchesBranch = event.branchName?.toLowerCase().includes(q) ?? false;
+
+        if (!matchesCustomer && !matchesPhone && !matchesCard && !matchesStaff && !matchesReason && !matchesBranch) {
+          return false;
+        }
+      }
+
+      if (actionFilter !== 'ALL' && event.action !== actionFilter) {
+        return false;
+      }
+
+      if (branchFilter !== 'ALL' && event.branchId && event.branchId !== branchFilter) {
+        return false;
+      }
+
+      if (dateRangeFilter !== 'ALL' && event.createdAt) {
+        const itemDate = new Date(event.createdAt);
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const itemTime = itemDate.getTime();
+
+        if (dateRangeFilter === 'today' && itemTime < startOfToday) return false;
+        if (dateRangeFilter === 'yesterday') {
+          const startOfYesterday = startOfToday - 24 * 60 * 60 * 1000;
+          if (itemTime < startOfYesterday || itemTime >= startOfToday) return false;
+        }
+        if (dateRangeFilter === '7d') {
+          const sevenDaysAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+          if (itemTime < sevenDaysAgo) return false;
+        }
+        if (dateRangeFilter === '30d') {
+          const thirtyDaysAgo = now.getTime() - 30 * 24 * 60 * 60 * 1000;
+          if (itemTime < thirtyDaysAgo) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [historyEvents, searchQuery, actionFilter, branchFilter, dateRangeFilter]);
+
+  // ─── KPI Metrics ─────────────────────────────────────────────────
   const activeCount = useMemo(
     () => customerHistoryItems.filter((i) => i.sessionStatus === 'ACTIVE').length,
     [customerHistoryItems],
   );
 
-  const settledCount = useMemo(
-    () => customerHistoryItems.filter((i) => i.sessionStatus === 'SETTLED').length,
-    [customerHistoryItems],
+  const blockedCardsCount = useMemo(
+    () => rawCards.filter((c) => c.status === 'BLOCKED').length,
+    [rawCards],
   );
 
-  const uniqueCustomersCount = useMemo(() => {
-    const customers = new Set<string>();
-    for (const item of customerHistoryItems) {
-      if (item.customerPhone) {
-        customers.add(item.customerPhone);
-      } else if (item.customerName) {
-        customers.add(item.customerName.toLowerCase());
-      }
-    }
-    return customers.size;
-  }, [customerHistoryItems]);
+  const totalAuditEventsCount = historyEvents.length;
 
   const totalActiveBalance = useMemo(
     () =>
@@ -282,7 +337,7 @@ export function SessionsPage() {
     [customerHistoryItems],
   );
 
-  // ─── Open Session Detail Inspection ────────────────────────────────
+  // ─── Open Session Detail Inspection ──────────────────────────────
   const handleOpenDetails = async (item: CustomerHistoryItem) => {
     setSelectedItem(item);
     setDetailTab('overview');
@@ -302,23 +357,15 @@ export function SessionsPage() {
     }
   };
 
-  // ─── Transaction Sub-filters for Detail Modal ──────────────────────
-  const recharges = useMemo(
-    () => sessionTxns.filter((t) => t.type === 'RECHARGE' || t.type?.includes('RECHARGE')),
-    [sessionTxns],
-  );
+  // ─── Card Events for Selected Session Card ───────────────────────
+  const selectedCardEvents = useMemo(() => {
+    if (!selectedItem) return [];
+    return historyEvents.filter(
+      (e) => e.cardId === selectedItem.cardId || e.physicalCardNumber === selectedItem.physicalCardNumber,
+    );
+  }, [selectedItem, historyEvents]);
 
-  const purchases = useMemo(
-    () => sessionTxns.filter((t) => t.type === 'PURCHASE'),
-    [sessionTxns],
-  );
-
-  const refundTxn = useMemo(
-    () => sessionTxns.find((t) => t.type === 'REFUND' || t.type?.includes('REFUND') || t.type?.includes('RETURN')),
-    [sessionTxns],
-  );
-
-  // ─── Permission Guard ──────────────────────────────────────────────
+  // ─── Permission Guard ────────────────────────────────────────────
   if (!hasPermission('SESSION_VIEW')) {
     return (
       <ErrorState
@@ -328,641 +375,562 @@ export function SessionsPage() {
     );
   }
 
-  // ─── Table Columns ─────────────────────────────────────────────────
-  const columns = [
+  // ─── Columns for Sessions Table ──────────────────────────────────
+  const sessionColumns = [
     {
-      key: 'customer',
-      header: 'Customer Profile',
-      render: (item: CustomerHistoryItem) => (
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-300 shrink-0 font-bold text-xs">
-            {item.customerName ? item.customerName.charAt(0).toUpperCase() : <User className="h-4 w-4 text-slate-400" />}
-          </div>
-          <div className="min-w-0">
-            <p className="font-semibold text-sm text-slate-100 truncate">
-              {item.customerName || <span className="text-slate-400 font-normal italic">Guest User</span>}
-            </p>
-            {item.customerPhone ? (
-              <p className="flex items-center gap-1 text-[11px] font-mono text-violet-300">
-                <Phone className="h-3 w-3 text-slate-500" />
-                {item.customerPhone}
-              </p>
-            ) : (
-              <p className="text-[10px] text-slate-500">No phone registered</p>
-            )}
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: 'card',
-      header: 'Physical Card & Internal ID',
-      render: (item: CustomerHistoryItem) => (
-        <div>
-          <div className="flex items-center gap-1.5">
-            <CreditCard className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-            <span className="font-mono text-sm font-bold text-slate-200">{item.physicalCardNumber}</span>
-          </div>
-          <div className="mt-0.5">
-            <Badge variant="outline" className="text-[10px] font-mono text-cyan-300 border-cyan-800/60 bg-cyan-950/30">
-              Internal ID: {item.sessionCardNumber}
-            </Badge>
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: 'sessionStatus',
-      header: 'Session Status',
-      render: (item: CustomerHistoryItem) => {
-        if (item.sessionStatus === 'ACTIVE') {
-          return (
-            <Badge variant="success" className="gap-1.5 text-xs font-semibold">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              ACTIVE
-            </Badge>
-          );
-        }
+      header: 'Customer',
+      accessorKey: 'customerName',
+      cell: ({ row }: any) => {
+        const item: CustomerHistoryItem = row.original;
         return (
-          <Badge variant="outline" className="text-xs text-slate-400 border-slate-700">
-            SETTLED
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 font-bold text-sm">
+              {item.customerName ? item.customerName.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
+            </div>
+            <div>
+              <p className="font-semibold text-slate-900 dark:text-slate-100">
+                {item.customerName || 'Walk-in Customer'}
+              </p>
+              {item.customerPhone && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                  <Phone className="h-3 w-3" />
+                  {item.customerPhone}
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Card Number',
+      accessorKey: 'physicalCardNumber',
+      cell: ({ row }: any) => {
+        const item: CustomerHistoryItem = row.original;
+        return (
+          <div className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4 text-emerald-600" />
+            <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
+              {item.physicalCardNumber}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Status',
+      accessorKey: 'sessionStatus',
+      cell: ({ row }: any) => {
+        const status = row.original.sessionStatus;
+        return (
+          <Badge variant={status === 'ACTIVE' ? 'success' : 'neutral'}>
+            {status}
           </Badge>
         );
       },
     },
     {
-      key: 'balance',
-      header: 'Wallet Balance',
-      render: (item: CustomerHistoryItem) => (
-        <div className="font-mono">
-          <p
-            className={`text-sm font-bold ${
-              item.balance > 0 ? 'text-emerald-400' : 'text-slate-400'
-            }`}
-          >
-            {formatCurrency(item.balance)}
-          </p>
-          <span className="text-[10px] text-slate-500">
-            {item.sessionStatus === 'ACTIVE' ? 'Live Balance' : 'Settled & Refunded'}
-          </span>
-        </div>
+      header: 'Balance',
+      accessorKey: 'balance',
+      cell: ({ row }: any) => (
+        <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
+          {formatCurrency(row.original.balance)}
+        </span>
       ),
     },
     {
-      key: 'branch',
-      header: 'Branch Location',
-      render: (item: CustomerHistoryItem) => (
-        <div className="flex items-center gap-1.5 text-xs text-slate-300">
-          <Building2 className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-          <span className="truncate max-w-[130px]">{item.branchName}</span>
-        </div>
+      header: 'Branch',
+      accessorKey: 'branchName',
+      cell: ({ row }: any) => (
+        <span className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+          <Building2 className="h-3.5 w-3.5 text-slate-400" />
+          {row.original.branchName}
+        </span>
       ),
     },
     {
-      key: 'startedAt',
-      header: 'Session Lifecycle',
-      render: (item: CustomerHistoryItem) => (
-        <div className="text-xs text-slate-400 space-y-0.5">
-          <p>Started: {formatDate(item.startedAt)}</p>
-          {item.settledAt ? (
-            <p className="text-[11px] text-slate-500">Settled: {formatDate(item.settledAt)}</p>
-          ) : (
-            <p className="text-[11px] text-emerald-400 font-medium">Session in progress</p>
-          )}
-        </div>
+      header: 'Issued At',
+      accessorKey: 'startedAt',
+      cell: ({ row }: any) => (
+        <span className="text-xs text-slate-500 dark:text-slate-400">
+          {formatDate(row.original.startedAt)}
+        </span>
       ),
     },
     {
-      key: 'actions',
       header: 'Actions',
-      className: 'text-right',
-      render: (item: CustomerHistoryItem) => (
+      id: 'actions',
+      cell: ({ row }: any) => (
         <Button
           variant="outline"
           size="sm"
-          onClick={() => handleOpenDetails(item)}
-          leftIcon={<Eye className="h-3.5 w-3.5 text-violet-400" />}
-          className="border-slate-700 hover:border-violet-500/50 hover:bg-violet-950/20"
+          className="gap-1.5"
+          onClick={() => handleOpenDetails(row.original)}
         >
-          Inspect History
+          <Eye className="h-3.5 w-3.5 text-emerald-600" />
+          <span>Inspect</span>
         </Button>
       ),
     },
   ];
 
-  return (
-    <div className="space-y-8">
-      {/* Header Bar */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+  // ─── Columns for Card Status & Block/Unblock Audit Events ─────────
+  const eventColumns = [
+    {
+      header: 'Customer',
+      accessorKey: 'customerName',
+      cell: ({ row }: any) => {
+        const event: CustomerHistoryEvent = row.original;
+        return (
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-100">Customer History</h1>
-            <Badge variant="outline" className="border-violet-500/30 text-violet-300 flex items-center gap-1">
-              <Sparkles className="h-3 w-3" />
-              Customer Audit Trail
-            </Badge>
-          </div>
-          <p className="mt-1 text-sm text-slate-400">
-            Chronological customer session records with global search by Name, Phone (10 digits), Physical Card (e.g. MC-104), or Internal Cycle ID (e.g. MC-104_1, MC-104_2).
-          </p>
-        </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={fetchCustomerHistoryData}
-          disabled={isLoading}
-          leftIcon={<RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />}
-        >
-          Refresh Data
-        </Button>
-      </div>
-
-      {/* KPI Stat Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Active Customer Sessions"
-          value={activeCount.toString()}
-          icon={<Clock className="h-5 w-5 text-emerald-400" />}
-        />
-
-        <StatCard
-          label="Settled Customer Cycles"
-          value={settledCount.toString()}
-          icon={<CheckCircle2 className="h-5 w-5 text-blue-400" />}
-        />
-
-        <StatCard
-          label="Identified Customers"
-          value={uniqueCustomersCount.toString()}
-          icon={<User className="h-5 w-5 text-violet-400" />}
-        />
-
-        <StatCard
-          label="Live Wallet Liabilities"
-          value={formatCurrency(totalActiveBalance)}
-          icon={<Wallet className="h-5 w-5 text-amber-400" />}
-        />
-      </div>
-
-      {/* Global Search & Filters Toolbar */}
-      <UiCard className="p-4 space-y-4 border-slate-800 bg-slate-900/60">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          {/* Global Search Input */}
-          <div className="relative flex-1 max-w-xl">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              id="customer-global-search"
-              type="text"
-              placeholder="Search by Customer Name, Phone (98765...), Physical Card (MC-104), or Internal ID (MC-104_1)..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-9 pr-8 text-sm text-slate-100 placeholder-slate-500 transition-colors focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-
-          {/* Quick Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Status Filter */}
-            <Select
-              id="session-status-filter"
-              value={sessionStatusFilter}
-              onChange={(e) => setSessionStatusFilter(e.target.value as any)}
-              options={[
-                { value: 'ALL', label: 'All Cycles' },
-                { value: 'ACTIVE', label: 'Active Sessions' },
-                { value: 'SETTLED', label: 'Settled & Refunded' },
-              ]}
-              className="w-40 text-xs"
-            />
-
-            {/* Branch Filter */}
-            <Select
-              id="branch-filter"
-              value={branchFilter}
-              onChange={(e) => setBranchFilter(e.target.value)}
-              options={[
-                { value: 'ALL', label: 'All Branches' },
-                ...branches.map((b) => ({ value: b.id, label: b.name })),
-              ]}
-              className="w-44 text-xs"
-            />
-
-            {/* Date Range Selector */}
-            <div className="flex items-center rounded-lg border border-slate-800 bg-slate-950 p-1">
-              {(
-                [
-                  { id: 'ALL', label: 'All Time' },
-                  { id: 'today', label: 'Today' },
-                  { id: 'yesterday', label: 'Yesterday' },
-                  { id: '7d', label: 'Last 7D' },
-                  { id: '30d', label: 'Last 30D' },
-                ] as const
-              ).map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setDateRangeFilter(tab.id)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
-                    dateRangeFilter === tab.id
-                      ? 'bg-violet-600/30 text-violet-200 border border-violet-500/40 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/50'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 font-bold text-xs">
+              {event.customerName ? event.customerName.charAt(0).toUpperCase() : <User className="h-3.5 w-3.5" />}
+            </div>
+            <div>
+              <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
+                {event.customerName || 'Registered Customer'}
+              </p>
+              {event.customerPhone && (
+                <p className="text-xs text-slate-500">{event.customerPhone}</p>
+              )}
             </div>
           </div>
-        </div>
+        );
+      },
+    },
+    {
+      header: 'Card',
+      accessorKey: 'physicalCardNumber',
+      cell: ({ row }: any) => (
+        <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
+          {row.original.physicalCardNumber}
+        </span>
+      ),
+    },
+    {
+      header: 'Action',
+      accessorKey: 'action',
+      cell: ({ row }: any) => {
+        const act: CardHistoryAction = row.original.action;
+        const isBlock = act === 'CARD_BLOCKED';
+        return (
+          <span
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+              isBlock
+                ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+            }`}
+          >
+            {isBlock ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+            {isBlock ? 'Card Blocked' : 'Card Unblocked'}
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Status Transition',
+      id: 'transition',
+      cell: ({ row }: any) => {
+        const e: CustomerHistoryEvent = row.original;
+        return (
+          <span className="text-xs text-slate-600 dark:text-slate-300 font-mono">
+            {e.previousStatus} → <strong>{e.newStatus}</strong>
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Performed By',
+      accessorKey: 'performedByName',
+      cell: ({ row }: any) => (
+        <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+          {row.original.performedByName || 'Staff'}
+        </span>
+      ),
+    },
+    {
+      header: 'Branch',
+      accessorKey: 'branchName',
+      cell: ({ row }: any) => (
+        <span className="text-xs text-slate-500">{row.original.branchName}</span>
+      ),
+    },
+    {
+      header: 'Date & Time',
+      accessorKey: 'createdAt',
+      cell: ({ row }: any) => (
+        <span className="text-xs text-slate-500 dark:text-slate-400">
+          {formatDate(row.original.createdAt)}
+        </span>
+      ),
+    },
+    {
+      header: 'Reason',
+      accessorKey: 'reason',
+      cell: ({ row }: any) => (
+        <span className="text-xs text-slate-600 dark:text-slate-400 italic max-w-xs truncate block">
+          {row.original.reason || '—'}
+        </span>
+      ),
+    },
+  ];
 
-        {/* Active Filter Indicators */}
-        {(searchQuery || sessionStatusFilter !== 'ALL' || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL') && (
-          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/80 text-xs text-slate-400">
-            <span>Filtering {filteredItems.length} of {customerHistoryItems.length} customer sessions</span>
-            {searchQuery && (
-              <Badge variant="outline" className="gap-1 border-violet-700 bg-violet-950/40 text-violet-300">
-                Search: "{searchQuery}"
-                <X className="h-3 w-3 cursor-pointer" onClick={() => setSearchQuery('')} />
-              </Badge>
-            )}
-            {sessionStatusFilter !== 'ALL' && (
-              <Badge variant="outline" className="gap-1 border-slate-700">
-                Status: {sessionStatusFilter}
-                <X className="h-3 w-3 cursor-pointer" onClick={() => setSessionStatusFilter('ALL')} />
-              </Badge>
-            )}
-            {branchFilter !== 'ALL' && (
-              <Badge variant="outline" className="gap-1 border-slate-700">
-                Branch: {branches.find((b) => b.id === branchFilter)?.name || branchFilter}
-                <X className="h-3 w-3 cursor-pointer" onClick={() => setBranchFilter('ALL')} />
-              </Badge>
-            )}
-            {dateRangeFilter !== 'ALL' && (
-              <Badge variant="outline" className="gap-1 border-slate-700">
-                Date: {dateRangeFilter}
-                <X className="h-3 w-3 cursor-pointer" onClick={() => setDateRangeFilter('ALL')} />
-              </Badge>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery('');
-                setSessionStatusFilter('ALL');
-                setBranchFilter('ALL');
-                setDateRangeFilter('ALL');
-              }}
-              className="text-xs text-violet-400 hover:underline ml-auto"
-            >
-              Clear All Filters
-            </button>
+  return (
+    <div className="space-y-6">
+      {/* ─── Header ───────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            Customer History & Audit Trail
+          </h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Authoritative registry of customer cafeteria sessions, purchases, and permanent card block/unblock audit events.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchCustomerHistoryData}
+            isLoading={isLoading}
+            className="gap-2"
+          >
+            <RefreshCw className="h-4 w-4 text-emerald-600" />
+            <span>Refresh History</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* ─── Top Stats ────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Active Customer Sessions"
+          value={activeCount}
+          icon={<Wallet className="h-5 w-5 text-emerald-600" />}
+          description="Currently active in cafeteria"
+        />
+        <StatCard
+          title="Active Floating Balance"
+          value={formatCurrency(totalActiveBalance)}
+          icon={<CreditCard className="h-5 w-5 text-blue-600" />}
+          description="Unsettled customer funds"
+        />
+        <StatCard
+          title="Blocked Cards"
+          value={blockedCardsCount}
+          icon={<ShieldAlert className="h-5 w-5 text-rose-600" />}
+          description="Disabled for fraud/loss prevention"
+        />
+        <StatCard
+          title="Audit Trail Records"
+          value={totalAuditEventsCount}
+          icon={<History className="h-5 w-5 text-violet-600" />}
+          description="Card status & lifecycle changes"
+        />
+      </div>
+
+      {/* ─── Navigation Tabs ──────────────────────────────────────── */}
+      <div className="flex border-b border-slate-200 dark:border-slate-800">
+        <button
+          onClick={() => setActiveTab('sessions')}
+          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold transition-all ${
+            activeTab === 'sessions'
+              ? 'border-emerald-600 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+          }`}
+        >
+          <FileText className="h-4 w-4" />
+          <span>Customer Sessions & Purchases ({filteredSessions.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('card_events')}
+          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold transition-all ${
+            activeTab === 'card_events'
+              ? 'border-rose-600 text-rose-600 dark:border-rose-400 dark:text-rose-400'
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+          }`}
+        >
+          <ShieldAlert className="h-4 w-4" />
+          <span>Card Block / Unblock Audit Trail ({filteredEvents.length})</span>
+        </button>
+      </div>
+
+      {/* ─── Filter Bar ───────────────────────────────────────────── */}
+      <UiCard padding="md">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by customer, card (MC 105), staff..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+            />
           </div>
-        )}
+
+          {activeTab === 'sessions' ? (
+            <Select
+              value={sessionStatusFilter}
+              onChange={(val) => setSessionStatusFilter(val as any)}
+              options={[
+                { value: 'ALL', label: 'All Session Statuses' },
+                { value: 'ACTIVE', label: 'Active Sessions Only' },
+                { value: 'SETTLED', label: 'Settled Sessions Only' },
+              ]}
+            />
+          ) : (
+            <Select
+              value={actionFilter}
+              onChange={(val) => setActionFilter(val as any)}
+              options={[
+                { value: 'ALL', label: 'All Card Actions' },
+                { value: 'CARD_BLOCKED', label: 'Card Blocked Events' },
+                { value: 'CARD_UNBLOCKED', label: 'Card Unblocked Events' },
+              ]}
+            />
+          )}
+
+          <Select
+            value={branchFilter}
+            onChange={setBranchFilter}
+            options={[
+              { value: 'ALL', label: 'All Branches' },
+              ...branches.map((b) => ({ value: b.id, label: b.name })),
+            ]}
+          />
+
+          <Select
+            value={dateRangeFilter}
+            onChange={(val) => setDateRangeFilter(val as any)}
+            options={[
+              { value: 'ALL', label: 'All Time' },
+              { value: 'today', label: 'Today' },
+              { value: 'yesterday', label: 'Yesterday' },
+              { value: '7d', label: 'Last 7 Days' },
+              { value: '30d', label: 'Last 30 Days' },
+            ]}
+          />
+        </div>
       </UiCard>
 
-      {/* Main Customer History Data Table */}
+      {/* ─── Content Views ────────────────────────────────────────── */}
       {isLoading ? (
-        <LoadingState message="Loading customer session history..." />
+        <LoadingState message="Loading customer history..." />
       ) : error ? (
-        <ErrorState title="Failed to Load Customer History" message={error} onRetry={fetchCustomerHistoryData} />
-      ) : filteredItems.length === 0 ? (
+        <ErrorState title="Error Loading History" message={error} onRetry={fetchCustomerHistoryData} />
+      ) : activeTab === 'sessions' ? (
+        filteredSessions.length === 0 ? (
+          <EmptyState
+            icon={<Wallet className="h-8 w-8 text-slate-400" />}
+            title="No Customer Sessions Found"
+            description="No customer sessions match your current search and filter criteria."
+          />
+        ) : (
+          <DataTable data={filteredSessions} columns={sessionColumns} />
+        )
+      ) : filteredEvents.length === 0 ? (
         <EmptyState
-          title={searchQuery ? 'No Matching Customer Records' : 'No Customer History Yet'}
-          description={
-            searchQuery
-              ? `No customer session matches your search query "${searchQuery}". Try searching by customer name, 10-digit mobile number, or card number.`
-              : 'Customer sessions will be logged here once staff members issue cards at branch counters.'
-          }
-          icon={<History className="h-10 w-10 text-slate-500" />}
-          action={
-            searchQuery ? (
-              <Button variant="outline" size="sm" onClick={() => setSearchQuery('')}>
-                Clear Search Filter
-              </Button>
-            ) : undefined
-          }
+          icon={<ShieldCheck className="h-8 w-8 text-emerald-500" />}
+          title="No Card Status Events"
+          description="No card block or unblock audit records match your query. Card status events are permanently preserved here when staff members perform actions."
         />
       ) : (
-        <DataTable<CustomerHistoryItem>
-          data={filteredItems}
-          columns={columns}
-          keyExtractor={(item) => item.id}
-        />
+        <DataTable data={filteredEvents} columns={eventColumns} />
       )}
 
-      {/* ─── Customer Session Details Modal ─────────────────────────── */}
-      {selectedItem && (
+      {/* ─── Session & Card Inspection Modal ──────────────────────── */}
+      {showDetailModal && selectedItem && (
         <Modal
           isOpen={showDetailModal}
           onClose={() => setShowDetailModal(false)}
-          title={`Customer Session: ${selectedItem.customerName || selectedItem.physicalCardNumber}`}
+          title={`Customer Session — Card ${selectedItem.physicalCardNumber}`}
           size="lg"
         >
-          <div className="space-y-5">
-            {/* Header Hero Card */}
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-600/20 border border-violet-500/30 text-violet-300 font-bold text-base">
-                    {selectedItem.customerName ? selectedItem.customerName.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-base text-slate-100">
-                      {selectedItem.customerName || 'Guest User (Unassigned)'}
-                    </h3>
-                    <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs text-slate-400">
-                      {selectedItem.customerPhone && (
-                        <span className="flex items-center gap-1 text-violet-300 font-mono">
-                          <Phone className="h-3 w-3" />
-                          {selectedItem.customerPhone}
-                        </span>
-                      )}
-                      <span>•</span>
-                      <span className="font-mono text-slate-300">Physical Card: {selectedItem.physicalCardNumber}</span>
-                    </div>
-                  </div>
-                </div>
+          <div className="space-y-4">
+            {/* Customer & Card Summary Banner */}
+            <div className="flex items-center justify-between rounded-xl bg-slate-50 p-4 dark:bg-slate-900">
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase">Customer Profile</p>
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                  {selectedItem.customerName || 'Walk-in Customer'}
+                </h3>
+                {selectedItem.customerPhone && (
+                  <p className="text-xs text-slate-500">{selectedItem.customerPhone}</p>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-xs font-semibold text-slate-500 uppercase">Session Balance</p>
+                <p className="text-xl font-bold font-mono text-emerald-600">
+                  {formatCurrency(selectedItem.balance)}
+                </p>
+                <Badge variant={selectedItem.sessionStatus === 'ACTIVE' ? 'success' : 'neutral'}>
+                  {selectedItem.sessionStatus}
+                </Badge>
+              </div>
+            </div>
 
-                <div className="text-right">
-                  <span className="text-[11px] text-slate-400">
-                    {selectedItem.sessionStatus === 'ACTIVE' ? 'Live Balance' : 'Settled & Refunded'}
-                  </span>
-                  <p className="text-xl font-bold font-mono text-emerald-400">
-                    {formatCurrency(selectedItem.balance)}
+            {/* Modal Detail Tabs */}
+            <div className="flex border-b border-slate-200 dark:border-slate-800 text-sm">
+              <button
+                onClick={() => setDetailTab('overview')}
+                className={`px-4 py-2 font-semibold border-b-2 ${
+                  detailTab === 'overview'
+                    ? 'border-emerald-600 text-emerald-600'
+                    : 'border-transparent text-slate-500'
+                }`}
+              >
+                Overview
+              </button>
+              <button
+                onClick={() => setDetailTab('timeline')}
+                className={`px-4 py-2 font-semibold border-b-2 ${
+                  detailTab === 'timeline'
+                    ? 'border-emerald-600 text-emerald-600'
+                    : 'border-transparent text-slate-500'
+                }`}
+              >
+                Transactions ({sessionTxns.length})
+              </button>
+              <button
+                onClick={() => setDetailTab('card_status')}
+                className={`px-4 py-2 font-semibold border-b-2 ${
+                  detailTab === 'card_status'
+                    ? 'border-rose-600 text-rose-600'
+                    : 'border-transparent text-slate-500'
+                }`}
+              >
+                Card Audit Events ({selectedCardEvents.length})
+              </button>
+            </div>
+
+            {/* Detail Tab Contents */}
+            {detailTab === 'overview' && (
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                  <p className="text-xs text-slate-500">Physical Card</p>
+                  <p className="font-mono font-bold text-slate-900 dark:text-slate-100">
+                    {selectedItem.physicalCardNumber}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                  <p className="text-xs text-slate-500">Branch Location</p>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100">
+                    {selectedItem.branchName}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                  <p className="text-xs text-slate-500">Session Started</p>
+                  <p className="text-slate-900 dark:text-slate-100">
+                    {formatDate(selectedItem.startedAt)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                  <p className="text-xs text-slate-500">Settled At</p>
+                  <p className="text-slate-900 dark:text-slate-100">
+                    {selectedItem.settledAt ? formatDate(selectedItem.settledAt) : 'Still Active'}
                   </p>
                 </div>
               </div>
+            )}
 
-              {/* Internal Cycle & Status Metadata */}
-              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/80 text-xs">
-                {selectedItem.sessionStatus === 'ACTIVE' ? (
-                  <Badge variant="success" className="gap-1.5 text-xs font-semibold">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    ACTIVE SESSION
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-xs text-slate-400 border-slate-700">
-                    SETTLED & REFUNDED
-                  </Badge>
-                )}
-
-                <Badge variant="outline" className="text-xs font-mono text-cyan-300 border-cyan-800/60 bg-cyan-950/40">
-                  Internal Tracking ID: {selectedItem.sessionCardNumber}
-                </Badge>
-
-                <div className="flex items-center gap-1 ml-auto text-slate-400">
-                  <Building2 className="h-3.5 w-3.5 text-slate-500" />
-                  <span>{selectedItem.branchName}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Sub-tabs */}
-            <div className="flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-950 p-1">
-              {[
-                { id: 'overview', label: 'Session Overview', icon: Clock },
-                { id: 'timeline', label: `All Transactions (${sessionTxns.length})`, icon: History },
-                { id: 'purchases', label: `POS Purchases (${purchases.length})`, icon: ShoppingBag },
-                { id: 'recharges', label: `Recharges (${recharges.length})`, icon: ArrowUpRight },
-              ].map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setDetailTab(tab.id as any)}
-                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
-                      detailTab === tab.id
-                        ? 'bg-violet-600/30 text-violet-200 border border-violet-500/40 shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/50'
-                    }`}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    <span>{tab.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Tab Contents */}
-            {isLoadingTxns ? (
-              <LoadingState message="Loading customer transaction records..." />
-            ) : (
-              <>
-                {/* TAB 1: OVERVIEW */}
-                {detailTab === 'overview' && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                      <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
-                        <span className="text-slate-500 text-[11px]">Total Recharges</span>
-                        <p className="text-base font-bold font-mono text-emerald-400 mt-0.5">
-                          {formatCurrency(recharges.reduce((sum, r) => sum + r.amount, 0))}
-                        </p>
-                        <span className="text-[10px] text-slate-500">{recharges.length} top-ups</span>
-                      </div>
-
-                      <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
-                        <span className="text-slate-500 text-[11px]">Total Purchases</span>
-                        <p className="text-base font-bold font-mono text-violet-300 mt-0.5">
-                          {formatCurrency(purchases.reduce((sum, p) => sum + p.amount, 0))}
-                        </p>
-                        <span className="text-[10px] text-slate-500">{purchases.length} transactions</span>
-                      </div>
-
-                      <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
-                        <span className="text-slate-500 text-[11px]">Settlement Refund</span>
-                        <p className="text-base font-bold font-mono text-amber-300 mt-0.5">
-                          {refundTxn ? formatCurrency(refundTxn.amount) : '₹0.00'}
-                        </p>
-                        <span className="text-[10px] text-slate-500">
-                          {selectedItem.sessionStatus === 'SETTLED' ? 'Returned to user' : 'Active session'}
-                        </span>
-                      </div>
-
-                      <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
-                        <span className="text-slate-500 text-[11px]">Session Cycle</span>
-                        <p className="text-base font-bold font-mono text-cyan-300 mt-0.5">
-                          Cycle #{selectedItem.cycleNumber}
-                        </p>
-                        <span className="text-[10px] text-slate-500">{selectedItem.sessionCardNumber}</span>
-                      </div>
-                    </div>
-
-                    {/* Timeline Breakdown */}
-                    <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-2 text-xs">
-                      <h4 className="font-semibold text-slate-300 text-xs">Lifecycle Timestamps & Staff</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-slate-400">
-                        <div>
-                          <span className="text-slate-500">Session Started:</span>
-                          <p className="font-medium text-slate-200">
-                            {formatDate(selectedItem.startedAt)}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Session Settled:</span>
-                          <p className="font-medium text-slate-200">
-                            {selectedItem.settledAt ? formatDate(selectedItem.settledAt) : 'Currently Active'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* TAB 2: ALL TRANSACTIONS */}
-                {detailTab === 'timeline' && (
-                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                    {sessionTxns.length === 0 ? (
-                      <div className="rounded-lg border border-slate-800/80 bg-slate-950 p-6 text-center text-xs text-slate-500">
-                        No transactions recorded for this customer session yet.
-                      </div>
-                    ) : (
-                      sessionTxns.map((t) => {
-                        const isPurchase = t.type === 'PURCHASE';
-                        const isRecharge = t.type === 'RECHARGE' || t.type?.includes('RECHARGE');
-
-                        return (
-                          <div
-                            key={t.id}
-                            className="flex items-center justify-between rounded-lg border border-slate-800/80 bg-slate-950 p-3 text-xs"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div
-                                className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                                  isRecharge
-                                    ? 'bg-emerald-500/10 text-emerald-400'
-                                    : isPurchase
-                                      ? 'bg-violet-500/10 text-violet-400'
-                                      : 'bg-amber-500/10 text-amber-400'
-                                }`}
-                              >
-                                {isRecharge ? (
-                                  <ArrowUpRight className="h-4 w-4" />
-                                ) : isPurchase ? (
-                                  <ShoppingBag className="h-4 w-4" />
-                                ) : (
-                                  <RotateCcw className="h-4 w-4" />
-                                )}
-                              </div>
-
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-slate-200">{t.type}</span>
-                                  <span className="text-[11px] text-slate-400">
-                                    {t.paymentMethod || 'WALLET'}
-                                  </span>
-                                </div>
-                                <p className="text-[11px] text-slate-500">{formatDate(t.createdAt)}</p>
-                              </div>
-                            </div>
-
-                            <div className="text-right font-mono">
-                              <p
-                                className={`font-bold ${
-                                  isRecharge ? 'text-emerald-400' : 'text-slate-200'
-                                }`}
-                              >
-                                {isRecharge ? '+' : '-'}
-                                {formatCurrency(t.amount || 0)}
-                              </p>
-                              <span className="text-[10px] text-slate-500">
-                                Balance: {formatCurrency(t.balanceAfter ?? 0)}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                )}
-
-                {/* TAB 3: POS PURCHASES */}
-                {detailTab === 'purchases' && (
-                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                    {purchases.length === 0 ? (
-                      <div className="rounded-lg border border-slate-800/80 bg-slate-950 p-6 text-center text-xs text-slate-500">
-                        No food or store purchases made during this session.
-                      </div>
-                    ) : (
-                      purchases.map((p) => (
+            {detailTab === 'timeline' && (
+              isLoadingTxns ? (
+                <LoadingState message="Loading transactions..." />
+              ) : sessionTxns.length === 0 ? (
+                <EmptyState
+                  icon={<History className="h-6 w-6 text-slate-400" />}
+                  title="No Transactions"
+                  description="No purchase or recharge activity recorded for this session yet."
+                />
+              ) : (
+                <div className="max-h-72 overflow-y-auto space-y-2">
+                  {sessionTxns.map((tx) => (
+                    <div
+                      key={tx.id}
+                      className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 text-sm"
+                    >
+                      <div className="flex items-center gap-2.5">
                         <div
-                          key={p.id}
-                          className="rounded-lg border border-slate-800/80 bg-slate-950 p-3 text-xs space-y-1.5"
+                          className={`p-2 rounded-lg ${
+                            tx.type === 'PURCHASE'
+                              ? 'bg-rose-50 text-rose-600'
+                              : tx.type === 'RECHARGE'
+                              ? 'bg-emerald-50 text-emerald-600'
+                              : 'bg-amber-50 text-amber-600'
+                          }`}
                         >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <ShoppingBag className="h-3.5 w-3.5 text-violet-400" />
-                              <span className="font-semibold text-slate-200">POS Purchase</span>
-                            </div>
-                            <span className="font-mono font-bold text-violet-300">
-                              {formatCurrency(p.amount || 0)}
-                            </span>
-                          </div>
-
-                          {p.items && p.items.length > 0 && (
-                            <div className="border-t border-slate-900 pt-1 text-[11px] text-slate-400 space-y-0.5">
-                              {p.items.map((it: any, idx: number) => (
-                                <div key={idx} className="flex justify-between">
-                                  <span>{it.itemName || it.productId} × {it.quantity}</span>
-                                  <span className="font-mono">{formatCurrency((it.priceAtSale || it.price || 0) * it.quantity)}</span>
-                                </div>
-                              ))}
-                            </div>
+                          {tx.type === 'PURCHASE' ? (
+                            <ShoppingBag className="h-4 w-4" />
+                          ) : tx.type === 'RECHARGE' ? (
+                            <ArrowUpRight className="h-4 w-4" />
+                          ) : (
+                            <RotateCcw className="h-4 w-4" />
                           )}
-
-                          <div className="flex justify-between text-[10px] text-slate-500 pt-1">
-                            <span>{formatDate(p.createdAt)}</span>
-                            <span>Remaining Balance: {formatCurrency(p.balanceAfter ?? 0)}</span>
-                          </div>
                         </div>
-                      ))
-                    )}
-                  </div>
-                )}
-
-                {/* TAB 4: RECHARGES */}
-                {detailTab === 'recharges' && (
-                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                    {recharges.length === 0 ? (
-                      <div className="rounded-lg border border-slate-800/80 bg-slate-950 p-6 text-center text-xs text-slate-500">
-                        No wallet recharges recorded for this session.
+                        <div>
+                          <p className="font-semibold text-slate-900 dark:text-slate-100">
+                            {tx.type === 'PURCHASE' ? 'POS Purchase' : tx.type === 'RECHARGE' ? 'Wallet Recharge' : 'Settlement Refund'}
+                          </p>
+                          <p className="text-xs text-slate-500">{formatDate(tx.createdAt)}</p>
+                        </div>
                       </div>
-                    ) : (
-                      recharges.map((r) => (
-                        <div
-                          key={r.id}
-                          className="flex items-center justify-between rounded-lg border border-slate-800/80 bg-slate-950 p-3 text-xs"
+                      <div className="text-right">
+                        <p
+                          className={`font-mono font-bold ${
+                            tx.type === 'RECHARGE' ? 'text-emerald-600' : 'text-slate-900 dark:text-slate-100'
+                          }`}
                         >
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <ArrowUpRight className="h-3.5 w-3.5 text-emerald-400" />
-                              <span className="font-semibold text-slate-200">Wallet Top-Up</span>
-                              <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-800/60 bg-emerald-950/20">
-                                {r.paymentMethod || 'CASH'}
-                              </Badge>
-                            </div>
-                            <p className="text-[10px] text-slate-500 mt-0.5">{formatDate(r.createdAt)}</p>
-                          </div>
+                          {tx.type === 'RECHARGE' ? '+' : '-'}{formatCurrency(tx.amount)}
+                        </p>
+                        {tx.balanceAfter !== undefined && (
+                          <p className="text-xs text-slate-400">Bal: {formatCurrency(tx.balanceAfter)}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
 
-                          <div className="text-right font-mono">
-                            <p className="font-bold text-emerald-400">+{formatCurrency(r.amount || 0)}</p>
-                            <span className="text-[10px] text-slate-500">After: {formatCurrency(r.balanceAfter ?? 0)}</span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </>
+            {detailTab === 'card_status' && (
+              selectedCardEvents.length === 0 ? (
+                <EmptyState
+                  icon={<ShieldCheck className="h-6 w-6 text-emerald-500" />}
+                  title="No Status Interventions"
+                  description="This card has not had any manual block/unblock actions performed by staff."
+                />
+              ) : (
+                <div className="max-h-72 overflow-y-auto space-y-2">
+                  {selectedCardEvents.map((e) => (
+                    <div
+                      key={e.id}
+                      className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 text-sm space-y-1"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold ${
+                            e.action === 'CARD_BLOCKED'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-emerald-100 text-emerald-800'
+                          }`}
+                        >
+                          {e.action === 'CARD_BLOCKED' ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+                          {e.action === 'CARD_BLOCKED' ? 'Card Blocked' : 'Card Unblocked'}
+                        </span>
+                        <span className="text-xs text-slate-400">{formatDate(e.createdAt)}</span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        Performed by: <strong>{e.performedByName}</strong>
+                      </p>
+                      {e.reason && (
+                        <p className="text-xs text-slate-500 italic">Reason: {e.reason}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )
             )}
           </div>
 

@@ -410,7 +410,7 @@ export async function purchaseSession(req: Request, res: Response) {
             changeQuantity: -qty,
             balanceAfter: updatedInv.quantity,
             type: 'PURCHASE',
-            reason: `POS Sale (Card #${session.physicalCardNumber || session.id.substring(0, 8)})`,
+            reason: `POS Sale (Card #${session.card?.physicalCardNumber || session.id.substring(0, 8)})`,
             staffName: (req as any).user?.name || 'Cashier Staff',
           });
         }

@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../config/database.js';
 import { sendError, sendSuccess } from '../utils/response.js';
 import { generateQrToken } from '../utils/crypto.js';
-import { CardStatus } from '@prisma/client';
+import { CardStatus, CardHistoryAction } from '@prisma/client';
 import { getEffectiveLimits } from '../utils/limits.js';
 
 export async function getCards(req: Request, res: Response) {
@@ -378,42 +378,119 @@ export async function resolveCard(req: Request, res: Response) {
 
 export async function blockCard(req: Request, res: Response) {
   const { id } = req.params;
+  const { reason = 'Blocked by Staff' } = req.body || {};
   const orgId = req.user?.organizationId;
 
+  if (!orgId) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
+  }
+
   const card = await prisma.card.findFirst({
-    where: { id, organizationId: orgId || undefined },
+    where: { id, organizationId: orgId },
+    include: {
+      sessions: {
+        where: { status: 'ACTIVE' },
+        take: 1,
+        include: { branch: true },
+      },
+    },
   });
 
   if (!card) {
-    return sendError(res, 404, 'NOT_FOUND', 'Card not found');
+    return sendError(res, 404, 'NOT_FOUND', 'Card not found in your organization');
   }
 
-  const updated = await prisma.card.update({
-    where: { id },
-    data: { status: CardStatus.BLOCKED },
+  const activeSession = card.sessions[0] || null;
+  const previousStatus = card.status;
+
+  // Execute atomic transaction: update card status & create audit CustomerHistoryEvent
+  const result = await prisma.$transaction(async (tx) => {
+    const updatedCard = await tx.card.update({
+      where: { id: card.id },
+      data: { status: CardStatus.BLOCKED },
+    });
+
+    const historyEvent = await tx.customerHistoryEvent.create({
+      data: {
+        organizationId: orgId,
+        cardId: card.id,
+        sessionId: activeSession?.id || null,
+        customerName: activeSession?.customerName || null,
+        customerPhone: activeSession?.customerPhone || null,
+        physicalCardNumber: card.physicalCardNumber,
+        action: CardHistoryAction.CARD_BLOCKED,
+        previousStatus: previousStatus,
+        newStatus: CardStatus.BLOCKED,
+        performedByUserId: req.user?.id || null,
+        performedByName: req.user?.name || req.user?.email || 'Staff',
+        branchId: activeSession?.branchId || req.user?.assignedBranchIds?.[0] || null,
+        branchName: activeSession?.branch?.name || 'Main Cafeteria',
+        reason: String(reason).trim(),
+      },
+    });
+
+    return { card: updatedCard, historyEvent };
   });
 
-  return sendSuccess(res, updated);
+  return sendSuccess(res, result.card);
 }
 
 export async function unblockCard(req: Request, res: Response) {
   const { id } = req.params;
+  const { reason = 'Unblocked by Staff' } = req.body || {};
   const orgId = req.user?.organizationId;
 
+  if (!orgId) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
+  }
+
   const card = await prisma.card.findFirst({
-    where: { id, organizationId: orgId || undefined },
-    include: { sessions: { where: { status: 'ACTIVE' } } },
+    where: { id, organizationId: orgId },
+    include: {
+      sessions: {
+        where: { status: 'ACTIVE' },
+        take: 1,
+        include: { branch: true },
+      },
+    },
   });
 
   if (!card) {
-    return sendError(res, 404, 'NOT_FOUND', 'Card not found');
+    return sendError(res, 404, 'NOT_FOUND', 'Card not found in your organization');
   }
 
-  const hasActiveSession = card.sessions.length > 0;
-  const updated = await prisma.card.update({
-    where: { id },
-    data: { status: hasActiveSession ? CardStatus.ACTIVE : CardStatus.AVAILABLE },
+  const activeSession = card.sessions[0] || null;
+  const previousStatus = card.status;
+  const newStatus = activeSession ? CardStatus.ACTIVE : CardStatus.AVAILABLE;
+
+  // Execute atomic transaction: update card status & create new CARD_UNBLOCKED audit event (preserving previous events)
+  const result = await prisma.$transaction(async (tx) => {
+    const updatedCard = await tx.card.update({
+      where: { id: card.id },
+      data: { status: newStatus },
+    });
+
+    const historyEvent = await tx.customerHistoryEvent.create({
+      data: {
+        organizationId: orgId,
+        cardId: card.id,
+        sessionId: activeSession?.id || null,
+        customerName: activeSession?.customerName || null,
+        customerPhone: activeSession?.customerPhone || null,
+        physicalCardNumber: card.physicalCardNumber,
+        action: CardHistoryAction.CARD_UNBLOCKED,
+        previousStatus: previousStatus,
+        newStatus: newStatus,
+        performedByUserId: req.user?.id || null,
+        performedByName: req.user?.name || req.user?.email || 'Staff',
+        branchId: activeSession?.branchId || req.user?.assignedBranchIds?.[0] || null,
+        branchName: activeSession?.branch?.name || 'Main Cafeteria',
+        reason: String(reason).trim(),
+      },
+    });
+
+    return { card: updatedCard, historyEvent };
   });
 
-  return sendSuccess(res, updated);
+  return sendSuccess(res, result.card);
 }

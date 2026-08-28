@@ -250,7 +250,7 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
         itemBuilder: (context, index) {
         final session = sessions[index];
         final isActive = session.status == SessionStatus.active;
-        final cardIdentifier = session.physicalCardNumber ?? session.cardId;
+        final cardIdentifier = session.displayCardNumber;
 
         return AppCard(
           padding: AppSpacing.paddingMd,

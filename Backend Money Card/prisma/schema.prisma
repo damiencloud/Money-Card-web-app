@@ -93,6 +93,13 @@ enum PlanRequestStatus {
   REJECTED
 }
 
+enum CardHistoryAction {
+  CARD_BLOCKED
+  CARD_UNBLOCKED
+  CARD_ISSUED
+  CARD_RETURNED
+}
+
 enum ProductStatus {
   ACTIVE
   INACTIVE
@@ -185,6 +192,7 @@ model Organization {
   subscription         Subscription?
   subscriptionPayments SubscriptionPayment[]
   planChangeRequests   PlanChangeRequest[]
+  customerHistoryEvents CustomerHistoryEvent[]
 
   @@map("organizations")
 }
@@ -317,6 +325,7 @@ model Card {
 
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sessions     CardSession[]
+  historyEvents CustomerHistoryEvent[]
 
   @@unique([organizationId, physicalCardNumber])
   @@map("cards")
@@ -402,4 +411,31 @@ model BranchInventory {
 
   @@unique([branchId, productId])
   @@map("branch_inventory")
+}
+
+
+model CustomerHistoryEvent {
+  id                 String            @id @default(uuid())
+  organizationId     String
+  cardId             String
+  sessionId          String?
+  customerName       String?
+  customerPhone      String?
+  physicalCardNumber String
+  action             CardHistoryAction
+  previousStatus     CardStatus
+  newStatus          CardStatus
+  performedByUserId  String?
+  performedByName    String?
+  branchId           String?
+  branchName         String?
+  reason             String?
+  createdAt          DateTime          @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  card         Card         @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, cardId])
+  @@index([organizationId, createdAt])
+  @@map("customer_history_events")
 }

@@ -9,8 +9,12 @@ enum TransactionType {
 
   static TransactionType fromString(String? val) {
     if (val == null) return TransactionType.purchase;
+    final upper = val.toUpperCase();
+    if (upper.contains('RECHARGE')) return TransactionType.recharge;
+    if (upper.contains('PURCHASE')) return TransactionType.purchase;
+    if (upper.contains('REFUND') || upper.contains('SETTLEMENT')) return TransactionType.refund;
     for (final type in TransactionType.values) {
-      if (type.value == val) return type;
+      if (type.value == upper) return type;
     }
     return TransactionType.purchase;
   }
@@ -28,8 +32,9 @@ enum TransactionStatus {
 
   static TransactionStatus fromString(String? val) {
     if (val == null) return TransactionStatus.pending;
+    final upper = val.toUpperCase();
     for (final status in TransactionStatus.values) {
-      if (status.value == val) return status;
+      if (status.value == upper) return status;
     }
     return TransactionStatus.pending;
   }
@@ -37,7 +42,8 @@ enum TransactionStatus {
 
 enum PaymentMethod {
   cash('CASH'),
-  upi('UPI');
+  upi('UPI'),
+  cardBalance('CARD_BALANCE');
 
   const PaymentMethod(this.value);
 
@@ -45,8 +51,12 @@ enum PaymentMethod {
 
   static PaymentMethod fromString(String? val) {
     if (val == null) return PaymentMethod.cash;
+    final upper = val.toUpperCase();
+    if (upper == 'UPI') return PaymentMethod.upi;
+    if (upper == 'CASH') return PaymentMethod.cash;
+    if (upper.contains('CARD') || upper.contains('BALANCE')) return PaymentMethod.cardBalance;
     for (final method in PaymentMethod.values) {
-      if (method.value == val) return method;
+      if (method.value == upper) return method;
     }
     return PaymentMethod.cash;
   }
@@ -92,11 +102,14 @@ class Transaction {
   final String branchId;
   final TransactionType type;
   final double amount;
+  final double? balanceBefore;
   final double? balanceAfter;
   final TransactionStatus status;
   final List<PurchaseItem>? items;
   final PaymentMethod? paymentMethod;
   final String? externalReference;
+  final String? staffName;
+  final String? branchName;
   final String? createdAt;
 
   const Transaction({
@@ -105,11 +118,14 @@ class Transaction {
     required this.branchId,
     required this.type,
     required this.amount,
+    this.balanceBefore,
     this.balanceAfter,
     required this.status,
     this.items,
     this.paymentMethod,
     this.externalReference,
+    this.staffName,
+    this.branchName,
     this.createdAt,
   });
 
@@ -120,6 +136,7 @@ class Transaction {
       branchId: json['branchId'] as String? ?? '',
       type: TransactionType.fromString(json['type'] as String?),
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+      balanceBefore: (json['balanceBefore'] as num?)?.toDouble(),
       balanceAfter: (json['balanceAfter'] as num?)?.toDouble(),
       status: TransactionStatus.fromString(json['status'] as String?),
       items: (json['items'] as List<dynamic>?)
@@ -129,6 +146,8 @@ class Transaction {
           ? PaymentMethod.fromString(json['paymentMethod'] as String?)
           : null,
       externalReference: json['externalReference'] as String?,
+      staffName: json['staffName'] as String?,
+      branchName: json['branchName'] as String?,
       createdAt: json['createdAt'] as String?,
     );
   }
@@ -139,11 +158,14 @@ class Transaction {
         'branchId': branchId,
         'type': type.value,
         'amount': amount,
+        if (balanceBefore != null) 'balanceBefore': balanceBefore,
         if (balanceAfter != null) 'balanceAfter': balanceAfter,
         'status': status.value,
         if (items != null) 'items': items!.map((i) => i.toJson()).toList(),
         if (paymentMethod != null) 'paymentMethod': paymentMethod!.value,
         if (externalReference != null) 'externalReference': externalReference,
+        if (staffName != null) 'staffName': staffName,
+        if (branchName != null) 'branchName': branchName,
         if (createdAt != null) 'createdAt': createdAt,
       };
 }

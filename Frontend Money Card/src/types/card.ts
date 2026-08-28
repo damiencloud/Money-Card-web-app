@@ -170,3 +170,24 @@ export interface ImportCardsResponseData {
   importedCount: number;
   cards: Card[];
 }
+
+
+export type CardHistoryAction = 'CARD_BLOCKED' | 'CARD_UNBLOCKED' | 'CARD_ISSUED' | 'CARD_RETURNED';
+
+export interface CustomerHistoryEvent {
+  id: string;
+  cardId: string;
+  sessionId?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  physicalCardNumber: string;
+  action: CardHistoryAction;
+  previousStatus: CardStatus;
+  newStatus: CardStatus;
+  performedByName?: string | null;
+  performedByUserId?: string | null;
+  branchId?: string | null;
+  branchName?: string | null;
+  reason?: string | null;
+  createdAt: string;
+}
