@@ -9,8 +9,8 @@ enum ApiMode {
   bool get isReal => this == ApiMode.real;
 
   static ApiMode fromString(String val) {
-    if (val.toLowerCase() == 'real') return ApiMode.real;
-    return ApiMode.mock;
+    if (val.toLowerCase() == 'mock') return ApiMode.mock;
+    return ApiMode.real;
   }
 }
 
@@ -20,16 +20,17 @@ class AppConfig {
   static const String appName = 'Money Card Staff';
   static const String appVersion = '1.0.0';
 
-  /// Default API base URL (conforming to M0 V10 /api/v1)
-  static const String defaultBaseUrl = 'http://localhost:3000/api/v1';
+  /// Primary USB Reverse endpoint (Fastest, zero-latency via adb reverse)
+  static const String defaultBaseUrl = 'http://127.0.0.1:3000/api/v1';
 
-  /// Active API Mode: 'mock' (default for M13-M17) or 'real' (M18+)
-  static ApiMode apiMode = ApiMode.fromString(
-    const String.fromEnvironment('API_MODE', defaultValue: 'real'),
-  );
+  /// Alternate Wi-Fi LAN endpoint
+  static const String alternateBaseUrl = 'http://192.168.105.39:3000/api/v1';
+
+  /// Active API Mode: Strictly REAL LIVE SERVER
+  static ApiMode apiMode = ApiMode.real;
 
   /// Helper flag for backward compatibility
-  static bool get useMockApi => apiMode.isMock;
+  static bool get useMockApi => false;
 
   /// Network timeouts
   static const Duration connectTimeout = Duration(seconds: 15);

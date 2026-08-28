@@ -4,14 +4,17 @@ import { cn } from '@/utils';
 // Table Foundation (Mobile-Responsive Container)
 // ==========================================
 
-interface Column<T> {
-  key: string;
+export interface Column<T> {
+  key?: string;
+  accessorKey?: string;
+  id?: string;
   header: string;
   render?: (item: T) => React.ReactNode;
+  cell?: (info: { row: { original: T } }) => React.ReactNode;
   className?: string;
 }
 
-interface DataTableProps<T> {
+export interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
   keyExtractor?: (item: T) => string;
@@ -45,17 +48,20 @@ export function DataTable<T>({
       <table className="w-full text-left border-collapse min-w-[580px] sm:min-w-full">
         <thead>
           <tr className="border-b border-slate-800 bg-slate-900/40">
-            {columns.map((col) => (
-              <th
-                key={col.key}
-                className={cn(
-                  'px-3 sm:px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 select-none whitespace-nowrap',
-                  col.className,
-                )}
-              >
-                {col.header}
-              </th>
-            ))}
+            {columns.map((col, idx) => {
+              const colKey = col.key || col.accessorKey || col.id || `col_${idx}`;
+              return (
+                <th
+                  key={colKey}
+                  className={cn(
+                    'px-3 sm:px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 select-none whitespace-nowrap',
+                    col.className,
+                  )}
+                >
+                  {col.header}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800/50">
@@ -70,16 +76,27 @@ export function DataTable<T>({
                   : 'hover:bg-slate-800/20',
               )}
             >
-              {columns.map((col) => (
-                <td
-                  key={col.key}
-                  className={cn('px-3 sm:px-4 py-3.5 text-xs sm:text-sm text-slate-300', col.className)}
-                >
-                  {col.render
-                    ? col.render(item)
-                    : String((item as Record<string, unknown>)[col.key] ?? '')}
-                </td>
-              ))}
+              {columns.map((col, idx) => {
+                const colKey = col.key || col.accessorKey || col.id || `col_${idx}`;
+                let renderedContent: React.ReactNode = null;
+                if (col.render) {
+                  renderedContent = col.render(item);
+                } else if (col.cell) {
+                  renderedContent = col.cell({ row: { original: item } });
+                } else if (col.key || col.accessorKey) {
+                  const propertyKey = (col.key || col.accessorKey) as keyof T;
+                  renderedContent = String((item as Record<string, unknown>)[propertyKey as string] ?? '');
+                }
+
+                return (
+                  <td
+                    key={colKey}
+                    className={cn('px-3 sm:px-4 py-3.5 text-xs sm:text-sm text-slate-300', col.className)}
+                  >
+                    {renderedContent}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>

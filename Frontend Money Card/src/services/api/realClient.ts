@@ -18,6 +18,11 @@ import type {
   ResolveQrResponseData,
   ImportCardsRequest,
   ImportCardsResponseData,
+  ImportQrCodesRequest,
+  ImportQrCodesResponseData,
+  AssignCardNumberRequest,
+  BulkAssignCardNumbersRequest,
+  BulkAssignCardNumbersResponseData,
   Staff,
   CreateStaffRequest,
   UpdateStaffRequest,
@@ -332,15 +337,28 @@ export const realClient: typeof mockClient = {
     async importCards(req: ImportCardsRequest): Promise<ApiResult<ImportCardsResponseData>> {
       return handleApiCall(() => apiClient.post<ImportCardsResponseData>('/v1/cards/batch', req));
     },
+
+    async importQrCodes(req: ImportQrCodesRequest): Promise<ApiResult<ImportQrCodesResponseData>> {
+      return handleApiCall(() => apiClient.post<ImportQrCodesResponseData>('/v1/cards/import-qr', req));
+    },
+
+    async assignCardNumber(id: string, req: AssignCardNumberRequest): Promise<ApiResult<Card>> {
+      return handleApiCall(() => apiClient.post<Card>(`/v1/cards/${id}/assign-number`, req));
+    },
+
+    async bulkAssignCardNumbers(req: BulkAssignCardNumbersRequest): Promise<ApiResult<BulkAssignCardNumbersResponseData>> {
+      return handleApiCall(() => apiClient.post<BulkAssignCardNumbersResponseData>('/v1/cards/bulk-assign', req));
+    },
   },
 
   sessions: {
     async getSessions(params?: any): Promise<ApiResult<PaginatedData<any>>> {
       const res = await handleApiCall<any>(() => apiClient.get('/v1/card-sessions', { params }));
-      if (res.success && Array.isArray(res.data)) {
+      if (res.success) {
+        const items = Array.isArray(res.data) ? res.data : (res.data?.items || []);
         return {
           success: true,
-          data: toPaginated(res.data, params?.page || 1, params?.limit || 50),
+          data: toPaginated(items, params?.page || 1, params?.limit || 50, res.data?.total || items.length),
         };
       }
       return res;

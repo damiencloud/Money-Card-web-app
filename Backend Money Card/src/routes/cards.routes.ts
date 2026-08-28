@@ -4,6 +4,9 @@ import {
   getCards,
   createCard,
   createCardBatch,
+  importQrCodes,
+  assignCardNumber,
+  bulkAssignCardNumbers,
   getCardById,
   resolveCard,
   blockCard,
@@ -18,7 +21,11 @@ cardsRouter.use(requireAuth);
 cardsRouter.get('/', requirePermission(PermissionCode.CARD_VIEW), getCards);
 cardsRouter.post('/', requirePermission(PermissionCode.CARD_ISSUE), createCard);
 cardsRouter.post('/resolve', requirePermission(PermissionCode.CARD_VIEW), resolveCard);
-cardsRouter.post('/batch', requirePermission(PermissionCode.CARD_ISSUE), createCardBatch);
+cardsRouter.post('/import-qr', requirePermission(PermissionCode.CARD_ISSUE), importQrCodes);
+cardsRouter.post('/batch', requirePermission(PermissionCode.CARD_ISSUE), importQrCodes);
+cardsRouter.post('/bulk-assign', requirePermission(PermissionCode.CARD_ISSUE), bulkAssignCardNumbers);
+cardsRouter.post('/:id/assign-number', requirePermission(PermissionCode.CARD_ISSUE), assignCardNumber);
+cardsRouter.patch('/:id/assign', requirePermission(PermissionCode.CARD_ISSUE), assignCardNumber);
 cardsRouter.get('/history', requirePermission(PermissionCode.CARD_VIEW), listCustomerHistoryEvents);
 cardsRouter.get('/:id', requirePermission(PermissionCode.CARD_VIEW), getCardById);
 cardsRouter.post('/:id/block', requirePermission(PermissionCode.CARD_BLOCK), blockCard);

@@ -1,95 +1,115 @@
 import { describe, it, expect } from 'vitest';
-import type { CustomerHistoryEvent } from '@/types';
+import { CustomerHistoryItem, CustomerHistoryEvent } from '../types';
 
-describe('Customer History & Card Status Synchronization Unit Tests', () => {
+describe('Customer History Sync & Table Rendering', () => {
+  const sampleSessions: CustomerHistoryItem[] = [
+    {
+      id: 'sess-1',
+      cardId: 'card-1',
+      physicalCardNumber: 'MC 105',
+      sessionCardNumber: 'MC 105_1',
+      cycleNumber: 1,
+      customerName: 'John Doe',
+      customerPhone: '9876501234',
+      session: {} as any,
+      sessionStatus: 'ACTIVE',
+      balance: 450,
+      branchId: 'branch_001',
+      branchName: 'Main Cafeteria',
+      startedAt: '2026-08-28T08:00:00Z',
+      settledAt: null,
+      lastActivityAt: '2026-08-28T08:00:00Z',
+    },
+    {
+      id: 'sess-2',
+      cardId: 'card-2',
+      physicalCardNumber: 'MC-001',
+      sessionCardNumber: 'MC-001_1',
+      cycleNumber: 1,
+      customerName: 'Alex Morgan',
+      customerPhone: '9876543210',
+      session: {} as any,
+      sessionStatus: 'ACTIVE',
+      balance: 600,
+      branchId: 'branch_001',
+      branchName: 'Main Cafeteria',
+      startedAt: '2026-08-28T08:30:00Z',
+      settledAt: null,
+      lastActivityAt: '2026-08-28T08:30:00Z',
+    },
+  ];
+
   const sampleEvents: CustomerHistoryEvent[] = [
     {
-      id: 'evt_1',
-      cardId: 'card_105',
+      id: 'evt-1',
+      cardId: 'card-1',
       customerName: 'John Doe',
-      customerPhone: '9876543210',
+      customerPhone: '9876501234',
       physicalCardNumber: 'MC 105',
       action: 'CARD_BLOCKED',
       previousStatus: 'ACTIVE',
       newStatus: 'BLOCKED',
-      performedByName: 'Alex Staff',
+      performedByName: 'Rahul Counter Staff',
       branchName: 'Main Cafeteria',
       reason: 'Reported lost by customer',
-      createdAt: '2026-08-28T11:30:00.000Z',
+      createdAt: '2026-08-28T09:00:00Z',
     },
     {
-      id: 'evt_2',
-      cardId: 'card_105',
+      id: 'evt-2',
+      cardId: 'card-1',
       customerName: 'John Doe',
-      customerPhone: '9876543210',
+      customerPhone: '9876501234',
       physicalCardNumber: 'MC 105',
       action: 'CARD_UNBLOCKED',
       previousStatus: 'BLOCKED',
       newStatus: 'ACTIVE',
-      performedByName: 'Alex Staff',
+      performedByName: 'Acme General Manager',
       branchName: 'Main Cafeteria',
-      reason: 'Card found by customer',
-      createdAt: '2026-08-28T12:15:00.000Z',
-    },
-    {
-      id: 'evt_3',
-      cardId: 'card_201',
-      customerName: 'Sarah Smith',
-      customerPhone: '9123456780',
-      physicalCardNumber: 'MC 201',
-      action: 'CARD_BLOCKED',
-      previousStatus: 'ACTIVE',
-      newStatus: 'BLOCKED',
-      performedByName: 'Maria Cashier',
-      branchName: 'Branch 2',
-      reason: 'Suspicious multiple recharges',
-      createdAt: '2026-08-28T13:00:00.000Z',
+      reason: 'Found card and verified identity',
+      createdAt: '2026-08-28T10:00:00Z',
     },
   ];
 
-  it('1. Correctly formats and identifies CARD_BLOCKED and CARD_UNBLOCKED events', () => {
-    const blockEvents = sampleEvents.filter((e) => e.action === 'CARD_BLOCKED');
-    const unblockEvents = sampleEvents.filter((e) => e.action === 'CARD_UNBLOCKED');
-
-    expect(blockEvents).toHaveLength(2);
-    expect(unblockEvents).toHaveLength(1);
-    expect(blockEvents[0].physicalCardNumber).toBe('MC 105');
-    expect(blockEvents[0].newStatus).toBe('BLOCKED');
+  it('filters sessions by search query across customer name and card number', () => {
+    const q = 'MC 105'.toLowerCase();
+    const matches = sampleSessions.filter((s) =>
+      s.physicalCardNumber.toLowerCase().includes(q) ||
+      (s.customerName?.toLowerCase().includes(q) ?? false)
+    );
+    expect(matches).toHaveLength(1);
+    expect(matches[0].customerName).toBe('John Doe');
   });
 
-  it('2. Multi-criteria search by customer name, phone, card number, and staff', () => {
-    // Search "John"
-    const searchJohn = sampleEvents.filter((e) =>
-      e.customerName?.toLowerCase().includes('john'),
-    );
-    expect(searchJohn).toHaveLength(2);
+  it('filters audit events by action type', () => {
+    const blockedEvents = sampleEvents.filter((e) => e.action === 'CARD_BLOCKED');
+    expect(blockedEvents).toHaveLength(1);
+    expect(blockedEvents[0].reason).toBe('Reported lost by customer');
 
-    // Search "MC 105"
-    const searchCard = sampleEvents.filter((e) =>
-      e.physicalCardNumber.toLowerCase().includes('mc 105'),
-    );
-    expect(searchCard).toHaveLength(2);
-
-    // Search "Maria"
-    const searchStaff = sampleEvents.filter((e) =>
-      e.performedByName?.toLowerCase().includes('maria'),
-    );
-    expect(searchStaff).toHaveLength(1);
-    expect(searchStaff[0].physicalCardNumber).toBe('MC 201');
+    const unblockedEvents = sampleEvents.filter((e) => e.action === 'CARD_UNBLOCKED');
+    expect(unblockedEvents).toHaveLength(1);
+    expect(unblockedEvents[0].reason).toBe('Found card and verified identity');
   });
 
-  it('3. Preserves immutable audit trail history without deleting previous events', () => {
-    const card105Events = sampleEvents.filter((e) => e.cardId === 'card_105');
-    expect(card105Events).toHaveLength(2);
+  it('correctly calculates total floating balance and active count from sessions', () => {
+    const activeSessions = sampleSessions.filter((s) => s.sessionStatus === 'ACTIVE');
+    const totalBalance = activeSessions.reduce((sum, s) => sum + s.balance, 0);
+    expect(activeSessions).toHaveLength(2);
+    expect(totalBalance).toBe(1050);
+  });
 
-    // First event is CARD_BLOCKED
-    expect(card105Events[0].action).toBe('CARD_BLOCKED');
-    expect(card105Events[0].previousStatus).toBe('ACTIVE');
-    expect(card105Events[0].newStatus).toBe('BLOCKED');
+  it('extracts array data safely from both raw array and paginated response objects', () => {
+    const extractArray = <T,>(data: any): T[] => {
+      if (!data) return [];
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data.items)) return data.items;
+      return [];
+    };
 
-    // Second event is CARD_UNBLOCKED
-    expect(card105Events[1].action).toBe('CARD_UNBLOCKED');
-    expect(card105Events[1].previousStatus).toBe('BLOCKED');
-    expect(card105Events[1].newStatus).toBe('ACTIVE');
+    const rawArrayData = [{ id: '1' }, { id: '2' }];
+    const paginatedObj = { items: [{ id: '3' }], pagination: { total: 1 } };
+
+    expect(extractArray(rawArrayData)).toHaveLength(2);
+    expect(extractArray(paginatedObj)).toHaveLength(1);
+    expect(extractArray(null)).toHaveLength(0);
   });
 });

@@ -3,14 +3,27 @@
 // QR contains ONLY the HTTPS URL with opaque token — NO DB UUID, balance, secrets, or numbers.
 
 export type CardStatus = 'AVAILABLE' | 'ACTIVE' | 'BLOCKED';
+export type CardAssignmentStatus = 'UNASSIGNED' | 'ASSIGNED';
 
 export interface Card {
   id: string;
   organizationId: string;
   qrToken: string;
-  physicalCardNumber: string;
+  physicalCardNumber?: string | null;
+  assignmentStatus?: CardAssignmentStatus;
   status: CardStatus;
   currentBranchId?: string | null;
+  activeSession?: {
+    id: string;
+    balance: number;
+    branchId: string;
+    branchName?: string;
+    sessionCardNumber?: string;
+    cycleNumber?: number;
+    customerName?: string | null;
+    customerPhone?: string | null;
+    issuedAt?: string;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -190,4 +203,54 @@ export interface CustomerHistoryEvent {
   branchName?: string | null;
   reason?: string | null;
   createdAt: string;
+}
+
+
+// ─── External Bulk QR Import & Assignment Types ────────────────────
+export interface QrImportEntry {
+  rowNumber: number;
+  qrCode: string;
+  cardNumber?: string;
+  status: 'VALID' | 'DUPLICATE_IN_FILE' | 'ALREADY_REGISTERED' | 'OVER_LIMIT' | 'INVALID_FORMAT';
+  errorMessage?: string;
+}
+
+export interface QrImportPreview {
+  totalRows: number;
+  validCount: number;
+  duplicateCount: number;
+  registeredCount: number;
+  errorCount: number;
+  entries: QrImportEntry[];
+  exceedsPlanLimit: boolean;
+  effectiveLimit: number;
+  currentCount: number;
+}
+
+export interface ImportQrCodesRequest {
+  qrCodes?: string[];
+  mappings?: { qrCode: string; cardNumber?: string }[];
+  cards?: { qrCode?: string; cardNumber?: string }[];
+  cardNumbers?: string[];
+  branchId?: string;
+}
+
+export interface ImportQrCodesResponseData {
+  importedCount: number;
+  unassignedCount: number;
+  assignedCount: number;
+  cards: Card[];
+}
+
+export interface AssignCardNumberRequest {
+  cardNumber: string;
+}
+
+export interface BulkAssignCardNumbersRequest {
+  assignments: { qrCode?: string; cardId?: string; cardNumber: string }[];
+}
+
+export interface BulkAssignCardNumbersResponseData {
+  assignedCount: number;
+  cards: Card[];
 }

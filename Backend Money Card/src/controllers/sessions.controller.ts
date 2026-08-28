@@ -118,6 +118,10 @@ export async function createSession(req: Request, res: Response) {
     return sendError(res, 404, 'NOT_FOUND', 'Card not found');
   }
 
+  if ((card as any).assignmentStatus === 'UNASSIGNED' || !card.physicalCardNumber) {
+    return sendError(res, 400, 'CARD_NOT_ASSIGNED', 'Card is not assigned yet. Please assign an organization card number in Org Admin portal before starting a session.');
+  }
+
   if (card.status === CardStatus.BLOCKED) {
     return sendError(res, 400, 'CARD_BLOCKED', 'Card is blocked and cannot be issued');
   }
@@ -254,6 +258,24 @@ export async function getActiveSessionByQr(req: Request, res: Response) {
     return sendError(res, 404, 'NOT_FOUND', 'Card not found with this QR code');
   }
 
+  if ((card as any).assignmentStatus === 'UNASSIGNED' || !card.physicalCardNumber) {
+    return sendError(
+      res,
+      400,
+      'CARD_NOT_ASSIGNED',
+      'Card is not assigned yet. Please assign an organization card number in Org Admin portal before use.',
+    );
+  }
+
+  if (card.status === CardStatus.BLOCKED) {
+    return sendError(
+      res,
+      403,
+      'CARD_BLOCKED',
+      `Card ${card.physicalCardNumber} is blocked and cannot be used for any cafeteria transactions.`,
+    );
+  }
+
   const activeSession = card.sessions[0] || null;
 
   return sendSuccess(res, {
@@ -261,6 +283,7 @@ export async function getActiveSessionByQr(req: Request, res: Response) {
       id: card.id,
       physicalCardNumber: card.physicalCardNumber,
       qrToken: card.qrToken,
+      assignmentStatus: (card as any).assignmentStatus,
       status: card.status,
     },
     activeSession,

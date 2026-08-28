@@ -66,9 +66,11 @@ export function CardContent({ children, className }: CardContentProps) {
 
 // ─── Stat Card ─────────────────────────────────────────────
 
-interface StatCardProps {
-  label: string;
+export interface StatCardProps {
+  label?: string;
+  title?: string;
   value: string | number;
+  description?: string;
   icon?: ReactNode;
   trend?: {
     value: number;
@@ -77,21 +79,33 @@ interface StatCardProps {
   className?: string;
 }
 
-export function StatCard({ label, value, icon, trend, className }: StatCardProps) {
+export function StatCard({ label, title, value, description, icon, trend, className }: StatCardProps) {
+  const headline = label || title || '';
   return (
-    <Card className={cn('flex items-start gap-4', className)}>
+    <Card className={cn('flex items-start gap-4 p-4 sm:p-5 transition-all hover:border-slate-700', className)}>
       {icon && (
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500/20 to-indigo-500/20 text-violet-400">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700/60 shadow-inner">
           {icon}
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <p className="text-xs sm:text-sm font-medium text-slate-400 truncate">{label}</p>
-        <p className="mt-1 text-xl sm:text-2xl font-bold text-slate-100 truncate">{value}</p>
+        {headline && (
+          <p className="text-xs sm:text-sm font-medium text-slate-400 leading-snug">
+            {headline}
+          </p>
+        )}
+        <p className="mt-1.5 text-2xl sm:text-3xl font-extrabold text-slate-100 tracking-tight">
+          {value}
+        </p>
+        {description && (
+          <p className="mt-1 text-xs text-slate-400/90 leading-normal">
+            {description}
+          </p>
+        )}
         {trend && (
           <p
             className={cn(
-              'mt-1 text-xs font-medium',
+              'mt-1.5 text-xs font-semibold',
               trend.isPositive ? 'text-emerald-400' : 'text-rose-400',
             )}
           >

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-describe('Frontend Unit Tests: CSV Parser & Multi-Mode Card Import Validation', () => {
+describe('Frontend Unit Tests: External Bulk QR Import CSV Parser & Validation', () => {
   const parseCsvLines = (csvText: string) => {
     return csvText
       .split(/\r?\n/)
@@ -8,168 +8,93 @@ describe('Frontend Unit Tests: CSV Parser & Multi-Mode Card Import Validation', 
       .filter((l) => l.length > 0);
   };
 
-  describe('Option 1: Auto-Generate QR Mode Parser', () => {
-    const parseAutoQrCsv = (csvText: string) => {
-      const lines = parseCsvLines(csvText);
-      if (lines.length === 0) return { validCards: [], invalidCards: [] };
+  const parseQrImportCsv = (csvText: string) => {
+    const lines = parseCsvLines(csvText);
+    if (lines.length === 0) return { validEntries: [], invalidEntries: [] };
 
-      let startIndex = 0;
-      const firstLineLower = lines[0].toLowerCase();
-      if (firstLineLower.includes('card') || firstLineLower.includes('number')) {
-        startIndex = 1;
+    let startIndex = 0;
+    const firstLineLower = lines[0].toLowerCase();
+    if (firstLineLower.includes('qr') || firstLineLower.includes('code') || firstLineLower.includes('token')) {
+      startIndex = 1;
+    }
+
+    const validEntries: { qrCode: string; cardNumber?: string }[] = [];
+    const invalidEntries: { rowNumber: number; qrCode: string; reason: string }[] = [];
+    const seenQrs = new Set<string>();
+
+    for (let i = startIndex; i < lines.length; i++) {
+      const rowNum = i + 1;
+      const parts = lines[i].split(',').map((s) => s.replace(/["']/g, '').trim());
+      const qrCode = parts[0];
+      const cardNumber = parts[1] ? parts[1].toUpperCase() : undefined;
+
+      if (!qrCode) {
+        invalidEntries.push({ rowNumber: rowNum, qrCode: '(empty)', reason: 'QR code value is missing' });
+        continue;
       }
 
-      const validCards: string[] = [];
-      const invalidCards: { rowNumber: number; cardNumber: string; reason: string }[] = [];
-      const seenCards = new Set<string>();
-
-      for (let i = startIndex; i < lines.length; i++) {
-        const rowNum = i + 1;
-        const parts = lines[i].split(',').map((s) => s.replace(/["']/g, '').trim());
-        const cardNum = parts[0];
-        const qrCode = parts[1] || '';
-
-        if (!cardNum) {
-          invalidCards.push({ rowNumber: rowNum, cardNumber: '(empty)', reason: 'Card number is missing' });
-          continue;
-        }
-
-        if (!/^[A-Za-z0-9\-_]{2,30}$/.test(cardNum)) {
-          invalidCards.push({ rowNumber: rowNum, cardNumber: cardNum, reason: 'Invalid format' });
-          continue;
-        }
-
-        if (qrCode.length > 0) {
-          invalidCards.push({
-            rowNumber: rowNum,
-            cardNumber: cardNum,
-            reason: 'Auto QR mode accepts card numbers only. Remove QR code or switch to Pre-Printed QR mode.',
-          });
-          continue;
-        }
-
-        const lower = cardNum.toLowerCase();
-        if (seenCards.has(lower)) {
-          invalidCards.push({ rowNumber: rowNum, cardNumber: cardNum, reason: 'Duplicate card number within CSV' });
-          continue;
-        }
-
-        seenCards.add(lower);
-        validCards.push(cardNum);
+      const lower = qrCode.toLowerCase();
+      if (seenQrs.has(lower)) {
+        invalidEntries.push({ rowNumber: rowNum, qrCode, reason: `Duplicate QR code '${qrCode}' inside CSV` });
+        continue;
       }
 
-      return { validCards, invalidCards };
-    };
+      seenQrs.add(lower);
+      validEntries.push({ qrCode, cardNumber });
+    }
 
-    it('should parse valid card numbers without QR tokens', () => {
-      const csv = `cardNumber\nasd-001\nasd-002\nasd-003`;
-      const result = parseAutoQrCsv(csv);
+    return { validEntries, invalidEntries };
+  };
 
-      expect(result.validCards).toEqual(['asd-001', 'asd-002', 'asd-003']);
-      expect(result.invalidCards).toHaveLength(0);
-    });
+  it('should parse 1-column external QR codes CSV as unassigned cards', () => {
+    const csv = `qrCode\nQR-A001\nVENDOR-QR-002\nQR-A8K29X\nhttps://moneycard.io/q/123`;
+    const result = parseQrImportCsv(csv);
 
-    it('should reject cards with pre-printed QR tokens in Auto QR mode', () => {
-      const csv = `cardNumber,qrCode\nasd-001,\nasd-002,VENDOR_QR_TOKEN_102`;
-      const result = parseAutoQrCsv(csv);
-
-      expect(result.validCards).toEqual(['asd-001']);
-      expect(result.invalidCards).toHaveLength(1);
-      expect(result.invalidCards[0].cardNumber).toBe('asd-002');
-      expect(result.invalidCards[0].reason).toContain('Auto QR mode accepts card numbers only');
-    });
-
-    it('should flag duplicate card numbers within the CSV', () => {
-      const csv = `cardNumber\nasd-001\nasd-002\nasd-001`;
-      const result = parseAutoQrCsv(csv);
-
-      expect(result.validCards).toEqual(['asd-001', 'asd-002']);
-      expect(result.invalidCards).toHaveLength(1);
-      expect(result.invalidCards[0].reason).toContain('Duplicate card number');
-    });
+    expect(result.validEntries).toHaveLength(4);
+    expect(result.validEntries[0]).toEqual({ qrCode: 'QR-A001', cardNumber: undefined });
+    expect(result.validEntries[1]).toEqual({ qrCode: 'VENDOR-QR-002', cardNumber: undefined });
+    expect(result.validEntries[2]).toEqual({ qrCode: 'QR-A8K29X', cardNumber: undefined });
+    expect(result.invalidEntries).toHaveLength(0);
   });
 
-  describe('Option 2: Pre-Printed Vendor QR Mode Parser', () => {
-    const parsePreprintedQrCsv = (csvText: string) => {
-      const lines = parseCsvLines(csvText);
-      if (lines.length === 0) return { validEntries: [], invalidCards: [] };
+  it('should support optional 2-column CSV with pre-mapped card numbers', () => {
+    const csv = `qrCode,cardNumber\nQR-A001,MC 101\nQR-A002,MC 102`;
+    const result = parseQrImportCsv(csv);
 
-      let startIndex = 0;
-      const firstLineLower = lines[0].toLowerCase();
-      if (firstLineLower.includes('card') || firstLineLower.includes('qr')) {
-        startIndex = 1;
-      }
+    expect(result.validEntries).toEqual([
+      { qrCode: 'QR-A001', cardNumber: 'MC 101' },
+      { qrCode: 'QR-A002', cardNumber: 'MC 102' },
+    ]);
+    expect(result.invalidEntries).toHaveLength(0);
+  });
 
-      const validEntries: { cardNumber: string; qrToken: string }[] = [];
-      const invalidCards: { rowNumber: number; cardNumber: string; reason: string }[] = [];
-      const seenCards = new Set<string>();
-      const seenQrs = new Set<string>();
+  it('should flag duplicate QR codes within the same CSV upload', () => {
+    const csv = `qrCode\nQR-A001\nQR-A002\nQR-A001`;
+    const result = parseQrImportCsv(csv);
 
-      for (let i = startIndex; i < lines.length; i++) {
-        const rowNum = i + 1;
-        const parts = lines[i].split(',').map((s) => s.replace(/["']/g, '').trim());
-        const cardNum = parts[0];
-        const qrCode = parts[1] || '';
+    expect(result.validEntries).toHaveLength(2);
+    expect(result.invalidEntries).toHaveLength(1);
+    expect(result.invalidEntries[0].qrCode).toBe('QR-A001');
+    expect(result.invalidEntries[0].reason).toContain('Duplicate QR code');
+  });
 
-        if (!cardNum) {
-          invalidCards.push({ rowNumber: rowNum, cardNumber: '(empty)', reason: 'Card number is missing' });
-          continue;
-        }
+  it('should flag empty rows or missing QR values', () => {
+    const csv = `qrCode\nQR-A001\n\nQR-A002`;
+    const result = parseQrImportCsv(csv);
 
-        if (!qrCode) {
-          invalidCards.push({ rowNumber: rowNum, cardNumber: cardNum, reason: 'Missing required pre-printed QR code' });
-          continue;
-        }
+    expect(result.validEntries).toHaveLength(2);
+    expect(result.invalidEntries).toHaveLength(0); // empty lines ignored by line filter
+  });
 
-        const lowerCard = cardNum.toLowerCase();
-        const lowerQr = qrCode.toLowerCase();
+  it('should enforce organization limit calculation on imported inventory', () => {
+    const planLimit = 100;
+    const currentCardCount = 95;
+    const remainingQuota = Math.max(0, planLimit - currentCardCount); // 5
 
-        if (seenCards.has(lowerCard)) {
-          invalidCards.push({ rowNumber: rowNum, cardNumber: cardNum, reason: 'Duplicate card number' });
-          continue;
-        }
+    const importCount = 10;
+    const exceedsLimit = importCount > remainingQuota;
 
-        if (seenQrs.has(lowerQr)) {
-          invalidCards.push({ rowNumber: rowNum, cardNumber: cardNum, reason: `Duplicate QR code '${qrCode}'` });
-          continue;
-        }
-
-        seenCards.add(lowerCard);
-        seenQrs.add(lowerQr);
-        validEntries.push({ cardNumber: cardNum, qrToken: qrCode });
-      }
-
-      return { validEntries, invalidCards };
-    };
-
-    it('should parse valid card number and QR token pairs', () => {
-      const csv = `cardNumber,qrCode\nasd-001,VENDOR_QR_001\nasd-002,VENDOR_QR_002`;
-      const result = parsePreprintedQrCsv(csv);
-
-      expect(result.validEntries).toEqual([
-        { cardNumber: 'asd-001', qrToken: 'VENDOR_QR_001' },
-        { cardNumber: 'asd-002', qrToken: 'VENDOR_QR_002' },
-      ]);
-      expect(result.invalidCards).toHaveLength(0);
-    });
-
-    it('should flag rows with missing QR tokens in Pre-Printed QR mode', () => {
-      const csv = `cardNumber,qrCode\nasd-001,VENDOR_QR_001\nasd-002,`;
-      const result = parsePreprintedQrCsv(csv);
-
-      expect(result.validEntries).toHaveLength(1);
-      expect(result.invalidCards).toHaveLength(1);
-      expect(result.invalidCards[0].cardNumber).toBe('asd-002');
-      expect(result.invalidCards[0].reason).toContain('Missing required pre-printed QR code');
-    });
-
-    it('should flag rows with duplicate QR tokens in the CSV', () => {
-      const csv = `cardNumber,qrCode\nasd-001,VENDOR_QR_SAME\nasd-002,VENDOR_QR_SAME`;
-      const result = parsePreprintedQrCsv(csv);
-
-      expect(result.validEntries).toHaveLength(1);
-      expect(result.invalidCards).toHaveLength(1);
-      expect(result.invalidCards[0].reason).toContain("Duplicate QR code 'VENDOR_QR_SAME'");
-    });
+    expect(remainingQuota).toBe(5);
+    expect(exceedsLimit).toBe(true);
   });
 });

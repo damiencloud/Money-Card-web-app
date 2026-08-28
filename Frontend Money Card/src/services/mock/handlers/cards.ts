@@ -10,6 +10,11 @@ import type {
   ResolveQrResponseData,
   ImportCardsRequest,
   ImportCardsResponseData,
+  ImportQrCodesRequest,
+  ImportQrCodesResponseData,
+  AssignCardNumberRequest,
+  BulkAssignCardNumbersRequest,
+  BulkAssignCardNumbersResponseData,
   CustomerHistoryEvent,
 } from '@/types';
 
@@ -100,7 +105,161 @@ export const mockCardsHandlers = {
       currentBranchId: req.branchId || null,
       createdAt: mockStore.getTimestamp(),
       updatedAt: mockStore.getTimestamp(),
-    };
+      async importQrCodes(req: ImportQrCodesRequest): Promise<ApiResult<ImportQrCodesResponseData>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+
+    let targetEntries: { qrCode: string; cardNumber?: string }[] = [];
+    if (req.qrCodes && req.qrCodes.length > 0) {
+      targetEntries = req.qrCodes.map((q) => ({ qrCode: q.trim() }));
+    } else if (req.mappings && req.mappings.length > 0) {
+      targetEntries = req.mappings.map((m) => ({
+        qrCode: m.qrCode.trim(),
+        cardNumber: m.cardNumber ? m.cardNumber.trim().toUpperCase() : undefined,
+      }));
+    } else if (req.cards && req.cards.length > 0) {
+      targetEntries = req.cards.map((c) => ({
+        qrCode: (c.qrCode || '').trim(),
+        cardNumber: c.cardNumber ? c.cardNumber.trim().toUpperCase() : undefined,
+      }));
+    }
+
+    targetEntries = targetEntries.filter((e) => !!e.qrCode);
+    if (targetEntries.length === 0) {
+      return createMockError('VALIDATION_ERROR', 'No QR codes provided for import');
+    }
+
+    // Plan Card Limit check
+    const subscription = mockStore.subscriptions.find((s) => s.organizationId === orgId);
+    if (subscription) {
+      const plan = mockStore.plans.find((p) => p.id === subscription.planId);
+      if (plan) {
+        const effectiveCardLimit = subscription.overrides?.cardLimit ?? plan.cardLimit;
+        const currentCount = mockStore.cards.filter((c) => c.organizationId === orgId).length;
+        if (currentCount + targetEntries.length > effectiveCardLimit) {
+          return createMockError(
+            'PLAN_LIMIT_REACHED',
+            `Importing ${targetEntries.length} QR code(s) exceeds your subscription card limit of ${effectiveCardLimit} (currently ${currentCount} registered)`,
+          );
+        }
+      }
+    }
+
+    const existingQrs = new Set(mockStore.cards.map((c) => c.qrToken.toLowerCase()));
+    const existingNums = new Set(
+      mockStore.cards
+        .filter((c) => c.organizationId === orgId && !!c.physicalCardNumber)
+        .map((c) => (c.physicalCardNumber || '').toLowerCase()),
+    );
+
+    const createdCards: Card[] = [];
+    for (const entry of targetEntries) {
+      if (existingQrs.has(entry.qrCode.toLowerCase())) {
+        return createMockError('DUPLICATE_QR', `QR code '${entry.qrCode}' is already registered in the platform`);
+      }
+      existingQrs.add(entry.qrCode.toLowerCase());
+
+      if (entry.cardNumber) {
+        if (existingNums.has(entry.cardNumber.toLowerCase())) {
+          return createMockError('DUPLICATE_CARD', `Card number '${entry.cardNumber}' already exists in this organization`);
+        }
+        existingNums.add(entry.cardNumber.toLowerCase());
+      }
+
+      const isAssigned = !!entry.cardNumber;
+      const newCard: Card = {
+        id: mockStore.generateId('card'),
+        organizationId: orgId,
+        physicalCardNumber: entry.cardNumber || null,
+        qrToken: entry.qrCode,
+        assignmentStatus: isAssigned ? 'ASSIGNED' : 'UNASSIGNED',
+        status: 'AVAILABLE',
+        currentBranchId: req.branchId || null,
+        createdAt: mockStore.getTimestamp(),
+        updatedAt: mockStore.getTimestamp(),
+      };
+      createdCards.push(newCard);
+    }
+
+    mockStore.cards.push(...createdCards);
+    const unassignedCount = createdCards.filter((c) => c.assignmentStatus === 'UNASSIGNED').length;
+
+    return createMockSuccess({
+      importedCount: createdCards.length,
+      unassignedCount,
+      assignedCount: createdCards.length - unassignedCount,
+      cards: createdCards,
+    });
+  },
+
+  async assignCardNumber(id: string, req: AssignCardNumberRequest): Promise<ApiResult<Card>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+    const cleanNum = (req.cardNumber || '').trim().toUpperCase();
+
+    if (!cleanNum) {
+      return createMockError('VALIDATION_ERROR', 'Card number is required');
+    }
+
+    const card = mockStore.cards.find((c) => c.id === id && c.organizationId === orgId);
+    if (!card) {
+      return createMockError('NOT_FOUND', 'Card not found in your organization');
+    }
+
+    const duplicate = mockStore.cards.find(
+      (c) => c.organizationId === orgId && c.physicalCardNumber?.toLowerCase() === cleanNum.toLowerCase() && c.id !== id,
+    );
+    if (duplicate) {
+      return createMockError('DUPLICATE_CARD_NUMBER', `Card number '${cleanNum}' is already assigned to another card in your organization`);
+    }
+
+    card.physicalCardNumber = cleanNum;
+    card.assignmentStatus = 'ASSIGNED';
+    card.updatedAt = mockStore.getTimestamp();
+
+    return createMockSuccess(card);
+  },
+
+  async bulkAssignCardNumbers(req: BulkAssignCardNumbersRequest): Promise<ApiResult<BulkAssignCardNumbersResponseData>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+
+    if (!req.assignments || req.assignments.length === 0) {
+      return createMockError('VALIDATION_ERROR', 'No assignments provided');
+    }
+
+    const updated: Card[] = [];
+    for (const a of req.assignments) {
+      const cleanNum = (a.cardNumber || '').trim().toUpperCase();
+      const card = mockStore.cards.find(
+        (c) => c.organizationId === orgId && (c.id === a.cardId || c.qrToken.toLowerCase() === (a.qrCode || '').toLowerCase()),
+      );
+      if (card) {
+        card.physicalCardNumber = cleanNum;
+        card.assignmentStatus = 'ASSIGNED';
+        card.updatedAt = mockStore.getTimestamp();
+        updated.push(card);
+      }
+    }
+
+    return createMockSuccess({
+      assignedCount: updated.length,
+      cards: updated,
+    });
+  },
+};
 
     mockStore.cards.push(newCard);
     return createMockSuccess(newCard);
@@ -154,7 +313,161 @@ export const mockCardsHandlers = {
       ...existing,
       status: 'BLOCKED',
       updatedAt: mockStore.getTimestamp(),
-    };
+      async importQrCodes(req: ImportQrCodesRequest): Promise<ApiResult<ImportQrCodesResponseData>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+
+    let targetEntries: { qrCode: string; cardNumber?: string }[] = [];
+    if (req.qrCodes && req.qrCodes.length > 0) {
+      targetEntries = req.qrCodes.map((q) => ({ qrCode: q.trim() }));
+    } else if (req.mappings && req.mappings.length > 0) {
+      targetEntries = req.mappings.map((m) => ({
+        qrCode: m.qrCode.trim(),
+        cardNumber: m.cardNumber ? m.cardNumber.trim().toUpperCase() : undefined,
+      }));
+    } else if (req.cards && req.cards.length > 0) {
+      targetEntries = req.cards.map((c) => ({
+        qrCode: (c.qrCode || '').trim(),
+        cardNumber: c.cardNumber ? c.cardNumber.trim().toUpperCase() : undefined,
+      }));
+    }
+
+    targetEntries = targetEntries.filter((e) => !!e.qrCode);
+    if (targetEntries.length === 0) {
+      return createMockError('VALIDATION_ERROR', 'No QR codes provided for import');
+    }
+
+    // Plan Card Limit check
+    const subscription = mockStore.subscriptions.find((s) => s.organizationId === orgId);
+    if (subscription) {
+      const plan = mockStore.plans.find((p) => p.id === subscription.planId);
+      if (plan) {
+        const effectiveCardLimit = subscription.overrides?.cardLimit ?? plan.cardLimit;
+        const currentCount = mockStore.cards.filter((c) => c.organizationId === orgId).length;
+        if (currentCount + targetEntries.length > effectiveCardLimit) {
+          return createMockError(
+            'PLAN_LIMIT_REACHED',
+            `Importing ${targetEntries.length} QR code(s) exceeds your subscription card limit of ${effectiveCardLimit} (currently ${currentCount} registered)`,
+          );
+        }
+      }
+    }
+
+    const existingQrs = new Set(mockStore.cards.map((c) => c.qrToken.toLowerCase()));
+    const existingNums = new Set(
+      mockStore.cards
+        .filter((c) => c.organizationId === orgId && !!c.physicalCardNumber)
+        .map((c) => (c.physicalCardNumber || '').toLowerCase()),
+    );
+
+    const createdCards: Card[] = [];
+    for (const entry of targetEntries) {
+      if (existingQrs.has(entry.qrCode.toLowerCase())) {
+        return createMockError('DUPLICATE_QR', `QR code '${entry.qrCode}' is already registered in the platform`);
+      }
+      existingQrs.add(entry.qrCode.toLowerCase());
+
+      if (entry.cardNumber) {
+        if (existingNums.has(entry.cardNumber.toLowerCase())) {
+          return createMockError('DUPLICATE_CARD', `Card number '${entry.cardNumber}' already exists in this organization`);
+        }
+        existingNums.add(entry.cardNumber.toLowerCase());
+      }
+
+      const isAssigned = !!entry.cardNumber;
+      const newCard: Card = {
+        id: mockStore.generateId('card'),
+        organizationId: orgId,
+        physicalCardNumber: entry.cardNumber || null,
+        qrToken: entry.qrCode,
+        assignmentStatus: isAssigned ? 'ASSIGNED' : 'UNASSIGNED',
+        status: 'AVAILABLE',
+        currentBranchId: req.branchId || null,
+        createdAt: mockStore.getTimestamp(),
+        updatedAt: mockStore.getTimestamp(),
+      };
+      createdCards.push(newCard);
+    }
+
+    mockStore.cards.push(...createdCards);
+    const unassignedCount = createdCards.filter((c) => c.assignmentStatus === 'UNASSIGNED').length;
+
+    return createMockSuccess({
+      importedCount: createdCards.length,
+      unassignedCount,
+      assignedCount: createdCards.length - unassignedCount,
+      cards: createdCards,
+    });
+  },
+
+  async assignCardNumber(id: string, req: AssignCardNumberRequest): Promise<ApiResult<Card>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+    const cleanNum = (req.cardNumber || '').trim().toUpperCase();
+
+    if (!cleanNum) {
+      return createMockError('VALIDATION_ERROR', 'Card number is required');
+    }
+
+    const card = mockStore.cards.find((c) => c.id === id && c.organizationId === orgId);
+    if (!card) {
+      return createMockError('NOT_FOUND', 'Card not found in your organization');
+    }
+
+    const duplicate = mockStore.cards.find(
+      (c) => c.organizationId === orgId && c.physicalCardNumber?.toLowerCase() === cleanNum.toLowerCase() && c.id !== id,
+    );
+    if (duplicate) {
+      return createMockError('DUPLICATE_CARD_NUMBER', `Card number '${cleanNum}' is already assigned to another card in your organization`);
+    }
+
+    card.physicalCardNumber = cleanNum;
+    card.assignmentStatus = 'ASSIGNED';
+    card.updatedAt = mockStore.getTimestamp();
+
+    return createMockSuccess(card);
+  },
+
+  async bulkAssignCardNumbers(req: BulkAssignCardNumbersRequest): Promise<ApiResult<BulkAssignCardNumbersResponseData>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+
+    if (!req.assignments || req.assignments.length === 0) {
+      return createMockError('VALIDATION_ERROR', 'No assignments provided');
+    }
+
+    const updated: Card[] = [];
+    for (const a of req.assignments) {
+      const cleanNum = (a.cardNumber || '').trim().toUpperCase();
+      const card = mockStore.cards.find(
+        (c) => c.organizationId === orgId && (c.id === a.cardId || c.qrToken.toLowerCase() === (a.qrCode || '').toLowerCase()),
+      );
+      if (card) {
+        card.physicalCardNumber = cleanNum;
+        card.assignmentStatus = 'ASSIGNED';
+        card.updatedAt = mockStore.getTimestamp();
+        updated.push(card);
+      }
+    }
+
+    return createMockSuccess({
+      assignedCount: updated.length,
+      cards: updated,
+    });
+  },
+};
 
     mockStore.cards[index] = updated;
 
@@ -175,7 +488,161 @@ export const mockCardsHandlers = {
       branchName: branch?.name || 'Main Cafeteria',
       reason,
       createdAt: new Date().toISOString(),
-    };
+      async importQrCodes(req: ImportQrCodesRequest): Promise<ApiResult<ImportQrCodesResponseData>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+
+    let targetEntries: { qrCode: string; cardNumber?: string }[] = [];
+    if (req.qrCodes && req.qrCodes.length > 0) {
+      targetEntries = req.qrCodes.map((q) => ({ qrCode: q.trim() }));
+    } else if (req.mappings && req.mappings.length > 0) {
+      targetEntries = req.mappings.map((m) => ({
+        qrCode: m.qrCode.trim(),
+        cardNumber: m.cardNumber ? m.cardNumber.trim().toUpperCase() : undefined,
+      }));
+    } else if (req.cards && req.cards.length > 0) {
+      targetEntries = req.cards.map((c) => ({
+        qrCode: (c.qrCode || '').trim(),
+        cardNumber: c.cardNumber ? c.cardNumber.trim().toUpperCase() : undefined,
+      }));
+    }
+
+    targetEntries = targetEntries.filter((e) => !!e.qrCode);
+    if (targetEntries.length === 0) {
+      return createMockError('VALIDATION_ERROR', 'No QR codes provided for import');
+    }
+
+    // Plan Card Limit check
+    const subscription = mockStore.subscriptions.find((s) => s.organizationId === orgId);
+    if (subscription) {
+      const plan = mockStore.plans.find((p) => p.id === subscription.planId);
+      if (plan) {
+        const effectiveCardLimit = subscription.overrides?.cardLimit ?? plan.cardLimit;
+        const currentCount = mockStore.cards.filter((c) => c.organizationId === orgId).length;
+        if (currentCount + targetEntries.length > effectiveCardLimit) {
+          return createMockError(
+            'PLAN_LIMIT_REACHED',
+            `Importing ${targetEntries.length} QR code(s) exceeds your subscription card limit of ${effectiveCardLimit} (currently ${currentCount} registered)`,
+          );
+        }
+      }
+    }
+
+    const existingQrs = new Set(mockStore.cards.map((c) => c.qrToken.toLowerCase()));
+    const existingNums = new Set(
+      mockStore.cards
+        .filter((c) => c.organizationId === orgId && !!c.physicalCardNumber)
+        .map((c) => (c.physicalCardNumber || '').toLowerCase()),
+    );
+
+    const createdCards: Card[] = [];
+    for (const entry of targetEntries) {
+      if (existingQrs.has(entry.qrCode.toLowerCase())) {
+        return createMockError('DUPLICATE_QR', `QR code '${entry.qrCode}' is already registered in the platform`);
+      }
+      existingQrs.add(entry.qrCode.toLowerCase());
+
+      if (entry.cardNumber) {
+        if (existingNums.has(entry.cardNumber.toLowerCase())) {
+          return createMockError('DUPLICATE_CARD', `Card number '${entry.cardNumber}' already exists in this organization`);
+        }
+        existingNums.add(entry.cardNumber.toLowerCase());
+      }
+
+      const isAssigned = !!entry.cardNumber;
+      const newCard: Card = {
+        id: mockStore.generateId('card'),
+        organizationId: orgId,
+        physicalCardNumber: entry.cardNumber || null,
+        qrToken: entry.qrCode,
+        assignmentStatus: isAssigned ? 'ASSIGNED' : 'UNASSIGNED',
+        status: 'AVAILABLE',
+        currentBranchId: req.branchId || null,
+        createdAt: mockStore.getTimestamp(),
+        updatedAt: mockStore.getTimestamp(),
+      };
+      createdCards.push(newCard);
+    }
+
+    mockStore.cards.push(...createdCards);
+    const unassignedCount = createdCards.filter((c) => c.assignmentStatus === 'UNASSIGNED').length;
+
+    return createMockSuccess({
+      importedCount: createdCards.length,
+      unassignedCount,
+      assignedCount: createdCards.length - unassignedCount,
+      cards: createdCards,
+    });
+  },
+
+  async assignCardNumber(id: string, req: AssignCardNumberRequest): Promise<ApiResult<Card>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+    const cleanNum = (req.cardNumber || '').trim().toUpperCase();
+
+    if (!cleanNum) {
+      return createMockError('VALIDATION_ERROR', 'Card number is required');
+    }
+
+    const card = mockStore.cards.find((c) => c.id === id && c.organizationId === orgId);
+    if (!card) {
+      return createMockError('NOT_FOUND', 'Card not found in your organization');
+    }
+
+    const duplicate = mockStore.cards.find(
+      (c) => c.organizationId === orgId && c.physicalCardNumber?.toLowerCase() === cleanNum.toLowerCase() && c.id !== id,
+    );
+    if (duplicate) {
+      return createMockError('DUPLICATE_CARD_NUMBER', `Card number '${cleanNum}' is already assigned to another card in your organization`);
+    }
+
+    card.physicalCardNumber = cleanNum;
+    card.assignmentStatus = 'ASSIGNED';
+    card.updatedAt = mockStore.getTimestamp();
+
+    return createMockSuccess(card);
+  },
+
+  async bulkAssignCardNumbers(req: BulkAssignCardNumbersRequest): Promise<ApiResult<BulkAssignCardNumbersResponseData>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+
+    if (!req.assignments || req.assignments.length === 0) {
+      return createMockError('VALIDATION_ERROR', 'No assignments provided');
+    }
+
+    const updated: Card[] = [];
+    for (const a of req.assignments) {
+      const cleanNum = (a.cardNumber || '').trim().toUpperCase();
+      const card = mockStore.cards.find(
+        (c) => c.organizationId === orgId && (c.id === a.cardId || c.qrToken.toLowerCase() === (a.qrCode || '').toLowerCase()),
+      );
+      if (card) {
+        card.physicalCardNumber = cleanNum;
+        card.assignmentStatus = 'ASSIGNED';
+        card.updatedAt = mockStore.getTimestamp();
+        updated.push(card);
+      }
+    }
+
+    return createMockSuccess({
+      assignedCount: updated.length,
+      cards: updated,
+    });
+  },
+};
     mockStore.customerHistoryEvents.unshift(historyEvent);
 
     return createMockSuccess(updated);
@@ -200,7 +667,161 @@ export const mockCardsHandlers = {
       ...existing,
       status: newStatus,
       updatedAt: mockStore.getTimestamp(),
-    };
+      async importQrCodes(req: ImportQrCodesRequest): Promise<ApiResult<ImportQrCodesResponseData>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+
+    let targetEntries: { qrCode: string; cardNumber?: string }[] = [];
+    if (req.qrCodes && req.qrCodes.length > 0) {
+      targetEntries = req.qrCodes.map((q) => ({ qrCode: q.trim() }));
+    } else if (req.mappings && req.mappings.length > 0) {
+      targetEntries = req.mappings.map((m) => ({
+        qrCode: m.qrCode.trim(),
+        cardNumber: m.cardNumber ? m.cardNumber.trim().toUpperCase() : undefined,
+      }));
+    } else if (req.cards && req.cards.length > 0) {
+      targetEntries = req.cards.map((c) => ({
+        qrCode: (c.qrCode || '').trim(),
+        cardNumber: c.cardNumber ? c.cardNumber.trim().toUpperCase() : undefined,
+      }));
+    }
+
+    targetEntries = targetEntries.filter((e) => !!e.qrCode);
+    if (targetEntries.length === 0) {
+      return createMockError('VALIDATION_ERROR', 'No QR codes provided for import');
+    }
+
+    // Plan Card Limit check
+    const subscription = mockStore.subscriptions.find((s) => s.organizationId === orgId);
+    if (subscription) {
+      const plan = mockStore.plans.find((p) => p.id === subscription.planId);
+      if (plan) {
+        const effectiveCardLimit = subscription.overrides?.cardLimit ?? plan.cardLimit;
+        const currentCount = mockStore.cards.filter((c) => c.organizationId === orgId).length;
+        if (currentCount + targetEntries.length > effectiveCardLimit) {
+          return createMockError(
+            'PLAN_LIMIT_REACHED',
+            `Importing ${targetEntries.length} QR code(s) exceeds your subscription card limit of ${effectiveCardLimit} (currently ${currentCount} registered)`,
+          );
+        }
+      }
+    }
+
+    const existingQrs = new Set(mockStore.cards.map((c) => c.qrToken.toLowerCase()));
+    const existingNums = new Set(
+      mockStore.cards
+        .filter((c) => c.organizationId === orgId && !!c.physicalCardNumber)
+        .map((c) => (c.physicalCardNumber || '').toLowerCase()),
+    );
+
+    const createdCards: Card[] = [];
+    for (const entry of targetEntries) {
+      if (existingQrs.has(entry.qrCode.toLowerCase())) {
+        return createMockError('DUPLICATE_QR', `QR code '${entry.qrCode}' is already registered in the platform`);
+      }
+      existingQrs.add(entry.qrCode.toLowerCase());
+
+      if (entry.cardNumber) {
+        if (existingNums.has(entry.cardNumber.toLowerCase())) {
+          return createMockError('DUPLICATE_CARD', `Card number '${entry.cardNumber}' already exists in this organization`);
+        }
+        existingNums.add(entry.cardNumber.toLowerCase());
+      }
+
+      const isAssigned = !!entry.cardNumber;
+      const newCard: Card = {
+        id: mockStore.generateId('card'),
+        organizationId: orgId,
+        physicalCardNumber: entry.cardNumber || null,
+        qrToken: entry.qrCode,
+        assignmentStatus: isAssigned ? 'ASSIGNED' : 'UNASSIGNED',
+        status: 'AVAILABLE',
+        currentBranchId: req.branchId || null,
+        createdAt: mockStore.getTimestamp(),
+        updatedAt: mockStore.getTimestamp(),
+      };
+      createdCards.push(newCard);
+    }
+
+    mockStore.cards.push(...createdCards);
+    const unassignedCount = createdCards.filter((c) => c.assignmentStatus === 'UNASSIGNED').length;
+
+    return createMockSuccess({
+      importedCount: createdCards.length,
+      unassignedCount,
+      assignedCount: createdCards.length - unassignedCount,
+      cards: createdCards,
+    });
+  },
+
+  async assignCardNumber(id: string, req: AssignCardNumberRequest): Promise<ApiResult<Card>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+    const cleanNum = (req.cardNumber || '').trim().toUpperCase();
+
+    if (!cleanNum) {
+      return createMockError('VALIDATION_ERROR', 'Card number is required');
+    }
+
+    const card = mockStore.cards.find((c) => c.id === id && c.organizationId === orgId);
+    if (!card) {
+      return createMockError('NOT_FOUND', 'Card not found in your organization');
+    }
+
+    const duplicate = mockStore.cards.find(
+      (c) => c.organizationId === orgId && c.physicalCardNumber?.toLowerCase() === cleanNum.toLowerCase() && c.id !== id,
+    );
+    if (duplicate) {
+      return createMockError('DUPLICATE_CARD_NUMBER', `Card number '${cleanNum}' is already assigned to another card in your organization`);
+    }
+
+    card.physicalCardNumber = cleanNum;
+    card.assignmentStatus = 'ASSIGNED';
+    card.updatedAt = mockStore.getTimestamp();
+
+    return createMockSuccess(card);
+  },
+
+  async bulkAssignCardNumbers(req: BulkAssignCardNumbersRequest): Promise<ApiResult<BulkAssignCardNumbersResponseData>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+
+    if (!req.assignments || req.assignments.length === 0) {
+      return createMockError('VALIDATION_ERROR', 'No assignments provided');
+    }
+
+    const updated: Card[] = [];
+    for (const a of req.assignments) {
+      const cleanNum = (a.cardNumber || '').trim().toUpperCase();
+      const card = mockStore.cards.find(
+        (c) => c.organizationId === orgId && (c.id === a.cardId || c.qrToken.toLowerCase() === (a.qrCode || '').toLowerCase()),
+      );
+      if (card) {
+        card.physicalCardNumber = cleanNum;
+        card.assignmentStatus = 'ASSIGNED';
+        card.updatedAt = mockStore.getTimestamp();
+        updated.push(card);
+      }
+    }
+
+    return createMockSuccess({
+      assignedCount: updated.length,
+      cards: updated,
+    });
+  },
+};
 
     mockStore.cards[index] = updated;
 
@@ -221,7 +842,161 @@ export const mockCardsHandlers = {
       branchName: branch?.name || 'Main Cafeteria',
       reason,
       createdAt: new Date().toISOString(),
-    };
+      async importQrCodes(req: ImportQrCodesRequest): Promise<ApiResult<ImportQrCodesResponseData>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+
+    let targetEntries: { qrCode: string; cardNumber?: string }[] = [];
+    if (req.qrCodes && req.qrCodes.length > 0) {
+      targetEntries = req.qrCodes.map((q) => ({ qrCode: q.trim() }));
+    } else if (req.mappings && req.mappings.length > 0) {
+      targetEntries = req.mappings.map((m) => ({
+        qrCode: m.qrCode.trim(),
+        cardNumber: m.cardNumber ? m.cardNumber.trim().toUpperCase() : undefined,
+      }));
+    } else if (req.cards && req.cards.length > 0) {
+      targetEntries = req.cards.map((c) => ({
+        qrCode: (c.qrCode || '').trim(),
+        cardNumber: c.cardNumber ? c.cardNumber.trim().toUpperCase() : undefined,
+      }));
+    }
+
+    targetEntries = targetEntries.filter((e) => !!e.qrCode);
+    if (targetEntries.length === 0) {
+      return createMockError('VALIDATION_ERROR', 'No QR codes provided for import');
+    }
+
+    // Plan Card Limit check
+    const subscription = mockStore.subscriptions.find((s) => s.organizationId === orgId);
+    if (subscription) {
+      const plan = mockStore.plans.find((p) => p.id === subscription.planId);
+      if (plan) {
+        const effectiveCardLimit = subscription.overrides?.cardLimit ?? plan.cardLimit;
+        const currentCount = mockStore.cards.filter((c) => c.organizationId === orgId).length;
+        if (currentCount + targetEntries.length > effectiveCardLimit) {
+          return createMockError(
+            'PLAN_LIMIT_REACHED',
+            `Importing ${targetEntries.length} QR code(s) exceeds your subscription card limit of ${effectiveCardLimit} (currently ${currentCount} registered)`,
+          );
+        }
+      }
+    }
+
+    const existingQrs = new Set(mockStore.cards.map((c) => c.qrToken.toLowerCase()));
+    const existingNums = new Set(
+      mockStore.cards
+        .filter((c) => c.organizationId === orgId && !!c.physicalCardNumber)
+        .map((c) => (c.physicalCardNumber || '').toLowerCase()),
+    );
+
+    const createdCards: Card[] = [];
+    for (const entry of targetEntries) {
+      if (existingQrs.has(entry.qrCode.toLowerCase())) {
+        return createMockError('DUPLICATE_QR', `QR code '${entry.qrCode}' is already registered in the platform`);
+      }
+      existingQrs.add(entry.qrCode.toLowerCase());
+
+      if (entry.cardNumber) {
+        if (existingNums.has(entry.cardNumber.toLowerCase())) {
+          return createMockError('DUPLICATE_CARD', `Card number '${entry.cardNumber}' already exists in this organization`);
+        }
+        existingNums.add(entry.cardNumber.toLowerCase());
+      }
+
+      const isAssigned = !!entry.cardNumber;
+      const newCard: Card = {
+        id: mockStore.generateId('card'),
+        organizationId: orgId,
+        physicalCardNumber: entry.cardNumber || null,
+        qrToken: entry.qrCode,
+        assignmentStatus: isAssigned ? 'ASSIGNED' : 'UNASSIGNED',
+        status: 'AVAILABLE',
+        currentBranchId: req.branchId || null,
+        createdAt: mockStore.getTimestamp(),
+        updatedAt: mockStore.getTimestamp(),
+      };
+      createdCards.push(newCard);
+    }
+
+    mockStore.cards.push(...createdCards);
+    const unassignedCount = createdCards.filter((c) => c.assignmentStatus === 'UNASSIGNED').length;
+
+    return createMockSuccess({
+      importedCount: createdCards.length,
+      unassignedCount,
+      assignedCount: createdCards.length - unassignedCount,
+      cards: createdCards,
+    });
+  },
+
+  async assignCardNumber(id: string, req: AssignCardNumberRequest): Promise<ApiResult<Card>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+    const cleanNum = (req.cardNumber || '').trim().toUpperCase();
+
+    if (!cleanNum) {
+      return createMockError('VALIDATION_ERROR', 'Card number is required');
+    }
+
+    const card = mockStore.cards.find((c) => c.id === id && c.organizationId === orgId);
+    if (!card) {
+      return createMockError('NOT_FOUND', 'Card not found in your organization');
+    }
+
+    const duplicate = mockStore.cards.find(
+      (c) => c.organizationId === orgId && c.physicalCardNumber?.toLowerCase() === cleanNum.toLowerCase() && c.id !== id,
+    );
+    if (duplicate) {
+      return createMockError('DUPLICATE_CARD_NUMBER', `Card number '${cleanNum}' is already assigned to another card in your organization`);
+    }
+
+    card.physicalCardNumber = cleanNum;
+    card.assignmentStatus = 'ASSIGNED';
+    card.updatedAt = mockStore.getTimestamp();
+
+    return createMockSuccess(card);
+  },
+
+  async bulkAssignCardNumbers(req: BulkAssignCardNumbersRequest): Promise<ApiResult<BulkAssignCardNumbersResponseData>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+
+    if (!req.assignments || req.assignments.length === 0) {
+      return createMockError('VALIDATION_ERROR', 'No assignments provided');
+    }
+
+    const updated: Card[] = [];
+    for (const a of req.assignments) {
+      const cleanNum = (a.cardNumber || '').trim().toUpperCase();
+      const card = mockStore.cards.find(
+        (c) => c.organizationId === orgId && (c.id === a.cardId || c.qrToken.toLowerCase() === (a.qrCode || '').toLowerCase()),
+      );
+      if (card) {
+        card.physicalCardNumber = cleanNum;
+        card.assignmentStatus = 'ASSIGNED';
+        card.updatedAt = mockStore.getTimestamp();
+        updated.push(card);
+      }
+    }
+
+    return createMockSuccess({
+      assignedCount: updated.length,
+      cards: updated,
+    });
+  },
+};
     mockStore.customerHistoryEvents.unshift(historyEvent);
 
     return createMockSuccess(updated);
@@ -313,7 +1088,161 @@ export const mockCardsHandlers = {
         currentBranchId: req.branchId || null,
         createdAt: mockStore.getTimestamp(),
         updatedAt: mockStore.getTimestamp(),
+        async importQrCodes(req: ImportQrCodesRequest): Promise<ApiResult<ImportQrCodesResponseData>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+
+    let targetEntries: { qrCode: string; cardNumber?: string }[] = [];
+    if (req.qrCodes && req.qrCodes.length > 0) {
+      targetEntries = req.qrCodes.map((q) => ({ qrCode: q.trim() }));
+    } else if (req.mappings && req.mappings.length > 0) {
+      targetEntries = req.mappings.map((m) => ({
+        qrCode: m.qrCode.trim(),
+        cardNumber: m.cardNumber ? m.cardNumber.trim().toUpperCase() : undefined,
+      }));
+    } else if (req.cards && req.cards.length > 0) {
+      targetEntries = req.cards.map((c) => ({
+        qrCode: (c.qrCode || '').trim(),
+        cardNumber: c.cardNumber ? c.cardNumber.trim().toUpperCase() : undefined,
+      }));
+    }
+
+    targetEntries = targetEntries.filter((e) => !!e.qrCode);
+    if (targetEntries.length === 0) {
+      return createMockError('VALIDATION_ERROR', 'No QR codes provided for import');
+    }
+
+    // Plan Card Limit check
+    const subscription = mockStore.subscriptions.find((s) => s.organizationId === orgId);
+    if (subscription) {
+      const plan = mockStore.plans.find((p) => p.id === subscription.planId);
+      if (plan) {
+        const effectiveCardLimit = subscription.overrides?.cardLimit ?? plan.cardLimit;
+        const currentCount = mockStore.cards.filter((c) => c.organizationId === orgId).length;
+        if (currentCount + targetEntries.length > effectiveCardLimit) {
+          return createMockError(
+            'PLAN_LIMIT_REACHED',
+            `Importing ${targetEntries.length} QR code(s) exceeds your subscription card limit of ${effectiveCardLimit} (currently ${currentCount} registered)`,
+          );
+        }
+      }
+    }
+
+    const existingQrs = new Set(mockStore.cards.map((c) => c.qrToken.toLowerCase()));
+    const existingNums = new Set(
+      mockStore.cards
+        .filter((c) => c.organizationId === orgId && !!c.physicalCardNumber)
+        .map((c) => (c.physicalCardNumber || '').toLowerCase()),
+    );
+
+    const createdCards: Card[] = [];
+    for (const entry of targetEntries) {
+      if (existingQrs.has(entry.qrCode.toLowerCase())) {
+        return createMockError('DUPLICATE_QR', `QR code '${entry.qrCode}' is already registered in the platform`);
+      }
+      existingQrs.add(entry.qrCode.toLowerCase());
+
+      if (entry.cardNumber) {
+        if (existingNums.has(entry.cardNumber.toLowerCase())) {
+          return createMockError('DUPLICATE_CARD', `Card number '${entry.cardNumber}' already exists in this organization`);
+        }
+        existingNums.add(entry.cardNumber.toLowerCase());
+      }
+
+      const isAssigned = !!entry.cardNumber;
+      const newCard: Card = {
+        id: mockStore.generateId('card'),
+        organizationId: orgId,
+        physicalCardNumber: entry.cardNumber || null,
+        qrToken: entry.qrCode,
+        assignmentStatus: isAssigned ? 'ASSIGNED' : 'UNASSIGNED',
+        status: 'AVAILABLE',
+        currentBranchId: req.branchId || null,
+        createdAt: mockStore.getTimestamp(),
+        updatedAt: mockStore.getTimestamp(),
       };
+      createdCards.push(newCard);
+    }
+
+    mockStore.cards.push(...createdCards);
+    const unassignedCount = createdCards.filter((c) => c.assignmentStatus === 'UNASSIGNED').length;
+
+    return createMockSuccess({
+      importedCount: createdCards.length,
+      unassignedCount,
+      assignedCount: createdCards.length - unassignedCount,
+      cards: createdCards,
+    });
+  },
+
+  async assignCardNumber(id: string, req: AssignCardNumberRequest): Promise<ApiResult<Card>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+    const cleanNum = (req.cardNumber || '').trim().toUpperCase();
+
+    if (!cleanNum) {
+      return createMockError('VALIDATION_ERROR', 'Card number is required');
+    }
+
+    const card = mockStore.cards.find((c) => c.id === id && c.organizationId === orgId);
+    if (!card) {
+      return createMockError('NOT_FOUND', 'Card not found in your organization');
+    }
+
+    const duplicate = mockStore.cards.find(
+      (c) => c.organizationId === orgId && c.physicalCardNumber?.toLowerCase() === cleanNum.toLowerCase() && c.id !== id,
+    );
+    if (duplicate) {
+      return createMockError('DUPLICATE_CARD_NUMBER', `Card number '${cleanNum}' is already assigned to another card in your organization`);
+    }
+
+    card.physicalCardNumber = cleanNum;
+    card.assignmentStatus = 'ASSIGNED';
+    card.updatedAt = mockStore.getTimestamp();
+
+    return createMockSuccess(card);
+  },
+
+  async bulkAssignCardNumbers(req: BulkAssignCardNumbersRequest): Promise<ApiResult<BulkAssignCardNumbersResponseData>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+
+    if (!req.assignments || req.assignments.length === 0) {
+      return createMockError('VALIDATION_ERROR', 'No assignments provided');
+    }
+
+    const updated: Card[] = [];
+    for (const a of req.assignments) {
+      const cleanNum = (a.cardNumber || '').trim().toUpperCase();
+      const card = mockStore.cards.find(
+        (c) => c.organizationId === orgId && (c.id === a.cardId || c.qrToken.toLowerCase() === (a.qrCode || '').toLowerCase()),
+      );
+      if (card) {
+        card.physicalCardNumber = cleanNum;
+        card.assignmentStatus = 'ASSIGNED';
+        card.updatedAt = mockStore.getTimestamp();
+        updated.push(card);
+      }
+    }
+
+    return createMockSuccess({
+      assignedCount: updated.length,
+      cards: updated,
+    });
+  },
+};
 
       createdCards.push(newCard);
     }
@@ -322,6 +1251,160 @@ export const mockCardsHandlers = {
     return createMockSuccess({
       importedCount: createdCards.length,
       cards: createdCards,
+    });
+  },
+  async importQrCodes(req: ImportQrCodesRequest): Promise<ApiResult<ImportQrCodesResponseData>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+
+    let targetEntries: { qrCode: string; cardNumber?: string }[] = [];
+    if (req.qrCodes && req.qrCodes.length > 0) {
+      targetEntries = req.qrCodes.map((q) => ({ qrCode: q.trim() }));
+    } else if (req.mappings && req.mappings.length > 0) {
+      targetEntries = req.mappings.map((m) => ({
+        qrCode: m.qrCode.trim(),
+        cardNumber: m.cardNumber ? m.cardNumber.trim().toUpperCase() : undefined,
+      }));
+    } else if (req.cards && req.cards.length > 0) {
+      targetEntries = req.cards.map((c) => ({
+        qrCode: (c.qrCode || '').trim(),
+        cardNumber: c.cardNumber ? c.cardNumber.trim().toUpperCase() : undefined,
+      }));
+    }
+
+    targetEntries = targetEntries.filter((e) => !!e.qrCode);
+    if (targetEntries.length === 0) {
+      return createMockError('VALIDATION_ERROR', 'No QR codes provided for import');
+    }
+
+    // Plan Card Limit check
+    const subscription = mockStore.subscriptions.find((s) => s.organizationId === orgId);
+    if (subscription) {
+      const plan = mockStore.plans.find((p) => p.id === subscription.planId);
+      if (plan) {
+        const effectiveCardLimit = subscription.overrides?.cardLimit ?? plan.cardLimit;
+        const currentCount = mockStore.cards.filter((c) => c.organizationId === orgId).length;
+        if (currentCount + targetEntries.length > effectiveCardLimit) {
+          return createMockError(
+            'PLAN_LIMIT_REACHED',
+            `Importing ${targetEntries.length} QR code(s) exceeds your subscription card limit of ${effectiveCardLimit} (currently ${currentCount} registered)`,
+          );
+        }
+      }
+    }
+
+    const existingQrs = new Set(mockStore.cards.map((c) => c.qrToken.toLowerCase()));
+    const existingNums = new Set(
+      mockStore.cards
+        .filter((c) => c.organizationId === orgId && !!c.physicalCardNumber)
+        .map((c) => (c.physicalCardNumber || '').toLowerCase()),
+    );
+
+    const createdCards: Card[] = [];
+    for (const entry of targetEntries) {
+      if (existingQrs.has(entry.qrCode.toLowerCase())) {
+        return createMockError('DUPLICATE_QR', `QR code '${entry.qrCode}' is already registered in the platform`);
+      }
+      existingQrs.add(entry.qrCode.toLowerCase());
+
+      if (entry.cardNumber) {
+        if (existingNums.has(entry.cardNumber.toLowerCase())) {
+          return createMockError('DUPLICATE_CARD', `Card number '${entry.cardNumber}' already exists in this organization`);
+        }
+        existingNums.add(entry.cardNumber.toLowerCase());
+      }
+
+      const isAssigned = !!entry.cardNumber;
+      const newCard: Card = {
+        id: mockStore.generateId('card'),
+        organizationId: orgId,
+        physicalCardNumber: entry.cardNumber || null,
+        qrToken: entry.qrCode,
+        assignmentStatus: isAssigned ? 'ASSIGNED' : 'UNASSIGNED',
+        status: 'AVAILABLE',
+        currentBranchId: req.branchId || null,
+        createdAt: mockStore.getTimestamp(),
+        updatedAt: mockStore.getTimestamp(),
+      };
+      createdCards.push(newCard);
+    }
+
+    mockStore.cards.push(...createdCards);
+    const unassignedCount = createdCards.filter((c) => c.assignmentStatus === 'UNASSIGNED').length;
+
+    return createMockSuccess({
+      importedCount: createdCards.length,
+      unassignedCount,
+      assignedCount: createdCards.length - unassignedCount,
+      cards: createdCards,
+    });
+  },
+
+  async assignCardNumber(id: string, req: AssignCardNumberRequest): Promise<ApiResult<Card>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+    const cleanNum = (req.cardNumber || '').trim().toUpperCase();
+
+    if (!cleanNum) {
+      return createMockError('VALIDATION_ERROR', 'Card number is required');
+    }
+
+    const card = mockStore.cards.find((c) => c.id === id && c.organizationId === orgId);
+    if (!card) {
+      return createMockError('NOT_FOUND', 'Card not found in your organization');
+    }
+
+    const duplicate = mockStore.cards.find(
+      (c) => c.organizationId === orgId && c.physicalCardNumber?.toLowerCase() === cleanNum.toLowerCase() && c.id !== id,
+    );
+    if (duplicate) {
+      return createMockError('DUPLICATE_CARD_NUMBER', `Card number '${cleanNum}' is already assigned to another card in your organization`);
+    }
+
+    card.physicalCardNumber = cleanNum;
+    card.assignmentStatus = 'ASSIGNED';
+    card.updatedAt = mockStore.getTimestamp();
+
+    return createMockSuccess(card);
+  },
+
+  async bulkAssignCardNumbers(req: BulkAssignCardNumbersRequest): Promise<ApiResult<BulkAssignCardNumbersResponseData>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser) {
+      return createMockError('UNAUTHORIZED', 'Authentication required');
+    }
+    const orgId = currentUser.organizationId || 'org_001';
+
+    if (!req.assignments || req.assignments.length === 0) {
+      return createMockError('VALIDATION_ERROR', 'No assignments provided');
+    }
+
+    const updated: Card[] = [];
+    for (const a of req.assignments) {
+      const cleanNum = (a.cardNumber || '').trim().toUpperCase();
+      const card = mockStore.cards.find(
+        (c) => c.organizationId === orgId && (c.id === a.cardId || c.qrToken.toLowerCase() === (a.qrCode || '').toLowerCase()),
+      );
+      if (card) {
+        card.physicalCardNumber = cleanNum;
+        card.assignmentStatus = 'ASSIGNED';
+        card.updatedAt = mockStore.getTimestamp();
+        updated.push(card);
+      }
+    }
+
+    return createMockSuccess({
+      assignedCount: updated.length,
+      cards: updated,
     });
   },
 };

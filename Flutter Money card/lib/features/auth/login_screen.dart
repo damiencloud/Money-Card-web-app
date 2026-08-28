@@ -18,7 +18,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
 
-  // Standard email validation pattern
   static final RegExp _emailRegExp = RegExp(
     r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
   );
@@ -31,7 +30,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
-    // Clear keyboard
     FocusScope.of(context).unfocus();
 
     if (!_formKey.currentState!.validate()) return;
@@ -66,7 +64,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     Center(
                       child: Container(
                         padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: AppColors.primaryLight,
                           shape: BoxShape.circle,
                         ),
@@ -235,7 +233,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       isLoading: authState.isAuthenticating,
                       onPressed: authState.isAuthenticating ? null : _handleLogin,
                     ),
-
                   ],
                 ),
               ),

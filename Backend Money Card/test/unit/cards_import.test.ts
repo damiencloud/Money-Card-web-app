@@ -1,121 +1,113 @@
 import { describe, it, expect } from 'vitest';
 
-describe('Backend Unit Tests: Cards Import Validation (Explicit 2-Option Flow)', () => {
-  describe('Option 1: AUTO_GENERATED_QR Mode Validation', () => {
-    const validateAutoQrRow = (row: { cardNumber: string; qrCode?: string }) => {
-      if (!row.cardNumber || !row.cardNumber.trim()) {
-        return { valid: false, error: 'Card number is missing' };
-      }
-      if (!/^[A-Za-z0-9\-_]{2,30}$/.test(row.cardNumber.trim())) {
-        return { valid: false, error: 'Invalid card number format' };
-      }
-      if (row.qrCode && row.qrCode.trim().length > 0) {
-        return {
-          valid: false,
-          error: 'Auto QR mode accepts card numbers only. Remove QR code or switch to Pre-Printed QR mode.',
-        };
-      }
-      return { valid: true, sanitizedNumber: row.cardNumber.trim() };
-    };
-
-    it('should accept valid card numbers in Auto QR mode', () => {
-      const result = validateAutoQrRow({ cardNumber: 'asd-001' });
-      expect(result.valid).toBe(true);
-      expect(result.sanitizedNumber).toBe('asd-001');
-    });
-
-    it('should reject rows with missing or blank card numbers', () => {
-      const result = validateAutoQrRow({ cardNumber: '  ' });
-      expect(result.valid).toBe(false);
-      expect(result.error).toBe('Card number is missing');
-    });
-
-    it('should reject card numbers containing invalid characters or incorrect length', () => {
-      const resultShort = validateAutoQrRow({ cardNumber: 'A' }); // < 2 chars
-      const resultSpecial = validateAutoQrRow({ cardNumber: 'CARD#123*!' });
-
-      expect(resultShort.valid).toBe(false);
-      expect(resultSpecial.valid).toBe(false);
-    });
-
-    it('should reject rows containing QR codes in Auto QR mode', () => {
-      const result = validateAutoQrRow({ cardNumber: 'asd-001', qrCode: 'PREPRINTED_TOKEN_123' });
-      expect(result.valid).toBe(false);
-      expect(result.error).toContain('Auto QR mode accepts card numbers only');
-    });
-  });
-
-  describe('Option 2: PREPRINTED_QR Mode Validation', () => {
-    const validatePreprintedQrRow = (row: { cardNumber: string; qrCode?: string }) => {
-      if (!row.cardNumber || !row.cardNumber.trim()) {
-        return { valid: false, error: 'Card number is missing' };
-      }
-      if (!/^[A-Za-z0-9\-_]{2,30}$/.test(row.cardNumber.trim())) {
-        return { valid: false, error: 'Invalid card number format' };
-      }
+describe('Backend Unit Tests: External Bulk QR Import & Card Number Assignment', () => {
+  describe('Stage 1: External Bulk QR Import Validation', () => {
+    const validateQrImportEntry = (row: { qrCode: string; cardNumber?: string }) => {
       if (!row.qrCode || !row.qrCode.trim()) {
-        return { valid: false, error: 'Missing required pre-printed QR code for this card' };
+        return { valid: false, error: 'QR code is missing or empty' };
       }
       return {
         valid: true,
-        sanitizedNumber: row.cardNumber.trim(),
         sanitizedQr: row.qrCode.trim(),
+        sanitizedCardNumber: row.cardNumber ? row.cardNumber.trim().toUpperCase() : null,
       };
     };
 
-    it('should accept valid card numbers with non-empty QR codes in Pre-Printed QR mode', () => {
-      const result = validatePreprintedQrRow({ cardNumber: 'asd-001', qrCode: 'VENDOR_QR_101' });
-      expect(result.valid).toBe(true);
-      expect(result.sanitizedNumber).toBe('asd-001');
-      expect(result.sanitizedQr).toBe('VENDOR_QR_101');
+    it('should accept arbitrary external bulk QR code values', () => {
+      const examples = ['QR-A001', 'VENDOR-QR-001', 'QR-A8K29X', 'ABC-99182', 'https://moneycard.io/q/12345'];
+      for (const qr of examples) {
+        const res = validateQrImportEntry({ qrCode: qr });
+        expect(res.valid).toBe(true);
+        expect(res.sanitizedQr).toBe(qr);
+        expect(res.sanitizedCardNumber).toBeNull();
+      }
     });
 
-    it('should strictly reject rows missing QR code in Pre-Printed QR mode', () => {
-      const result = validatePreprintedQrRow({ cardNumber: 'asd-001', qrCode: '' });
-      expect(result.valid).toBe(false);
-      expect(result.error).toContain('Missing required pre-printed QR code');
+    it('should optionally accept pre-mapped card numbers in 2-column format', () => {
+      const res = validateQrImportEntry({ qrCode: 'QR-A001', cardNumber: 'mc 105' });
+      expect(res.valid).toBe(true);
+      expect(res.sanitizedQr).toBe('QR-A001');
+      expect(res.sanitizedCardNumber).toBe('MC 105');
     });
 
-    it('should reject duplicate card numbers within the batch', () => {
+    it('should reject empty or whitespace-only QR codes', () => {
+      const res = validateQrImportEntry({ qrCode: '   ' });
+      expect(res.valid).toBe(false);
+      expect(res.error).toBe('QR code is missing or empty');
+    });
+
+    it('should detect and reject duplicate QR codes within the import batch', () => {
       const batch = [
-        { cardNumber: 'asd-001', qrCode: 'VENDOR_001' },
-        { cardNumber: 'asd-001', qrCode: 'VENDOR_002' },
+        { qrCode: 'QR-A001' },
+        { qrCode: 'QR-A002' },
+        { qrCode: 'QR-A001' }, // Duplicate
       ];
 
-      const seenCards = new Set<string>();
+      const seen = new Set<string>();
       const duplicates: string[] = [];
-
       for (const item of batch) {
-        const lower = item.cardNumber.toLowerCase();
-        if (seenCards.has(lower)) {
-          duplicates.push(item.cardNumber);
+        const lower = item.qrCode.toLowerCase();
+        if (seen.has(lower)) {
+          duplicates.push(item.qrCode);
         }
-        seenCards.add(lower);
+        seen.add(lower);
       }
 
       expect(duplicates).toHaveLength(1);
-      expect(duplicates[0]).toBe('asd-001');
+      expect(duplicates[0]).toBe('QR-A001');
+    });
+  });
+
+  describe('Stage 2: Card Number Assignment Validation', () => {
+    const validateAssignment = (
+      card: { id: string; qrToken: string; physicalCardNumber?: string | null },
+      newCardNumber: string,
+      existingOrgCardNumbers: string[],
+    ) => {
+      const clean = newCardNumber.trim().toUpperCase();
+      if (!clean) {
+        return { valid: false, error: 'Card number is required' };
+      }
+      if (existingOrgCardNumbers.map((n) => n.toUpperCase()).includes(clean)) {
+        return { valid: false, error: `Card number '${clean}' is already assigned in this organization` };
+      }
+      return { valid: true, assignedCardNumber: clean };
+    };
+
+    it('should successfully assign organization-specific card number to unassigned QR card', () => {
+      const card = { id: 'c-1', qrToken: 'QR-A001', physicalCardNumber: null };
+      const res = validateAssignment(card, 'mc 105', ['MC 101', 'MC 102']);
+      expect(res.valid).toBe(true);
+      expect(res.assignedCardNumber).toBe('MC 105');
     });
 
-    it('should reject duplicate QR codes within the batch', () => {
-      const batch = [
-        { cardNumber: 'asd-001', qrCode: 'VENDOR_QR_999' },
-        { cardNumber: 'asd-002', qrCode: 'VENDOR_QR_999' },
-      ];
+    it('should support different organization numbering conventions (MC 101, STU-001, EMP-450)', () => {
+      const card = { id: 'c-1', qrToken: 'QR-A001', physicalCardNumber: null };
+      expect(validateAssignment(card, 'STU-001', []).assignedCardNumber).toBe('STU-001');
+      expect(validateAssignment(card, 'EMP-450', []).assignedCardNumber).toBe('EMP-450');
+      expect(validateAssignment(card, 'MC 101', []).assignedCardNumber).toBe('MC 101');
+    });
 
-      const seenQrs = new Set<string>();
-      const duplicateQrs: string[] = [];
+    it('should reject card number if already assigned to another card in same organization', () => {
+      const card = { id: 'c-1', qrToken: 'QR-A001', physicalCardNumber: null };
+      const res = validateAssignment(card, 'MC 101', ['MC 101', 'MC 102']);
+      expect(res.valid).toBe(false);
+      expect(res.error).toContain('already assigned in this organization');
+    });
+  });
 
-      for (const item of batch) {
-        const lower = item.qrCode.toLowerCase();
-        if (seenQrs.has(lower)) {
-          duplicateQrs.push(item.qrCode);
-        }
-        seenQrs.add(lower);
-      }
+  describe('Stage 3: Unassigned Card Operation Guards', () => {
+    it('should reject cafeteria operations on unassigned cards until card number is assigned', () => {
+      const card = {
+        id: 'c-1',
+        qrToken: 'QR-A001',
+        physicalCardNumber: null,
+        assignmentStatus: 'UNASSIGNED',
+        status: 'AVAILABLE',
+      };
 
-      expect(duplicateQrs).toHaveLength(1);
-      expect(duplicateQrs[0]).toBe('VENDOR_QR_999');
+      const canOperate = !!card.physicalCardNumber && card.assignmentStatus === 'ASSIGNED';
+      expect(canOperate).toBe(false);
     });
   });
 });

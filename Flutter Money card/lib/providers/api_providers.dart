@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/config/app_config.dart';
 import '../core/network/dio_client.dart';
 import '../core/storage/secure_storage_service.dart';
 import '../core/storage/token_storage.dart';
@@ -37,6 +38,8 @@ final Provider<DioClient> dioClientProvider = Provider<DioClient>((ref) {
 
   return DioClient.create(
     tokenStorage: tokenStorage,
+    baseUrl: AppConfig.baseUrl,
+    useMockApi: false, // Strictly live backend
     onRefreshToken: (refreshToken) async {
       try {
         final authService = ref.read(authServiceProvider);
@@ -53,7 +56,6 @@ final Provider<DioClient> dioClientProvider = Provider<DioClient>((ref) {
     },
     onSessionExpired: () {
       try {
-        // Clear tokens on hard expiration
         tokenStorage.clearTokens();
       } catch (_) {}
     },

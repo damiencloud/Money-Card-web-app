@@ -100,6 +100,13 @@ export function SessionsPage() {
   const [isLoadingTxns, setIsLoadingTxns] = useState(false);
   const [detailTab, setDetailTab] = useState<'overview' | 'timeline' | 'purchases' | 'recharges' | 'card_status'>('overview');
 
+  const extractArray = <T,>(data: any): T[] => {
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data.items)) return data.items;
+    return [];
+  };
+
   // ─── Fetch Sessions, Cards, History Events & Branches ─────────────
   const fetchCustomerHistoryData = useCallback(async () => {
     setIsLoading(true);
@@ -117,15 +124,15 @@ export function SessionsPage() {
         return;
       }
 
-      setRawSessions(sessionsRes.data.items);
+      setRawSessions(extractArray<CardSessionOverview>(sessionsRes.data));
       if (cardsRes.success) {
-        setRawCards(cardsRes.data.items);
+        setRawCards(extractArray<CardEntity>(cardsRes.data));
       }
       if (branchesRes.success) {
-        setBranches(branchesRes.data.items);
+        setBranches(extractArray<Branch>(branchesRes.data));
       }
-      if (eventsRes?.success && eventsRes.data?.items) {
-        setHistoryEvents(eventsRes.data.items);
+      if (eventsRes?.success) {
+        setHistoryEvents(extractArray<CustomerHistoryEvent>(eventsRes.data));
       }
     } catch {
       setError('Unable to connect to the server. Please try again.');
@@ -153,15 +160,15 @@ export function SessionsPage() {
           return;
         }
 
-        setRawSessions(sessionsRes.data.items);
+        setRawSessions(extractArray<CardSessionOverview>(sessionsRes.data));
         if (cardsRes.success) {
-          setRawCards(cardsRes.data.items);
+          setRawCards(extractArray<CardEntity>(cardsRes.data));
         }
         if (branchesRes.success) {
-          setBranches(branchesRes.data.items);
+          setBranches(extractArray<Branch>(branchesRes.data));
         }
-        if (eventsRes?.success && eventsRes.data?.items) {
-          setHistoryEvents(eventsRes.data.items);
+        if (eventsRes?.success) {
+          setHistoryEvents(extractArray<CustomerHistoryEvent>(eventsRes.data));
         }
       } catch {
         if (!isCancelled) {
@@ -183,10 +190,10 @@ export function SessionsPage() {
   // ─── Build Customer History Records ──────────────────────────────
   const customerHistoryItems = useMemo<CustomerHistoryItem[]>(() => {
     return rawSessions.map((s) => {
-      const card = rawCards.find((c) => c.id === s.cardId);
+      const card = rawCards.find((c) => c.id === s.cardId || c.physicalCardNumber === s.physicalCardNumber);
       const branch = branches.find((b) => b.id === s.branchId);
 
-      const physCard = card ? card.physicalCardNumber : (s.physicalCardNumber || 'MC-Card');
+      const physCard = s.physicalCardNumber || (card ? card.physicalCardNumber : 'MC-Card');
       const cycleNum = s.cycleNumber || 1;
       const sessionCardNum = s.sessionCardNumber || `${physCard}_${cycleNum}`;
 
@@ -200,10 +207,10 @@ export function SessionsPage() {
         customerPhone: s.customerPhone || null,
         session: s,
         sessionStatus: s.status,
-        balance: s.balance,
+        balance: Number(s.balance) || 0,
         branchId: s.branchId,
-        branchName: branch ? branch.name : 'Main Branch',
-        startedAt: s.startedAt,
+        branchName: branch ? branch.name : (s.branchName || 'Main Cafeteria'),
+        startedAt: s.startedAt || s.createdAt,
         settledAt: s.settledAt || null,
         issuedByName: (s as any).issuedBy?.name,
         lastActivityAt: s.updatedAt || s.createdAt || s.startedAt,
@@ -378,94 +385,85 @@ export function SessionsPage() {
   // ─── Columns for Sessions Table ──────────────────────────────────
   const sessionColumns = [
     {
+      key: 'customerName',
       header: 'Customer',
-      accessorKey: 'customerName',
-      cell: ({ row }: any) => {
-        const item: CustomerHistoryItem = row.original;
-        return (
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 font-bold text-sm">
-              {item.customerName ? item.customerName.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
-            </div>
-            <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-100">
-                {item.customerName || 'Walk-in Customer'}
+      render: (item: CustomerHistoryItem) => (
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 font-bold text-sm">
+            {item.customerName ? item.customerName.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
+          </div>
+          <div>
+            <p className="font-semibold text-slate-900 dark:text-slate-100">
+              {item.customerName || 'Walk-in Customer'}
+            </p>
+            {item.customerPhone && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Phone className="h-3 w-3" />
+                {item.customerPhone}
               </p>
-              {item.customerPhone && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                  <Phone className="h-3 w-3" />
-                  {item.customerPhone}
-                </p>
-              )}
-            </div>
+            )}
           </div>
-        );
-      },
+        </div>
+      ),
     },
     {
+      key: 'physicalCardNumber',
       header: 'Card Number',
-      accessorKey: 'physicalCardNumber',
-      cell: ({ row }: any) => {
-        const item: CustomerHistoryItem = row.original;
-        return (
-          <div className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4 text-emerald-600" />
-            <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-              {item.physicalCardNumber}
-            </span>
-          </div>
-        );
-      },
+      render: (item: CustomerHistoryItem) => (
+        <div className="flex items-center gap-2">
+          <CreditCard className="h-4 w-4 text-emerald-600" />
+          <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
+            {item.physicalCardNumber}
+          </span>
+        </div>
+      ),
     },
     {
+      key: 'sessionStatus',
       header: 'Status',
-      accessorKey: 'sessionStatus',
-      cell: ({ row }: any) => {
-        const status = row.original.sessionStatus;
-        return (
-          <Badge variant={status === 'ACTIVE' ? 'success' : 'neutral'}>
-            {status}
-          </Badge>
-        );
-      },
+      render: (item: CustomerHistoryItem) => (
+        <Badge variant={item.sessionStatus === 'ACTIVE' ? 'success' : 'neutral'}>
+          {item.sessionStatus}
+        </Badge>
+      ),
     },
     {
+      key: 'balance',
       header: 'Balance',
-      accessorKey: 'balance',
-      cell: ({ row }: any) => (
+      render: (item: CustomerHistoryItem) => (
         <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-          {formatCurrency(row.original.balance)}
+          {formatCurrency(item.balance)}
         </span>
       ),
     },
     {
+      key: 'branchName',
       header: 'Branch',
-      accessorKey: 'branchName',
-      cell: ({ row }: any) => (
+      render: (item: CustomerHistoryItem) => (
         <span className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
           <Building2 className="h-3.5 w-3.5 text-slate-400" />
-          {row.original.branchName}
+          {item.branchName}
         </span>
       ),
     },
     {
+      key: 'startedAt',
       header: 'Issued At',
-      accessorKey: 'startedAt',
-      cell: ({ row }: any) => (
+      render: (item: CustomerHistoryItem) => (
         <span className="text-xs text-slate-500 dark:text-slate-400">
-          {formatDate(row.original.startedAt)}
+          {formatDate(item.startedAt)}
         </span>
       ),
     },
     {
+      key: 'actions',
       header: 'Actions',
-      id: 'actions',
-      cell: ({ row }: any) => (
+      render: (item: CustomerHistoryItem) => (
         <Button
           variant="outline"
           size="sm"
           className="gap-1.5"
-          onClick={() => handleOpenDetails(row.original)}
+          onClick={() => handleOpenDetails(item)}
         >
           <Eye className="h-3.5 w-3.5 text-emerald-600" />
           <span>Inspect</span>
@@ -477,42 +475,38 @@ export function SessionsPage() {
   // ─── Columns for Card Status & Block/Unblock Audit Events ─────────
   const eventColumns = [
     {
+      key: 'customerName',
       header: 'Customer',
-      accessorKey: 'customerName',
-      cell: ({ row }: any) => {
-        const event: CustomerHistoryEvent = row.original;
-        return (
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 font-bold text-xs">
-              {event.customerName ? event.customerName.charAt(0).toUpperCase() : <User className="h-3.5 w-3.5" />}
-            </div>
-            <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
-                {event.customerName || 'Registered Customer'}
-              </p>
-              {event.customerPhone && (
-                <p className="text-xs text-slate-500">{event.customerPhone}</p>
-              )}
-            </div>
+      render: (event: CustomerHistoryEvent) => (
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 font-bold text-xs">
+            {event.customerName ? event.customerName.charAt(0).toUpperCase() : <User className="h-3.5 w-3.5" />}
           </div>
-        );
-      },
+          <div>
+            <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
+              {event.customerName || 'Registered Customer'}
+            </p>
+            {event.customerPhone && (
+              <p className="text-xs text-slate-500">{event.customerPhone}</p>
+            )}
+          </div>
+        </div>
+      ),
     },
     {
+      key: 'physicalCardNumber',
       header: 'Card',
-      accessorKey: 'physicalCardNumber',
-      cell: ({ row }: any) => (
+      render: (event: CustomerHistoryEvent) => (
         <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-          {row.original.physicalCardNumber}
+          {event.physicalCardNumber}
         </span>
       ),
     },
     {
+      key: 'action',
       header: 'Action',
-      accessorKey: 'action',
-      cell: ({ row }: any) => {
-        const act: CardHistoryAction = row.original.action;
-        const isBlock = act === 'CARD_BLOCKED';
+      render: (event: CustomerHistoryEvent) => {
+        const isBlock = event.action === 'CARD_BLOCKED';
         return (
           <span
             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
@@ -528,48 +522,45 @@ export function SessionsPage() {
       },
     },
     {
+      key: 'transition',
       header: 'Status Transition',
-      id: 'transition',
-      cell: ({ row }: any) => {
-        const e: CustomerHistoryEvent = row.original;
-        return (
-          <span className="text-xs text-slate-600 dark:text-slate-300 font-mono">
-            {e.previousStatus} → <strong>{e.newStatus}</strong>
-          </span>
-        );
-      },
+      render: (e: CustomerHistoryEvent) => (
+        <span className="text-xs text-slate-600 dark:text-slate-300 font-mono">
+          {e.previousStatus} → <strong>{e.newStatus}</strong>
+        </span>
+      ),
     },
     {
+      key: 'performedByName',
       header: 'Performed By',
-      accessorKey: 'performedByName',
-      cell: ({ row }: any) => (
+      render: (event: CustomerHistoryEvent) => (
         <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
-          {row.original.performedByName || 'Staff'}
+          {event.performedByName || 'Staff'}
         </span>
       ),
     },
     {
+      key: 'branchName',
       header: 'Branch',
-      accessorKey: 'branchName',
-      cell: ({ row }: any) => (
-        <span className="text-xs text-slate-500">{row.original.branchName}</span>
+      render: (event: CustomerHistoryEvent) => (
+        <span className="text-xs text-slate-500">{event.branchName}</span>
       ),
     },
     {
+      key: 'createdAt',
       header: 'Date & Time',
-      accessorKey: 'createdAt',
-      cell: ({ row }: any) => (
+      render: (event: CustomerHistoryEvent) => (
         <span className="text-xs text-slate-500 dark:text-slate-400">
-          {formatDate(row.original.createdAt)}
+          {formatDate(event.createdAt)}
         </span>
       ),
     },
     {
+      key: 'reason',
       header: 'Reason',
-      accessorKey: 'reason',
-      cell: ({ row }: any) => (
+      render: (event: CustomerHistoryEvent) => (
         <span className="text-xs text-slate-600 dark:text-slate-400 italic max-w-xs truncate block">
-          {row.original.reason || '—'}
+          {event.reason || '—'}
         </span>
       ),
     },

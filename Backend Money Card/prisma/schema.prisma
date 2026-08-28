@@ -36,6 +36,11 @@ enum BranchStatus {
   INACTIVE
 }
 
+enum CardAssignmentStatus {
+  UNASSIGNED
+  ASSIGNED
+}
+
 enum CardStatus {
   AVAILABLE
   ACTIVE
@@ -315,13 +320,14 @@ model PlanChangeRequest {
 }
 
 model Card {
-  id                 String     @id @default(uuid())
+  id                 String               @id @default(uuid())
   organizationId     String
-  physicalCardNumber String
-  qrToken            String     @unique
-  status             CardStatus @default(AVAILABLE)
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
+  physicalCardNumber String?
+  qrToken            String               @unique
+  assignmentStatus   CardAssignmentStatus @default(UNASSIGNED)
+  status             CardStatus           @default(AVAILABLE)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
 
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sessions     CardSession[]
