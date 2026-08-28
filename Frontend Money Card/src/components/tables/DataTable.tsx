@@ -14,7 +14,7 @@ interface Column<T> {
 interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
-  keyExtractor: (item: T) => string;
+  keyExtractor?: (item: T) => string;
   onRowClick?: (item: T) => void;
   className?: string;
   emptyMessage?: string;
@@ -35,6 +35,10 @@ export function DataTable<T>({
       </div>
     );
   }
+
+  const getKey =
+    keyExtractor ||
+    ((item: any) => String(item?.id ?? item?.key ?? item?._id ?? JSON.stringify(item)));
 
   return (
     <div className={cn('relative w-full overflow-x-auto scrollbar-thin scrollbar-thumb-slate-800', className)}>
@@ -57,7 +61,7 @@ export function DataTable<T>({
         <tbody className="divide-y divide-slate-800/50">
           {data.map((item) => (
             <tr
-              key={keyExtractor(item)}
+              key={getKey(item)}
               onClick={onRowClick ? () => onRowClick(item) : undefined}
               className={cn(
                 'transition-colors',

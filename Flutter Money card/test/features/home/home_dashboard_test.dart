@@ -57,6 +57,10 @@ class FakeSessionRepository implements SessionRepository {
   Future<CardSession> createSession({
     required String cardId,
     required String branchId,
+    String? customerName,
+    String? customerPhone,
+    double initialAmount = 0,
+    String paymentMethod = 'CASH',
   }) async {
     final newSession = CardSession(
       id: 'session-${DateTime.now().millisecondsSinceEpoch}',

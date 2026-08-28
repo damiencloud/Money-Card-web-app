@@ -62,9 +62,9 @@ export const NAVIGATION_ITEMS: NavItemConfig[] = [
   },
   {
     id: 'sessions',
-    label: 'Sessions',
+    label: 'Customer History',
     path: '/sessions',
-    iconName: 'Clock',
+    iconName: 'UserCheck',
     roles: ['ORG_ADMIN'],
     permission: 'SESSION_VIEW',
   },

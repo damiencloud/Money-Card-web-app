@@ -336,6 +336,25 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
               ),
               const Divider(height: AppSpacing.md),
 
+              // Customer Information (if captured)
+              if (session.customerName != null && session.customerName!.isNotEmpty) ...[
+                Row(
+                  children: [
+                    const Icon(Icons.person_outline, size: 14, color: AppColors.primary),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Customer: ${session.customerName}${session.customerPhone != null && session.customerPhone!.isNotEmpty ? " (${session.customerPhone})" : ""}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimaryLight,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+              ],
+
               // Metadata: Branch and Started Date/Time
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,

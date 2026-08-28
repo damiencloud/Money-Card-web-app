@@ -104,6 +104,8 @@ export function CardsPage() {
   const [selectedAvailableCardNumber, setSelectedAvailableCardNumber] = useState('');
   const [cardNumberInput, setCardNumberInput] = useState('');
   const [selectedBranchId, setSelectedBranchId] = useState('');
+  const [customerNameInput, setCustomerNameInput] = useState('');
+  const [customerPhoneInput, setCustomerPhoneInput] = useState('');
   const [numberError, setNumberError] = useState<string | null>(null);
   const [branchError, setBranchError] = useState<string | null>(null);
   const [modalApiError, setModalApiError] = useState<string | null>(null);
@@ -268,7 +270,19 @@ export function CardsPage() {
       );
 
       if (existingAvailable) {
-        notify.success(`Card ${existingAvailable.physicalCardNumber} is ready for session activation at ${branches.find((b) => b.id === selectedBranchId)?.name || 'selected branch'}`);
+        const sessionRes = await apiService.sessions.createSession({
+          cardId: existingAvailable.id,
+          branchId: selectedBranchId,
+          customerName: customerNameInput.trim() || undefined,
+          customerPhone: customerPhoneInput.trim() || undefined,
+        } as any);
+
+        if (!sessionRes.success) {
+          setModalApiError(sessionRes.error.message || 'Failed to activate card session');
+          return;
+        }
+
+        notify.success(`Card ${existingAvailable.physicalCardNumber} activated and issued successfully${customerNameInput.trim() ? ` to ${customerNameInput.trim()}` : ''}`);
         setShowIssueModal(false);
         fetchCardsData();
         return;
@@ -1182,8 +1196,30 @@ export function CardsPage() {
             disabled={isSubmitting}
           />
 
+          {/* Customer Details (Optional) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
+            <Input
+              id="issue-customer-name"
+              label="Customer Name (Optional)"
+              placeholder="e.g. John Doe"
+              value={customerNameInput}
+              onChange={(e) => setCustomerNameInput(e.target.value)}
+              disabled={isSubmitting}
+            />
+
+            <Input
+              id="issue-customer-phone"
+              label="Phone Number (10 Digits)"
+              placeholder="e.g. 9876543210"
+              value={customerPhoneInput}
+              maxLength={10}
+              onChange={(e) => setCustomerPhoneInput(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              disabled={isSubmitting}
+            />
+          </div>
+
           <p className="text-xs text-slate-400">
-            Physical card will be registered with a cryptographically secure opaque QR credential.
+            Physical card will be registered and activated with an active customer session until returned.
           </p>
 
           <ModalFooter>
@@ -1818,6 +1854,11 @@ export function CardsPage() {
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   <Badge variant="success" className="text-[11px]">ACTIVE SESSION</Badge>
+                                  {(activeSession.sessionCardNumber || activeSession.cycleNumber) && (
+                                    <Badge variant="outline" className="text-[10px] font-mono text-emerald-300 border-emerald-500/40 bg-emerald-950/40">
+                                      Internal: {activeSession.sessionCardNumber || `${selectedCard?.physicalCardNumber}_${activeSession.cycleNumber}`}
+                                    </Badge>
+                                  )}
                                   <span className="text-xs text-slate-300 font-medium">
                                     {sessionBranch?.name || 'Main Branch'}
                                   </span>
@@ -1879,6 +1920,11 @@ export function CardsPage() {
                                     <Badge variant="outline" className="text-[10px] text-slate-400 border-slate-700">
                                       SETTLED
                                     </Badge>
+                                    {(session.sessionCardNumber || session.cycleNumber) && (
+                                      <Badge variant="outline" className="text-[10px] font-mono text-cyan-300 border-cyan-700/60 bg-cyan-950/40">
+                                        Internal: {session.sessionCardNumber || `${selectedCard?.physicalCardNumber}_${session.cycleNumber}`}
+                                      </Badge>
+                                    )}
                                     <span className="text-[11px] font-medium text-slate-300">
                                       {sessionBranch?.name || 'Main Branch'}
                                     </span>

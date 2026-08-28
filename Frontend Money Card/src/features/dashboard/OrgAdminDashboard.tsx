@@ -1,6 +1,6 @@
 // ─── Organization Admin Dashboard (M11) ────────────────────
 // Real-time organization metrics, plan usage limits, and
-// date-range calendar filtered operational metrics.
+// unified date-range calendar filtered operational metrics.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -316,166 +316,6 @@ export function OrgAdminDashboard() {
         </div>
       </div>
 
-      {/* Date Range Calendar Filter Bar */}
-      <Card className="border-slate-800/80 bg-slate-900/50 backdrop-blur-sm">
-        <div className="p-4 space-y-3">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-            {/* Quick Preset Pills */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 mr-2">
-                <CalendarDays className="h-4 w-4 text-violet-400" />
-                Date Filter:
-              </span>
-
-              <button
-                type="button"
-                onClick={() => handlePresetChange('all')}
-                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                  datePreset === 'all'
-                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                    : 'bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
-                }`}
-              >
-                All Time
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handlePresetChange('today')}
-                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                  datePreset === 'today'
-                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                    : 'bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
-                }`}
-              >
-                Today
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handlePresetChange('yesterday')}
-                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                  datePreset === 'yesterday'
-                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                    : 'bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
-                }`}
-              >
-                Yesterday
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handlePresetChange('last7')}
-                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                  datePreset === 'last7'
-                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                    : 'bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
-                }`}
-              >
-                Last 7 Days
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handlePresetChange('last30')}
-                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                  datePreset === 'last30'
-                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                    : 'bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
-                }`}
-              >
-                Last 30 Days
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handlePresetChange('thisMonth')}
-                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                  datePreset === 'thisMonth'
-                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                    : 'bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
-                }`}
-              >
-                This Month
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handlePresetChange('custom')}
-                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                  datePreset === 'custom'
-                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                    : 'bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
-                }`}
-              >
-                Custom Range
-              </button>
-            </div>
-
-            {/* Active Range Summary Tag */}
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-950 px-2.5 py-1 text-xs font-medium text-slate-300 border border-slate-800">
-                <Clock className="h-3.5 w-3.5 text-violet-400" />
-                <span>Period: <strong className="text-slate-100">{activeDateLabel}</strong></span>
-              </span>
-
-              {(startDate || endDate) && (
-                <button
-                  type="button"
-                  onClick={handleClearDateFilter}
-                  className="inline-flex items-center gap-1 rounded-md bg-slate-800/80 px-2 py-1 text-xs font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                  title="Reset date filter to All Time"
-                >
-                  <X className="h-3.5 w-3.5" />
-                  <span>Reset</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Expanded Custom Date Picker Inputs */}
-          {(showCustomPicker || datePreset === 'custom') && (
-            <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-800/80 text-xs">
-              <div className="flex items-center gap-2">
-                <label htmlFor="dashboard-start-date" className="font-medium text-slate-400">
-                  From:
-                </label>
-                <input
-                  id="dashboard-start-date"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => {
-                    setStartDate(e.target.value);
-                    setDatePreset('custom');
-                  }}
-                  className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none [color-scheme:dark]"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <label htmlFor="dashboard-end-date" className="font-medium text-slate-400">
-                  To:
-                </label>
-                <input
-                  id="dashboard-end-date"
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => {
-                    setEndDate(e.target.value);
-                    setDatePreset('custom');
-                  }}
-                  className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none [color-scheme:dark]"
-                />
-              </div>
-
-              <span className="text-[11px] text-slate-500">
-                Metrics update automatically when dates are selected.
-              </span>
-            </div>
-          )}
-        </div>
-      </Card>
-
       {/* Permission-Guarded Quick Actions Bar */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
         {hasPermission('BRANCH_MANAGE') && (
@@ -651,32 +491,197 @@ export function OrgAdminDashboard() {
             </CardContent>
           </Card>
 
-          {/* Operational Stat Cards (Filtered by Date Range) */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              label="Purchase Sales Volume"
-              value={formatCurrency(analytics?.totalPurchaseVolume || 0)}
-              icon={<ShoppingBag className="h-5 w-5 text-emerald-400" />}
+          {/* ── UNIFIED FILTERED METRICS BOX (Date Filter Toolbar + 4 Operational Stat Cards) ── */}
+          <Card className="border-slate-800/80 bg-slate-900/50 backdrop-blur-sm">
+            <CardHeader
+              title="Operational & Financial Metrics"
+              description={`Key metrics filtered for ${activeDateLabel.toLowerCase()}.`}
+              action={
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-950 px-2.5 py-1 text-xs font-medium text-slate-300 border border-slate-800">
+                    <Clock className="h-3.5 w-3.5 text-violet-400" />
+                    <span>Period: <strong className="text-slate-100">{activeDateLabel}</strong></span>
+                  </span>
+
+                  {(startDate || endDate) && (
+                    <button
+                      type="button"
+                      onClick={handleClearDateFilter}
+                      className="inline-flex items-center gap-1 rounded-md bg-slate-800/80 px-2 py-1 text-xs font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                      title="Reset date filter to All Time"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      <span>Reset</span>
+                    </button>
+                  )}
+                </div>
+              }
             />
 
-            <StatCard
-              label="Card Wallet Recharges"
-              value={formatCurrency(analytics?.totalRechargeVolume || 0)}
-              icon={<TrendingUp className="h-5 w-5 text-violet-400" />}
-            />
+            <CardContent className="space-y-5">
+              {/* Date Filter Toolbar inside the box */}
+              <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3 space-y-3">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 mr-2">
+                    <CalendarDays className="h-4 w-4 text-violet-400" />
+                    Date Filter:
+                  </span>
 
-            <StatCard
-              label={startDate || endDate ? "Cards Issued in Period" : "Active Cards Issued"}
-              value={filteredCardsIssuedCount}
-              icon={<CreditCard className="h-5 w-5 text-sky-400" />}
-            />
+                  <button
+                    type="button"
+                    onClick={() => handlePresetChange('all')}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                      datePreset === 'all'
+                        ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                        : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    All Time
+                  </button>
 
-            <StatCard
-              label="Low Stock Alert Items"
-              value={lowStockCount}
-              icon={<AlertTriangle className="h-5 w-5 text-amber-400" />}
-            />
-          </div>
+                  <button
+                    type="button"
+                    onClick={() => handlePresetChange('today')}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                      datePreset === 'today'
+                        ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                        : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    Today
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handlePresetChange('yesterday')}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                      datePreset === 'yesterday'
+                        ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                        : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    Yesterday
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handlePresetChange('last7')}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                      datePreset === 'last7'
+                        ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                        : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    Last 7 Days
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handlePresetChange('last30')}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                      datePreset === 'last30'
+                        ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                        : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    Last 30 Days
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handlePresetChange('thisMonth')}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                      datePreset === 'thisMonth'
+                        ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                        : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    This Month
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handlePresetChange('custom')}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                      datePreset === 'custom'
+                        ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                        : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    Custom Range
+                  </button>
+                </div>
+
+                {/* Expanded Custom Date Picker Inputs */}
+                {(showCustomPicker || datePreset === 'custom') && (
+                  <div className="flex flex-wrap items-center gap-3 pt-2.5 border-t border-slate-800/80 text-xs">
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="dashboard-start-date" className="font-medium text-slate-400">
+                        From:
+                      </label>
+                      <input
+                        id="dashboard-start-date"
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => {
+                          setStartDate(e.target.value);
+                          setDatePreset('custom');
+                        }}
+                        className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none [color-scheme:dark]"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="dashboard-end-date" className="font-medium text-slate-400">
+                        To:
+                      </label>
+                      <input
+                        id="dashboard-end-date"
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => {
+                          setEndDate(e.target.value);
+                          setDatePreset('custom');
+                        }}
+                        className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none [color-scheme:dark]"
+                      />
+                    </div>
+
+                    <span className="text-[11px] text-slate-500">
+                      Metrics update automatically when dates are selected.
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* 4 Filtered Stat Cards inside the box */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <StatCard
+                  label="Purchase Sales Volume"
+                  value={formatCurrency(analytics?.totalPurchaseVolume || 0)}
+                  icon={<ShoppingBag className="h-5 w-5 text-emerald-400" />}
+                />
+
+                <StatCard
+                  label="Card Wallet Recharges"
+                  value={formatCurrency(analytics?.totalRechargeVolume || 0)}
+                  icon={<TrendingUp className="h-5 w-5 text-violet-400" />}
+                />
+
+                <StatCard
+                  label={startDate || endDate ? "Cards Issued in Period" : "Active Cards Issued"}
+                  value={filteredCardsIssuedCount}
+                  icon={<CreditCard className="h-5 w-5 text-sky-400" />}
+                />
+
+                <StatCard
+                  label="Low Stock Alert Items"
+                  value={lowStockCount}
+                  icon={<AlertTriangle className="h-5 w-5 text-amber-400" />}
+                />
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

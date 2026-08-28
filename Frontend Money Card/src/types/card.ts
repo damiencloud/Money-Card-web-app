@@ -27,10 +27,16 @@ export interface CardSession {
   branchId: string;
   status: SessionStatus;
   balance: number;
+  cycleNumber?: number;
+  sessionCardNumber?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  physicalCardNumber?: string | null;
   startedAt: string;
   settledAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  transactions?: any[];
 }
 
 // ─── Transactions & Payments ────────────────────────────────

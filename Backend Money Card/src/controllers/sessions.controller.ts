@@ -11,7 +11,7 @@ export async function listSessions(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
   }
 
-  const { status, branchId, cardId, limit = 50, page = 1, offset } = req.query;
+  const { status, branchId, cardId, search, q, limit = 50, page = 1, offset } = req.query as Record<string, any>;
 
   const validStatuses = Object.values(SessionStatus);
   if (status && status !== 'ALL' && !validStatuses.includes(status as SessionStatus)) {
@@ -34,6 +34,17 @@ export async function listSessions(req: Request, res: Response) {
 
   if (cardId) {
     where.cardId = String(cardId);
+  }
+
+  const searchTerm = String(search || q || '').trim();
+  if (searchTerm) {
+    where.OR = [
+      { customerName: { contains: searchTerm, mode: 'insensitive' } },
+      { customerPhone: { contains: searchTerm, mode: 'insensitive' } },
+      { sessionCardNumber: { contains: searchTerm, mode: 'insensitive' } },
+      { sessionToken: { contains: searchTerm, mode: 'insensitive' } },
+      { card: { physicalCardNumber: { contains: searchTerm, mode: 'insensitive' } } },
+    ];
   }
 
   const take = Math.min(100, Math.max(1, parseInt(String(limit), 10) || 50));
@@ -59,10 +70,14 @@ export async function listSessions(req: Request, res: Response) {
       id: s.id,
       cardId: s.cardId,
       physicalCardNumber: s.card?.physicalCardNumber || null,
+      sessionCardNumber: s.sessionCardNumber || (s.card?.physicalCardNumber ? `${s.card.physicalCardNumber}_${s.cycleNumber || 1}` : null),
+      cycleNumber: s.cycleNumber || 1,
       branchId: s.branchId,
       branchName: s.branch?.name || null,
       status: s.status,
       balance: s.balance,
+      customerName: s.customerName || null,
+      customerPhone: s.customerPhone || null,
       startedAt: s.issuedAt.toISOString(),
       settledAt: s.settledAt ? s.settledAt.toISOString() : null,
       createdAt: s.issuedAt.toISOString(),
@@ -88,7 +103,9 @@ export async function createSession(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
   }
 
-  const { cardId, branchId, initialAmount = 0, paymentMethod = 'CASH' } = req.body;
+  const { cardId, branchId, initialAmount = 0, paymentMethod = 'CASH', customerName, customerPhone, userName, phone } = req.body;
+  const cleanCustomerName = (customerName || userName || '').trim() || null;
+  const cleanCustomerPhone = (customerPhone || phone || '').trim() || null;
   if (!cardId || !branchId) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'cardId and branchId are required');
   }
@@ -129,6 +146,13 @@ export async function createSession(req: Request, res: Response) {
   const sessionToken = generateSessionToken();
 
   const session = await prisma.$transaction(async (tx) => {
+    // Count existing cycles for this physical card to determine internal session cycle (e.g. MC-100_1, MC-100_2)
+    const sessionCount = await tx.cardSession.count({
+      where: { cardId: card.id },
+    });
+    const cycleNumber = sessionCount + 1;
+    const sessionCardNumber = `${card.physicalCardNumber}_${cycleNumber}`;
+
     const createdSession = await tx.cardSession.create({
       data: {
         organizationId: orgId,
@@ -137,6 +161,10 @@ export async function createSession(req: Request, res: Response) {
         sessionToken,
         balance: initAmount,
         status: SessionStatus.ACTIVE,
+        cycleNumber,
+        sessionCardNumber,
+        customerName: cleanCustomerName,
+        customerPhone: cleanCustomerPhone,
         issuedByUserId: req.user?.id,
       },
     });
@@ -170,6 +198,10 @@ export async function createSession(req: Request, res: Response) {
       ...session,
       cardId: card.id,
       physicalCardNumber: card.physicalCardNumber,
+      sessionCardNumber: session.sessionCardNumber || `${card.physicalCardNumber}_${session.cycleNumber || 1}`,
+      cycleNumber: session.cycleNumber || 1,
+      customerName: session.customerName,
+      customerPhone: session.customerPhone,
       startedAt: session.issuedAt.toISOString(),
       createdAt: session.issuedAt.toISOString(),
       updatedAt: session.issuedAt.toISOString(),

@@ -792,12 +792,31 @@ class MockApiInterceptor extends Interceptor {
         }
       }
 
+      final detailedItems = <Map<String, dynamic>>[];
+      for (final it in items) {
+        final pid = it['productId'] as String? ?? '';
+        final qty = (it['quantity'] as num?)?.toInt() ?? 1;
+        final p = mockProducts.firstWhere(
+          (prod) => prod['id'] == pid,
+          orElse: () => <String, dynamic>{},
+        );
+        final unitPrice = (p['price'] as num?)?.toDouble() ?? 0.0;
+        detailedItems.add({
+          'productId': pid,
+          'itemName': p['name'] ?? p['itemName'] ?? 'Cafeteria Item',
+          'quantity': qty,
+          'unitPrice': unitPrice,
+          'totalAmount': unitPrice * qty,
+        });
+      }
+
       final tx = {
         'id': 'tx-${DateTime.now().millisecondsSinceEpoch}',
         'sessionId': sessionId,
         'type': 'PURCHASE',
         'amount': total,
         'balanceAfter': updatedBalance,
+        'items': detailedItems,
         'status': 'SUCCESS',
         'createdAt': DateTime.now().toIso8601String(),
       };
@@ -931,6 +950,7 @@ class MockApiInterceptor extends Interceptor {
       if (card.isNotEmpty && card['physicalCardNumber'] != null) {
         enriched['physicalCardNumber'] = card['physicalCardNumber'];
       }
+      enriched['transactions'] = mockTransactions.where((t) => t['sessionId'] == sessionId).toList();
 
       return _resolve(handler, options, enriched);
     }

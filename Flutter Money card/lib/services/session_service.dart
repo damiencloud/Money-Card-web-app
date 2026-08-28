@@ -12,12 +12,20 @@ class SessionService {
   Future<CardSession> createSession({
     required String cardId,
     required String branchId,
+    String? customerName,
+    String? customerPhone,
+    double initialAmount = 0,
+    String paymentMethod = 'CASH',
   }) async {
     return _apiService.post<CardSession>(
       ApiEndpoints.cardSessions,
       data: {
         'cardId': cardId,
         'branchId': branchId,
+        if (customerName != null && customerName.isNotEmpty) 'customerName': customerName,
+        if (customerPhone != null && customerPhone.isNotEmpty) 'customerPhone': customerPhone,
+        if (initialAmount > 0) 'initialAmount': initialAmount,
+        'paymentMethod': paymentMethod,
       },
       fromJson: (data) => CardSession.fromJson(data as Map<String, dynamic>),
     );

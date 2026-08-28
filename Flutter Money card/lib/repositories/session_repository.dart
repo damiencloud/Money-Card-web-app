@@ -10,10 +10,18 @@ class SessionRepository {
   Future<CardSession> createSession({
     required String cardId,
     required String branchId,
+    String? customerName,
+    String? customerPhone,
+    double initialAmount = 0,
+    String paymentMethod = 'CASH',
   }) async {
     return _sessionService.createSession(
       cardId: cardId,
       branchId: branchId,
+      customerName: customerName,
+      customerPhone: customerPhone,
+      initialAmount: initialAmount,
+      paymentMethod: paymentMethod,
     );
   }
 

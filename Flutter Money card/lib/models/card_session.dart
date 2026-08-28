@@ -26,8 +26,13 @@ class CardSession {
   final String? branchName;
   final SessionStatus status;
   final double balance;
+  final int? cycleNumber;
+  final String? sessionCardNumber;
+  final String? customerName;
+  final String? customerPhone;
   final String startedAt;
   final String? settledAt;
+  final List<Transaction>? transactions;
   final String? createdAt;
   final String? updatedAt;
 
@@ -39,8 +44,13 @@ class CardSession {
     this.branchName,
     required this.status,
     required this.balance,
+    this.cycleNumber,
+    this.sessionCardNumber,
+    this.customerName,
+    this.customerPhone,
     required this.startedAt,
     this.settledAt,
+    this.transactions,
     this.createdAt,
     this.updatedAt,
   });
@@ -54,7 +64,12 @@ class CardSession {
       branchName: json['branchName'] as String? ?? (json['branch'] != null && json['branch'] is Map ? json['branch']['name'] as String? : null),
       status: SessionStatus.fromString(json['status'] as String? ?? json['sessionStatus'] as String?),
       balance: (json['balance'] as num?)?.toDouble() ?? 0.0,
+      cycleNumber: (json['cycleNumber'] as num?)?.toInt(),
+      sessionCardNumber: json['sessionCardNumber'] as String?,
+      customerName: json['customerName'] as String? ?? json['userName'] as String?,
+      customerPhone: json['customerPhone'] as String? ?? json['phone'] as String?,
       startedAt: json['startedAt'] as String? ?? '',
+      transactions: (json['transactions'] as List<dynamic>?)?.map((t) => Transaction.fromJson(t as Map<String, dynamic>)).toList(),
       settledAt: json['settledAt'] as String?,
       createdAt: json['createdAt'] as String?,
       updatedAt: json['updatedAt'] as String?,
@@ -68,8 +83,13 @@ class CardSession {
         'branchId': branchId,
         'status': status.value,
         'balance': balance,
+        if (cycleNumber != null) 'cycleNumber': cycleNumber,
+        if (sessionCardNumber != null) 'sessionCardNumber': sessionCardNumber,
+        if (customerName != null) 'customerName': customerName,
+        if (customerPhone != null) 'customerPhone': customerPhone,
         'startedAt': startedAt,
         if (settledAt != null) 'settledAt': settledAt,
+        if (transactions != null) 'transactions': transactions!.map((t) => t.toJson()).toList(),
         if (createdAt != null) 'createdAt': createdAt,
         if (updatedAt != null) 'updatedAt': updatedAt,
       };
@@ -81,8 +101,13 @@ class CardSession {
     String? branchId,
     SessionStatus? status,
     double? balance,
+    int? cycleNumber,
+    String? sessionCardNumber,
+    String? customerName,
+    String? customerPhone,
     String? startedAt,
     String? settledAt,
+    List<Transaction>? transactions,
     String? createdAt,
     String? updatedAt,
   }) {
@@ -93,8 +118,13 @@ class CardSession {
       branchId: branchId ?? this.branchId,
       status: status ?? this.status,
       balance: balance ?? this.balance,
+      cycleNumber: cycleNumber ?? this.cycleNumber,
+      sessionCardNumber: sessionCardNumber ?? this.sessionCardNumber,
+      customerName: customerName ?? this.customerName,
+      customerPhone: customerPhone ?? this.customerPhone,
       startedAt: startedAt ?? this.startedAt,
       settledAt: settledAt ?? this.settledAt,
+      transactions: transactions ?? this.transactions,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

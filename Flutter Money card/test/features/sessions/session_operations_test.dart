@@ -1,3 +1,4 @@
+import 'package:money_card_staff/models/transaction.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -53,7 +54,7 @@ class FakeSessionRepository implements SessionRepository {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 
   @override
-  Future<CardSession> createSession({required String cardId, required String branchId}) async {
+  Future<CardSession> createSession({required String cardId, required String branchId, String? customerName, String? customerPhone, double initialAmount = 0, String paymentMethod = 'CASH'}) async {
     if (shouldThrowError) {
       throw const ApiException(
         code: ApiErrorCode.networkError,
@@ -329,6 +330,95 @@ void main() {
       expect(find.text('ACTIVE'), findsOneWidget);
       expect(find.text('New POS Purchase'), findsOneWidget);
       expect(find.text('Return & Settle Card'), findsOneWidget);
+    });
+    testWidgets('SessionDetailsScreen renders transactions with itemized purchased products', (tester) async {
+      const mockUser = AuthUser(
+        id: 'staff-1',
+        email: 'staff@moneycard.io',
+        name: 'Alex Morgan',
+        role: 'STAFF',
+        organizationId: 'org-demo-001',
+        permissions: [AppPermission.purchase, AppPermission.cardReturn],
+        assignedBranchIds: ['branch-001'],
+      );
+
+      const mockBranch = Branch(
+        id: 'branch-001',
+        organizationId: 'org-demo-001',
+        name: 'Main Cafeteria',
+      );
+
+      final sessionWithTxns = const CardSession(
+        id: 'session-tx-100',
+        cardId: 'card-100',
+        physicalCardNumber: 'MC-100',
+        branchId: 'branch-001',
+        status: SessionStatus.active,
+        balance: 500.0,
+        startedAt: '2026-08-20T10:00:00Z',
+        transactions: [
+          Transaction(
+            id: 'tx-001',
+            sessionId: 'session-tx-100',
+            branchId: 'branch-001',
+            type: TransactionType.purchase,
+            amount: 180.0,
+            balanceAfter: 500.0,
+            status: TransactionStatus.success,
+            createdAt: '2026-08-20T10:15:00Z',
+            items: [
+              PurchaseItem(
+                productId: 'prod-001',
+                itemName: 'Chicken Sandwich',
+                quantity: 2,
+                unitPrice: 90.0,
+                totalAmount: 180.0,
+              ),
+            ],
+          ),
+          Transaction(
+            id: 'tx-002',
+            sessionId: 'session-tx-100',
+            branchId: 'branch-001',
+            type: TransactionType.recharge,
+            amount: 680.0,
+            balanceAfter: 680.0,
+            status: TransactionStatus.success,
+            paymentMethod: PaymentMethod.upi,
+            createdAt: '2026-08-20T10:00:00Z',
+          ),
+        ],
+      );
+
+      fakeRepo.sessions.add(sessionWithTxns);
+      final sessionNotifier = SessionDetailsNotifier(fakeRepo);
+      await sessionNotifier.loadSessionById('session-tx-100');
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            currentUserProvider.overrideWithValue(mockUser),
+            currentBranchProvider.overrideWithValue(mockBranch),
+            sessionDetailsNotifierProvider.overrideWith((ref) => sessionNotifier),
+          ],
+          child: const MaterialApp(
+            home: SessionDetailsScreen(sessionId: 'session-tx-100'),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Transactions & Purchased Products'), findsOneWidget);
+      expect(find.text('POS Purchase'), findsOneWidget);
+      expect(find.text('-₹180.00'), findsOneWidget);
+      expect(find.text('Chicken Sandwich'), findsOneWidget);
+      expect(find.text('× 2'), findsOneWidget);
+      expect(find.text('Purchased Products (1)'), findsOneWidget);
+
+      await tester.scrollUntilVisible(find.text('Wallet Recharge (UPI)'), 200);
+      expect(find.text('Wallet Recharge (UPI)'), findsOneWidget);
+      expect(find.text('+₹680.00'), findsOneWidget);
     });
   });
 }

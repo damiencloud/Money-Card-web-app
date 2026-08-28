@@ -288,12 +288,20 @@ class CardDetailsNotifier extends StateNotifier<CardDetailsState> {
   Future<CardSession?> issueCardSession({
     required String cardId,
     required String branchId,
+    String? customerName,
+    String? customerPhone,
+    double initialAmount = 0,
+    String paymentMethod = 'CASH',
   }) async {
     state = state.copyWith(isSubmitting: true, errorMessage: null);
     try {
       final session = await _sessionRepository.createSession(
         cardId: cardId,
         branchId: branchId,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        initialAmount: initialAmount,
+        paymentMethod: paymentMethod,
       );
 
       final updatedCard = state.card?.copyWith(

@@ -1,3 +1,4 @@
+import '../../models/transaction.dart';
 import 'package:flutter/material.dart' hide Card;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -160,6 +161,8 @@ class _PosScanPurchaseScreenState extends ConsumerState<PosScanPurchaseScreen> {
     final card = _resolvedCard;
     if (session == null || card == null) return;
 
+    final txns = session.transactions ?? [];
+
     AppBottomSheet.show(
       context,
       title: 'Session Transactions (${card.physicalCardNumber})',
@@ -189,26 +192,21 @@ class _PosScanPurchaseScreenState extends ConsumerState<PosScanPurchaseScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          const Text(
-            'Activity & Timeline',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Activity & Purchases',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              if (txns.isNotEmpty)
+                Text(
+                  '${txns.length} transaction${txns.length > 1 ? "s" : ""}',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
+                ),
+            ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.successLight,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.check_circle_outline, color: AppColors.success, size: 20),
-            ),
-            title: const Text('Session Started', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            subtitle: Text(_formatDateTime(session.startedAt), style: const TextStyle(fontSize: 12)),
-            trailing: const AppBadge(label: 'ACTIVE', variant: AppBadgeVariant.success),
-          ),
-          const Divider(height: 1),
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: Container(
@@ -226,6 +224,140 @@ class _PosScanPurchaseScreenState extends ConsumerState<PosScanPurchaseScreen> {
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
             ),
           ),
+          const Divider(height: 1),
+          if (txns.isEmpty) ...[
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.successLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.check_circle_outline, color: AppColors.success, size: 20),
+              ),
+              title: const Text('Session Started', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              subtitle: Text(_formatDateTime(session.startedAt), style: const TextStyle(fontSize: 12)),
+              trailing: const AppBadge(label: 'ACTIVE', variant: AppBadgeVariant.success),
+            ),
+          ] else ...[
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 320),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: txns.length,
+                separatorBuilder: (context, index) => const Divider(height: 12),
+                itemBuilder: (context, idx) {
+                  final t = txns[idx];
+                  final isPurch = t.type == TransactionType.purchase;
+                  final isRech = t.type == TransactionType.recharge;
+                  final items = t.items ?? [];
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: isRech
+                                  ? AppColors.successLight
+                                  : isPurch
+                                      ? AppColors.primaryLight
+                                      : AppColors.warningLight,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Icon(
+                              isRech
+                                  ? Icons.arrow_upward
+                                  : isPurch
+                                      ? Icons.shopping_bag_outlined
+                                      : Icons.assignment_return_outlined,
+                              size: 16,
+                              color: isRech
+                                  ? AppColors.success
+                                  : isPurch
+                                      ? AppColors.primary
+                                      : AppColors.warning,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isRech
+                                      ? 'Recharge (${t.paymentMethod?.value ?? "CASH"})'
+                                      : isPurch
+                                          ? 'POS Purchase'
+                                          : 'Settlement Refund',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                                Text(
+                                  _formatDateTime(t.createdAt),
+                                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            '${isRech ? "+" : isPurch ? "-" : ""}₹${t.amount.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: isRech
+                                  ? AppColors.success
+                                  : isPurch
+                                      ? AppColors.error
+                                      : AppColors.textPrimaryLight,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (isPurch && items.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: items.map((it) {
+                              final name = it.itemName ?? it.productId;
+                              final subtotal = it.totalAmount ?? ((it.unitPrice ?? 0) * it.quantity);
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 2),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '$name × ${it.quantity}',
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                                      ),
+                                    ),
+                                    Text(
+                                      '₹${subtotal.toStringAsFixed(2)}',
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
           AppButton(
             label: 'Close',

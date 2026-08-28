@@ -323,18 +323,22 @@ model Card {
 }
 
 model CardSession {
-  id              String        @id @default(uuid())
-  organizationId  String
-  branchId        String
-  cardId          String
-  sessionToken    String        @unique
-  balance         Float         @default(0.0)
-  status          SessionStatus @default(ACTIVE)
-  issuedByUserId  String?
-  issuedAt        DateTime      @default(now())
-  settledByUserId String?
-  settledAt       DateTime?
-  refundAmount    Float?
+  id                String        @id @default(uuid())
+  organizationId    String
+  branchId          String
+  cardId            String
+  sessionToken      String        @unique
+  balance           Float         @default(0.0)
+  status            SessionStatus @default(ACTIVE)
+  cycleNumber       Int           @default(1)
+  sessionCardNumber String?
+  customerName      String?
+  customerPhone     String?
+  issuedByUserId    String?
+  issuedAt          DateTime      @default(now())
+  settledByUserId   String?
+  settledAt         DateTime?
+  refundAmount      Float?
 
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   branch       Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)

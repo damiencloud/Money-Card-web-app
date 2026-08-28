@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart' hide Card;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -63,61 +64,118 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
       return;
     }
 
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    String? phoneError;
+
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirm Card Issuance'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      builder: (context) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Confirm Card Issuance'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Card Number:'),
-                Text(
-                  card.physicalCardNumber,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Card Number:'),
+                    Text(
+                      card.physicalCardNumber,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Branch:'),
+                    Text(branch!.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: const [
+                    Text('Starting Balance:'),
+                    Text(
+                      '\u20b90.00',
+                      style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                    ),
+                  ],
+                ),
+                const Divider(height: AppSpacing.md),
+                const Text(
+                  'Customer Details (Optional):',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondaryLight),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Customer Name',
+                    hintText: 'e.g. John Doe',
+                    prefixIcon: Icon(Icons.person_outline, size: 18),
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: phoneCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(10),
+                  ],
+                  onChanged: (val) {
+                    if (phoneError != null) {
+                      setDialogState(() {
+                        phoneError = null;
+                      });
+                    }
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Phone Number (10 Digits)',
+                    hintText: 'e.g. 9876543210',
+                    prefixIcon: const Icon(Icons.phone_outlined, size: 18),
+                    errorText: phoneError,
+                    counterText: '',
+                    isDense: true,
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                const Text(
+                  'Issuing this card will activate it and create an active session for transactions.',
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
                 ),
               ],
             ),
-
-            const SizedBox(height: AppSpacing.xs),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Branch:'),
-                Text(branch!.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-              ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: AppSpacing.xs),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text('Starting Balance:'),
-                Text(
-                  '₹0.00',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
-                ),
-              ],
-            ),
-            const Divider(height: AppSpacing.lg),
-            const Text(
-              'Issuing this card will activate it and create an active session for transactions.',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
+            ElevatedButton(
+              onPressed: () {
+                final phone = phoneCtrl.text.trim();
+                if (phone.isNotEmpty && phone.length != 10) {
+                  setDialogState(() {
+                    phoneError = 'Phone number must be exactly 10 digits';
+                  });
+                  return;
+                }
+                Navigator.of(context).pop(true);
+              },
+              child: const Text('Confirm & Issue'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Confirm & Issue'),
-          ),
-        ],
       ),
     );
 
@@ -126,6 +184,8 @@ class _IssueCardScreenState extends ConsumerState<IssueCardScreen> {
     final session = await ref.read(cardDetailsNotifierProvider.notifier).issueCardSession(
           cardId: card.id,
           branchId: branch.id,
+          customerName: nameCtrl.text.trim(),
+          customerPhone: phoneCtrl.text.trim(),
         );
 
     if (session != null && mounted) {

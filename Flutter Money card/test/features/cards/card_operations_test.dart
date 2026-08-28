@@ -168,6 +168,10 @@ class FakeSessionRepository implements SessionRepository {
   Future<CardSession> createSession({
     required String cardId,
     required String branchId,
+    String? customerName,
+    String? customerPhone,
+    double initialAmount = 0,
+    String paymentMethod = 'CASH',
   }) async {
     final session = CardSession(
       id: 'session-${sessions.length + 1}',
@@ -391,6 +395,11 @@ void main() {
 
       // Tap Start Active Session
       await tester.tap(find.text('Start Active Session'));
+      await tester.pumpAndSettle();
+
+      // Confirm activation in dialog
+      expect(find.text('Confirm Card Activation'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Confirm & Activate'));
       await tester.pumpAndSettle();
 
       expect(find.text('Active session created successfully!'), findsOneWidget);
