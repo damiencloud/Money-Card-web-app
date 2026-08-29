@@ -447,11 +447,19 @@ export async function purchaseSession(req: Request, res: Response) {
         });
       }
 
-      if (session.balance < totalCost) {
-        throw new Error(`INSUFFICIENT_BALANCE: Current balance is ₹${session.balance.toFixed(2)}, required ₹${totalCost.toFixed(2)}`);
+      const currentSession = await tx.cardSession.findUniqueOrThrow({
+        where: { id },
+      });
+
+      if (currentSession.status !== SessionStatus.ACTIVE) {
+        throw new Error('INVALID_STATE: Session is no longer active');
       }
 
-      const balanceBefore = session.balance;
+      if (currentSession.balance < totalCost) {
+        throw new Error(`INSUFFICIENT_BALANCE: Current balance is ₹${currentSession.balance.toFixed(2)}, required ₹${totalCost.toFixed(2)}`);
+      }
+
+      const balanceBefore = currentSession.balance;
       const balanceAfter = balanceBefore - totalCost;
 
       const updatedSession = await tx.cardSession.update({
