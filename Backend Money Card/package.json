@@ -15,7 +15,8 @@
     "prisma:studio": "prisma studio",
     "lint": "tsc --noEmit",
     "test": "vitest run",
-    "test:unit": "vitest run"
+    "test:unit": "vitest run",
+    "prisma:seed:prod": "tsx prisma/seed.prod.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.18.0",
