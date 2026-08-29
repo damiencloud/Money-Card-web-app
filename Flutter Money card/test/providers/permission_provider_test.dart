@@ -1,8 +1,10 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_card_staff/core/constants/permission_constants.dart';
 import 'package:money_card_staff/providers/permission_provider.dart';
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('PermissionChecker Unit Tests', () {
     test('hasPermission returns true only if permission exists', () {
       const checker = PermissionChecker([

@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,6 +34,7 @@ class MockTokenStorage implements TokenStorage {
 }
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('AuthInterceptor Tests', () {
     late MockTokenStorage tokenStorage;
     late Dio dio;

@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_card_staff/core/constants/permission_constants.dart';
 import 'package:money_card_staff/models/api_response.dart';
@@ -10,6 +11,7 @@ import 'package:money_card_staff/models/subscription.dart';
 import 'package:money_card_staff/models/transaction.dart';
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('M0 V10 Data Models Serialization Tests', () {
     test('AuthUser serialization & deserialization', () {
       final json = {

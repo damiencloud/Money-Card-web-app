@@ -30,7 +30,7 @@ class AppConfig {
   static ApiMode apiMode = ApiMode.real;
 
   /// Helper flag for backward compatibility
-  static bool get useMockApi => false;
+  static bool get useMockApi => apiMode.isMock;
 
   /// Network timeouts
   static const Duration connectTimeout = Duration(seconds: 15);

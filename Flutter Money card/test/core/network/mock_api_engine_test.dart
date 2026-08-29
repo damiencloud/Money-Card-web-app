@@ -41,6 +41,7 @@ class InMemoryTokenStorage implements TokenStorage {
 }
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('Mock API Engine & M0 V10 Compliance Tests', () {
     late Dio dio;
     late ApiService apiService;

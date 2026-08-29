@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,6 +19,7 @@ import 'package:money_card_staff/services/product_service.dart';
 import 'package:money_card_staff/services/session_service.dart';
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const mockBranch = Branch(

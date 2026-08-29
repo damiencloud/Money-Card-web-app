@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../config/app_config.dart';
 import '../storage/token_storage.dart';
+import 'interceptors/mock_api_interceptor.dart';
 import 'interceptors/auth_interceptor.dart';
 import 'interceptors/error_interceptor.dart';
 
@@ -82,6 +83,11 @@ class DioClient {
         },
       ),
     );
+
+    // Attach MockApiInterceptor if in Mock mode
+    if (useMockApi ?? AppConfig.useMockApi) {
+      dio.interceptors.add(MockApiInterceptor());
+    }
 
     // Attach AuthInterceptor for Bearer token, token refresh, and session expiry
     dio.interceptors.add(

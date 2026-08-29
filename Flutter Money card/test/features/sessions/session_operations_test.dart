@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:money_card_staff/models/transaction.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -130,6 +131,7 @@ class FakeSessionRepository implements SessionRepository {
 }
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('Session Operations Unit & Widget Tests', () {
     late FakeSessionRepository fakeRepo;
 

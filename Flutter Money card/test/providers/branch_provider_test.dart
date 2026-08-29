@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_card_staff/models/branch.dart';
@@ -35,6 +36,7 @@ class FakeBranchService extends BranchService {
 }
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('BranchNotifier Unit Tests', () {
     test('loads only assigned branches and selects the first one by default', () async {
       final repo = BranchRepository(FakeBranchService());

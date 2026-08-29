@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -63,6 +64,7 @@ class FakeSessionRepo extends Fake implements SessionRepository {
 }
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('Staff App UI & Routing Regression Tests', () {
     testWidgets('CardsScreen displays Card Number without exposing internal QR Token', (tester) async {
       await tester.pumpWidget(

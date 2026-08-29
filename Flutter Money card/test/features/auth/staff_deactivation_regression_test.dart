@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_card_staff/core/errors/api_exception.dart';
@@ -25,6 +26,7 @@ class FakeFailingAuthService extends AuthService {
 }
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('Staff Deactivation & Inactive Org Regression Tests', () {
     test('STAFF_INACTIVE response sets exact friendly banner message', () async {
       final mockStorage = InMemoryTokenStorage();

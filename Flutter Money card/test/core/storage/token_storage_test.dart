@@ -1,7 +1,9 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_card_staff/core/storage/secure_storage_service.dart';
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('InMemoryTokenStorage Tests', () {
     late InMemoryTokenStorage storage;
 

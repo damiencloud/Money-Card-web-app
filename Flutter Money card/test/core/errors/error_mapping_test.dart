@@ -1,8 +1,10 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_card_staff/core/errors/api_exception.dart';
 import 'package:money_card_staff/core/errors/error_codes.dart';
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('ApiErrorCode & ApiException Mapping Tests', () {
     test('should correctly parse known M0 V10 ApiErrorCodes', () {
       expect(ApiErrorCode.fromString('UNAUTHORIZED'), ApiErrorCode.unauthorized);

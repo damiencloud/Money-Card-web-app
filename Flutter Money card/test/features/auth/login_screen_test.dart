@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -54,6 +55,7 @@ class TestAuthNotifier extends AuthNotifier {
 }
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('LoginScreen Widget Tests', () {
     testWidgets('renders all login UI elements (Brand, Title, Email, Password, Button)', (tester) async {
       final fakeRepo = FakeAuthRepository();

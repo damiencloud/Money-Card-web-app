@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +18,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  AppConfig.apiMode = ApiMode.mock;
 
   late CardRepository cardRepository;
   late SessionRepository sessionRepository;

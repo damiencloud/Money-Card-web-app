@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import 'package:money_card_staff/widgets/receipt/digital_receipt_dialog.dart';
 import 'package:printing/printing.dart';
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('HardwareSettings & Device Feedback Tests', () {

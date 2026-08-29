@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:money_card_staff/widgets/states/app_unauthorized_state.dart';
 import 'package:money_card_staff/core/constants/permission_constants.dart';
 import 'package:money_card_staff/providers/permission_provider.dart';
@@ -86,6 +87,7 @@ class FakeSessionRepository implements SessionRepository {
 }
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('POS Catalog, Cart & Purchase Tests', () {
     late FakeProductRepository fakeProductRepo;
     late FakeSessionRepository fakeSessionRepo;

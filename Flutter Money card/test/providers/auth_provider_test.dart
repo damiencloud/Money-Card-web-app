@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_card_staff/core/constants/permission_constants.dart';
@@ -73,6 +74,7 @@ class FakeAuthServiceFailure extends AuthService {
 }
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('AuthNotifier State Lifecycle Tests', () {
     test('successful login updates state to authenticated', () async {
       final tokenStorage = InMemoryTokenStorage();

@@ -1,7 +1,9 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_card_staff/core/utils/qr_validator.dart';
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('QrValidator Tests', () {
     test('should extract opaque token from HTTPS URL', () {
       final token1 = QrValidator.extractToken('https://moneycard.io/c/opaque_token_abc_123');

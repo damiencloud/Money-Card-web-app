@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_card_staff/widgets/common/app_badge.dart';
@@ -9,6 +10,7 @@ import 'package:money_card_staff/widgets/common/app_text_field.dart';
 import 'package:money_card_staff/widgets/common/section_header.dart';
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('Design System Reusable Components Tests', () {
     testWidgets('AppButton renders label, handles tap and loading state', (tester) async {
       bool tapped = false;

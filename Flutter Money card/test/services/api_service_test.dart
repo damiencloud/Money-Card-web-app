@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_card_staff/core/constants/permission_constants.dart';
 import 'package:money_card_staff/core/errors/api_exception.dart';
@@ -10,6 +11,7 @@ import 'package:money_card_staff/services/branch_service.dart';
 import 'package:money_card_staff/services/card_service.dart';
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('DioClient & Mock API Pipeline Tests', () {
     late InMemoryTokenStorage tokenStorage;
     late DioClient dioClient;

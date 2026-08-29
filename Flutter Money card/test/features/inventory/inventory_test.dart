@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -123,6 +124,7 @@ class FakeInventoryRepository implements InventoryRepository {
 }
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('Inventory Operations Unit & Widget Tests', () {
     late FakeInventoryRepository fakeRepo;
 

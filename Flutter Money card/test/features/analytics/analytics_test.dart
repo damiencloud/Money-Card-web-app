@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -64,6 +65,7 @@ class FakeAnalyticsRepository implements AnalyticsRepository {
 }
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('Staff Analytics Unit & Widget Tests', () {
     late FakeAnalyticsRepository fakeRepo;
 

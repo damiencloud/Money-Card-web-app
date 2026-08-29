@@ -1,9 +1,11 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_card_staff/models/receipt_bill.dart';
 import 'package:money_card_staff/models/transaction.dart';
 import 'package:money_card_staff/services/digital_receipt_service.dart';
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Flutter Unit & Regression Tests: CASH & UPI Recharge Receipts & PDF Pipeline', () {

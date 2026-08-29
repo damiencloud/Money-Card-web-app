@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:flutter/material.dart' hide Card;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -187,6 +188,7 @@ class FakeSessionRepository implements SessionRepository {
 }
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   group('Card Operations Unit & Widget Tests', () {
     late FakeCardRepository fakeCardRepo;
     late FakeSessionRepository fakeSessionRepo;

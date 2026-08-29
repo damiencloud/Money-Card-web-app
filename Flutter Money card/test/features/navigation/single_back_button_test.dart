@@ -1,3 +1,4 @@
+import 'package:money_card_staff/core/config/app_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -87,6 +88,7 @@ class FakeCardRepository implements CardRepository {
 }
 
 void main() {
+  AppConfig.apiMode = ApiMode.mock;
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const mockUser = AuthUser(

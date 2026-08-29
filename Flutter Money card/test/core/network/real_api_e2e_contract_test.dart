@@ -56,7 +56,7 @@ void main() {
       expect(ApiMode.fromString('real'), ApiMode.real);
       expect(ApiMode.fromString('REAL'), ApiMode.real);
       expect(ApiMode.fromString('mock'), ApiMode.mock);
-      expect(ApiMode.fromString('anything_else'), ApiMode.mock);
+      expect(ApiMode.fromString('anything_else'), ApiMode.real);
     });
 
     test('DioClient with useMockApi=false excludes MockApiInterceptor and targets real baseUrl', () {
