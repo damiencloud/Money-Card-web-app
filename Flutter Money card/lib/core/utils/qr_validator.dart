@@ -12,13 +12,27 @@ class QrValidator {
 
     final trimmed = rawPayload.trim();
 
+    // Reject non-card standard barcode formats
+    if (trimmed.startsWith('WIFI:') ||
+        trimmed.startsWith('mailto:') ||
+        trimmed.startsWith('tel:') ||
+        trimmed.startsWith('sms:')) {
+      return null;
+    }
+
+    // Check if payload has 'mc:' prefix
+    if (trimmed.startsWith('mc:')) {
+      final token = trimmed.substring(3).trim();
+      return token.isNotEmpty ? token : null;
+    }
+
     // Check if payload is a URL
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
       try {
         final uri = Uri.parse(trimmed);
         final segments = uri.pathSegments;
         if (segments.isNotEmpty) {
-          // If URL path is /c/{token} or /card/{token}
+          // If URL path is /c/{token} or /card/{token} or last segment
           return segments.last;
         }
       } catch (_) {
@@ -26,7 +40,7 @@ class QrValidator {
       }
     }
 
-    // Direct token string
+    // Direct token string (e.g., QR-MOCK-001, CARD001, CC-12345)
     if (trimmed.length >= 4) {
       return trimmed;
     }
