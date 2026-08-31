@@ -43,13 +43,16 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
     if (rawUrl.isEmpty) return;
 
     final normalized = AppConfig.normalizeUrl(rawUrl);
-    // Replace /api/v1 with /api/v1/health or /api/health
-    final healthUrl = normalized.endsWith('/health')
-        ? normalized
-        : normalized.endsWith('/')
-            ? '${normalized}health'
-            : '$normalized/health';
+    var healthUrl = normalized;
+    if (!healthUrl.endsWith('/health')) {
+      if (healthUrl.endsWith('/')) {
+        healthUrl = '${healthUrl}health';
+      } else {
+        healthUrl = '$healthUrl/health';
+      }
+    }
 
+    if (!mounted) return;
     setState(() {
       _isTesting = true;
       _testResult = null;
@@ -68,6 +71,7 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
       final resp = await testDio.get(healthUrl);
       stopwatch.stop();
 
+      if (!mounted) return;
       if (resp.statusCode == 200) {
         setState(() {
           _testSuccess = true;
@@ -76,20 +80,21 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
       } else {
         setState(() {
           _testSuccess = false;
-          _testResult = '✗ HTTP ${resp.statusCode}: Server responded with error';
+          _testResult = '✗ HTTP ${resp.statusCode}: Server returned error';
         });
       }
     } catch (e) {
       stopwatch.stop();
+      if (!mounted) return;
       setState(() {
         _testSuccess = false;
         if (e is DioException) {
           if (e.type == DioExceptionType.connectionTimeout) {
-            _testResult = '✗ Timed out (4s). Check that phone & laptop are on same Wi-Fi.';
+            _testResult = '✗ Timed out (4s). Ensure phone & laptop are on the same Wi-Fi.';
           } else if (e.type == DioExceptionType.connectionError) {
-            _testResult = '✗ Connection refused. Ensure backend is running (npm run dev).';
+            _testResult = '✗ Connection refused. Check IP/port or if using USB run adb reverse.';
           } else {
-            _testResult = '✗ ${e.message ?? "Connection failed"}';
+            _testResult = '✗ ${e.message ?? "Connection error"}';
           }
         } else {
           _testResult = '✗ Unable to reach host';
@@ -154,7 +159,7 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Enter your laptop\'s LAN IP or backend API URL:',
+              'Select connection mode or enter laptop IP:',
               style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
             ),
             const SizedBox(height: 12),
@@ -162,7 +167,7 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
               controller: _urlController,
               style: const TextStyle(color: Colors.white, fontSize: 14),
               decoration: InputDecoration(
-                hintText: 'http://192.168.X.X:3000/api/v1',
+                hintText: 'http://192.168.104.179:3000/api/v1',
                 hintStyle: const TextStyle(color: Color(0xFF64748B)),
                 filled: true,
                 fillColor: const Color(0xFF0F172A),
@@ -189,7 +194,7 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
               children: [
                 ActionChip(
                   avatar: const Icon(Icons.wifi, size: 14, color: AppColors.primary),
-                  label: const Text('Laptop LAN', style: TextStyle(fontSize: 12)),
+                  label: const Text('Wi-Fi LAN', style: TextStyle(fontSize: 12)),
                   backgroundColor: const Color(0xFF0F172A),
                   side: const BorderSide(color: Color(0xFF334155)),
                   onPressed: () {
@@ -198,7 +203,7 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
                 ),
                 ActionChip(
                   avatar: const Icon(Icons.usb, size: 14, color: Colors.cyan),
-                  label: const Text('127.0.0.1 (USB)', style: TextStyle(fontSize: 12)),
+                  label: const Text('USB (127.0.0.1)', style: TextStyle(fontSize: 12)),
                   backgroundColor: const Color(0xFF0F172A),
                   side: const BorderSide(color: Color(0xFF334155)),
                   onPressed: () {

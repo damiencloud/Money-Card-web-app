@@ -23,7 +23,7 @@ class AppConfig {
   /// Primary USB Reverse / Local Loopback endpoint
   static const String defaultBaseUrl = 'http://127.0.0.1:3000/api/v1';
 
-  /// Current active Laptop LAN endpoint
+  /// Current active Laptop Wi-Fi LAN endpoint
   static const String defaultLanBaseUrl = 'http://192.168.105.39:3000/api/v1';
 
   /// Active API Mode: Strictly REAL LIVE SERVER
