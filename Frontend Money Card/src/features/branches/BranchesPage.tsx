@@ -27,6 +27,7 @@ import {
   Power,
   AlertCircle,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 
 export function BranchesPage() {
@@ -45,6 +46,8 @@ export function BranchesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteApiConflict, setDeleteApiConflict] = useState<boolean>(false);
 
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
   const [branchNameInput, setBranchNameInput] = useState('');
@@ -261,6 +264,47 @@ export function BranchesPage() {
     }
   };
 
+  // ── Delete / Archive Branch ────────────────────────────────
+  const handleOpenDelete = (branch: Branch) => {
+    setSelectedBranch(branch);
+    setModalApiError(null);
+    setDeleteApiConflict(false);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteSubmit = async (forceArchive = false) => {
+    if (!selectedBranch) return;
+    setIsSubmitting(true);
+    setModalApiError(null);
+
+    try {
+      const result = await apiService.branches.deleteBranch(selectedBranch.id, {
+        archive: forceArchive,
+        force: forceArchive,
+      });
+
+      if (!result.success) {
+        if ((result.error as any)?.code === 'DEPENDENT_RECORDS_EXIST' || (result.error as any)?.status === 409) {
+          setDeleteApiConflict(true);
+        }
+        setModalApiError(result.error.message || 'Failed to delete branch');
+        return;
+      }
+
+      notify.success(
+        result.data?.archived
+          ? 'Branch deactivated to preserve historical accounting records'
+          : 'Branch deleted successfully',
+      );
+      setShowDeleteModal(false);
+      fetchBranches();
+    } catch {
+      setModalApiError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // ── Data Table Columns ────────────────────────────────────
   const columns = [
     {
@@ -324,6 +368,19 @@ export function BranchesPage() {
                 leftIcon={<Power className="h-3.5 w-3.5" />}
               >
                 {branch.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+              </Button>
+            )}
+            {/* Delete Branch */}
+            {canManage && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleOpenDelete(branch)}
+                title="Delete Branch"
+                className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30"
+                leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+              >
+                Delete
               </Button>
             )}
           </div>
@@ -549,6 +606,72 @@ export function BranchesPage() {
             >
               Confirm {selectedBranch?.status === 'ACTIVE' ? 'Deactivation' : 'Activation'}
             </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
+      {/* ── Delete Confirmation Modal ────────────────────────────── */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => !isSubmitting && setShowDeleteModal(false)}
+        title="Delete Branch"
+        description="Permanent removal or safe deactivation of branch"
+        size="md"
+      >
+        <div className="space-y-4">
+          {modalApiError && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold">Cannot Delete Branch</p>
+                <p>{modalApiError}</p>
+              </div>
+            </div>
+          )}
+
+          {!deleteApiConflict ? (
+            <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 space-y-2">
+              <p className="text-sm text-slate-200 font-medium">
+                Are you sure you want to delete <span className="text-violet-300 font-bold font-mono">{selectedBranch?.name}</span>?
+              </p>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                If this branch has no dependent transactions or sessions, it will be permanently deleted. If historical records exist, the backend will safely preserve accounting data.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-2 text-xs text-amber-200">
+              <p className="font-bold text-amber-300">Safe Deactivation Available</p>
+              <p>
+                This branch cannot be permanently erased because customers have financial transactions recorded here. You can safely <strong>Deactivate</strong> it so it is hidden from operations while preserving all historical records.
+              </p>
+            </div>
+          )}
+
+          <ModalFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setShowDeleteModal(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            {deleteApiConflict ? (
+              <Button
+                variant="primary"
+                onClick={() => handleDeleteSubmit(true)}
+                isLoading={isSubmitting}
+                className="bg-amber-600 hover:bg-amber-500 text-white"
+              >
+                Safe Deactivate
+              </Button>
+            ) : (
+              <Button
+                variant="danger"
+                onClick={() => handleDeleteSubmit(false)}
+                isLoading={isSubmitting}
+              >
+                Delete Branch
+              </Button>
+            )}
           </ModalFooter>
         </div>
       </Modal>

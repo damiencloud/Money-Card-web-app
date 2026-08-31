@@ -4,6 +4,14 @@ import { mockAuthHandlers } from './auth';
 import type { ApiResult, Branch, PaginatedData, PaginationParams } from '@/types';
 
 export const mockBranchesHandlers = {
+  async deleteBranch(id: string, _options?: { force?: boolean; archive?: boolean }): Promise<ApiResult<any>> {
+    await mockDelay();
+    const branch = mockStore.branches.find((b) => b.id === id);
+    if (!branch) return createMockError('NOT_FOUND', 'Branch not found');
+    mockStore.branches = mockStore.branches.filter((b) => b.id !== id);
+    return createMockSuccess({ deleted: true, message: 'Branch deleted successfully.' });
+  },
+
   async getBranches(params?: PaginationParams): Promise<ApiResult<PaginatedData<Branch>>> {
     await mockDelay();
     const currentUser = mockAuthHandlers.getCurrentSessionUser();

@@ -19,6 +19,14 @@ import type {
 } from '@/types';
 
 export const mockCardsHandlers = {
+  async deleteCard(id: string): Promise<ApiResult<any>> {
+    await mockDelay();
+    const card = mockStore.cards.find((c) => c.id === id);
+    if (!card) return createMockError('NOT_FOUND', 'Card not found');
+    mockStore.cards = mockStore.cards.filter((c) => c.id !== id);
+    return createMockSuccess({ deleted: true, message: 'Card permanently deleted.' });
+  },
+
   // GET /api/v1/cards
   async getCards(params?: PaginationParams): Promise<ApiResult<PaginatedData<Card>>> {
     await mockDelay();
@@ -211,6 +219,8 @@ export const mockCardsHandlers = {
   },
 
   // POST /api/v1/cards/bulk-assign-numbers
+  
+
   async bulkAssignCardNumbers(req: BulkAssignCardNumbersRequest): Promise<ApiResult<BulkAssignCardNumbersResponseData>> {
     await mockDelay();
     const currentUser = mockAuthHandlers.getCurrentSessionUser();

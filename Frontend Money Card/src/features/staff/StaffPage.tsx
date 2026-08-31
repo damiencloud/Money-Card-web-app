@@ -42,6 +42,7 @@ import {
   ArrowRight,
   ArrowLeft,
   User,
+  Trash2,
 } from 'lucide-react';
 
 export function StaffPage() {
@@ -86,6 +87,7 @@ export function StaffPage() {
 
   // ── Status Toggle Modal ───────────────────────────────────
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showDeleteStaffModal, setShowDeleteStaffModal] = useState(false);
 
   // ── Form & Selection State ────────────────────────────────
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
@@ -444,6 +446,39 @@ export function StaffPage() {
     }
   };
 
+  // ── Delete / Deactivate Staff ──────────────────────────────
+  const handleOpenDeleteStaff = (staff: Staff) => {
+    setSelectedStaff(staff);
+    setModalApiError(null);
+    setShowDeleteStaffModal(true);
+  };
+
+  const handleDeleteStaffSubmit = async () => {
+    if (!selectedStaff) return;
+    setIsSubmitting(true);
+    setModalApiError(null);
+
+    try {
+      const res = await apiService.staff.deleteStaff(selectedStaff.id);
+      if (!res.success) {
+        setModalApiError(res.error.message || 'Failed to delete staff member');
+        return;
+      }
+
+      notify.success(
+        res.data?.deactivated
+          ? 'Staff member deactivated to preserve historical transaction records'
+          : 'Staff member deleted successfully',
+      );
+      setShowDeleteStaffModal(false);
+      fetchStaffData();
+    } catch {
+      setModalApiError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // ── Table Columns ─────────────────────────────────────────
   const columns = [
     {
@@ -567,6 +602,19 @@ export function StaffPage() {
               leftIcon={<Power className="h-3.5 w-3.5" />}
             >
               {staff.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+            </Button>
+          )}
+          {/* Delete Staff Member */}
+          {canManage && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleOpenDeleteStaff(staff)}
+              title="Delete Staff Member"
+              className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30"
+              leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+            >
+              Delete
             </Button>
           )}
         </div>
@@ -1379,6 +1427,52 @@ export function StaffPage() {
               disabled={isSubmitting}
             >
               Confirm {selectedStaff?.status === 'ACTIVE' ? 'Deactivation' : 'Activation'}
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
+      {/* ── Delete Staff Confirmation Modal ───────────────────────── */}
+      <Modal
+        isOpen={showDeleteStaffModal}
+        onClose={() => !isSubmitting && setShowDeleteStaffModal(false)}
+        title="Delete Staff Member"
+        description="Permanently remove staff account or safely deactivate"
+        size="md"
+      >
+        <div className="space-y-4">
+          {modalApiError && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold">Action Blocked</p>
+                <p>{modalApiError}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 space-y-2">
+            <p className="text-sm text-slate-200 font-medium">
+              Are you sure you want to remove <span className="text-violet-300 font-bold font-mono">{selectedStaff?.name}</span> ({selectedStaff?.email})?
+            </p>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              If this staff member has never processed sessions or transactions, their account will be permanently removed. If historical transaction records exist, their access will be safely deactivated and tokens revoked, preserving all "Performed By" audit history.
+            </p>
+          </div>
+
+          <ModalFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setShowDeleteStaffModal(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteStaffSubmit}
+              isLoading={isSubmitting}
+            >
+              Confirm Deletion
             </Button>
           </ModalFooter>
         </div>

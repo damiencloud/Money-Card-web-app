@@ -11,6 +11,7 @@ import {
   resolveCard,
   blockCard,
   unblockCard,
+  deleteCard,
 } from '../controllers/cards.controller.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
 import { requirePermission } from '../middlewares/permission.middleware.js';
@@ -30,5 +31,7 @@ cardsRouter.get('/history', requirePermission(PermissionCode.CARD_VIEW), listCus
 cardsRouter.get('/:id', requirePermission(PermissionCode.CARD_VIEW), getCardById);
 cardsRouter.post('/:id/block', requirePermission(PermissionCode.CARD_BLOCK), blockCard);
 cardsRouter.post('/:id/unblock', requirePermission(PermissionCode.CARD_UNBLOCK), unblockCard);
+
+cardsRouter.delete('/:id', requirePermission(PermissionCode.CARD_BLOCK), deleteCard);
 
 export default cardsRouter;

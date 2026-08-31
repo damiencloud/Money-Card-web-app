@@ -233,3 +233,88 @@ export async function updateBranch(req: Request, res: Response) {
 
   return sendSuccess(res, updated);
 }
+
+export async function deleteBranch(req: Request, res: Response) {
+  const { id } = req.params;
+  const orgId = req.user?.organizationId;
+  const force = req.query.force === 'true' || req.query.archive === 'true';
+
+  const branch = await prisma.branch.findFirst({
+    where: { id, organizationId: orgId || undefined },
+    include: {
+      _count: {
+        select: {
+          cardSessions: true,
+          transactions: true,
+          inventoryItems: true,
+          staffAssignments: true,
+        },
+      },
+    },
+  });
+
+  if (!branch) {
+    return sendError(res, 404, 'NOT_FOUND', 'Branch not found');
+  }
+
+  const remainingActiveCount = await prisma.branch.count({
+    where: {
+      organizationId: branch.organizationId,
+      id: { not: id },
+      status: 'ACTIVE',
+    },
+  });
+
+  const hasFinancialRecords = branch._count.cardSessions > 0 || branch._count.transactions > 0;
+
+  if (hasFinancialRecords) {
+    if (force) {
+      if (remainingActiveCount === 0 && branch.status === 'ACTIVE') {
+        return sendError(
+          res,
+          400,
+          'MIN_ACTIVE_BRANCH_REQUIRED',
+          'Cannot deactivate this branch. An organization must have at least one active branch.',
+        );
+      }
+      const updated = await prisma.branch.update({
+        where: { id },
+        data: { status: 'INACTIVE' },
+      });
+      return sendSuccess(res, {
+        archived: true,
+        message: 'Branch has historical session and transaction records and was safely deactivated.',
+        branch: updated,
+      });
+    }
+
+    return sendError(
+      res,
+      409,
+      'DEPENDENT_RECORDS_EXIST',
+      `Cannot permanently delete this branch because it contains ${branch._count.cardSessions} session(s) and ${branch._count.transactions} transaction(s). You can deactivate it instead.`,
+      {
+        canArchive: true,
+        cardSessionsCount: branch._count.cardSessions,
+        transactionsCount: branch._count.transactions,
+      },
+    );
+  }
+
+  if (branch.status === 'ACTIVE' && remainingActiveCount === 0) {
+    return sendError(
+      res,
+      400,
+      'MIN_ACTIVE_BRANCH_REQUIRED',
+      'Cannot delete this branch. An organization must have at least one active branch.',
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.branchInventory.deleteMany({ where: { branchId: id } });
+    await tx.userBranch.deleteMany({ where: { branchId: id } });
+    await tx.branch.delete({ where: { id } });
+  });
+
+  return sendSuccess(res, { deleted: true, message: 'Branch deleted successfully.' });
+}

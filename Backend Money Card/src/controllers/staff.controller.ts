@@ -445,3 +445,82 @@ export async function resendStaffInvite(req: Request, res: Response) {
     message: `Activation invitation re-sent successfully to ${user.email}.`,
   });
 }
+
+export async function deleteStaffMember(req: Request, res: Response) {
+  const { id } = req.params;
+  const orgId = req.user?.organizationId;
+
+  if (!orgId && req.user?.role !== Role.SUPER_ADMIN) {
+    return sendError(res, 403, 'FORBIDDEN', 'No organization context found');
+  }
+
+  const user = await prisma.user.findFirst({
+    where: {
+      id,
+      ...(orgId ? { organizationId: orgId } : {}),
+      role: Role.STAFF,
+    },
+    include: {
+      _count: {
+        select: {
+          recordedTransactions: true,
+          issuedSessions: true,
+          settledSessions: true,
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    return sendError(res, 404, 'NOT_FOUND', 'Staff member not found');
+  }
+
+  const activeSessionsCount = await prisma.cardSession.count({
+    where: {
+      organizationId: user.organizationId || undefined,
+      issuedByUserId: user.id,
+      status: 'ACTIVE',
+    },
+  });
+
+  if (activeSessionsCount > 0) {
+    return sendError(
+      res,
+      400,
+      'STAFF_HAS_ACTIVE_SESSIONS',
+      `Cannot delete or deactivate staff member because they currently have ${activeSessionsCount} open card session(s). Settle all open sessions first.`,
+    );
+  }
+
+  const hasHistory =
+    user._count.recordedTransactions > 0 ||
+    user._count.issuedSessions > 0 ||
+    user._count.settledSessions > 0;
+
+  if (hasHistory) {
+    await prisma.$transaction(async (tx) => {
+      await tx.userBranch.deleteMany({ where: { userId: user.id } });
+      await tx.userPermission.deleteMany({ where: { userId: user.id } });
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          status: UserStatus.DEACTIVATED,
+          tokenVersion: { increment: 1 },
+        },
+      });
+    });
+
+    return sendSuccess(res, {
+      deactivated: true,
+      message: 'Staff member has historical transaction records and was safely deactivated. Login tokens revoked.',
+    });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.userBranch.deleteMany({ where: { userId: user.id } });
+    await tx.userPermission.deleteMany({ where: { userId: user.id } });
+    await tx.user.delete({ where: { id: user.id } });
+  });
+
+  return sendSuccess(res, { deleted: true, message: 'Staff member permanently deleted.' });
+}

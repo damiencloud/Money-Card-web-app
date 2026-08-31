@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../config/database.js';
 import { sendError, sendSuccess } from '../utils/response.js';
 import { generateQrToken } from '../utils/crypto.js';
-import { CardStatus, CardAssignmentStatus, CardHistoryAction } from '@prisma/client';
+import { CardStatus, CardAssignmentStatus, CardHistoryAction, SessionStatus } from '@prisma/client';
 import { getEffectiveLimits } from '../utils/limits.js';
 
 export async function getCards(req: Request, res: Response) {
@@ -661,4 +661,59 @@ export async function getCardById(req: Request, res: Response) {
   }
 
   return sendSuccess(res, card);
+}
+
+export async function deleteCard(req: Request, res: Response) {
+  const { id } = req.params;
+  const orgId = req.user?.organizationId;
+  if (!orgId) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
+  }
+
+  const card = await prisma.card.findFirst({
+    where: { id, organizationId: orgId },
+    include: {
+      sessions: {
+        where: { status: SessionStatus.ACTIVE },
+      },
+      _count: {
+        select: {
+          sessions: true,
+          historyEvents: true,
+        },
+      },
+    },
+  });
+
+  if (!card) {
+    return sendError(res, 404, 'NOT_FOUND', 'Card not found');
+  }
+
+  if (card.sessions.length > 0) {
+    return sendError(
+      res,
+      400,
+      'CARD_HAS_ACTIVE_SESSION',
+      `Cannot delete card "${card.physicalCardNumber || card.qrToken}" because it currently has an active open session. Settle or return the card first.`,
+    );
+  }
+
+  if (card._count.sessions > 0 || card._count.historyEvents > 0) {
+    const updated = await prisma.card.update({
+      where: { id },
+      data: {
+        status: CardStatus.BLOCKED,
+      },
+    });
+
+    return sendSuccess(res, {
+      archived: true,
+      message: 'Card has historical session and transaction records. It has been safely deactivated/blocked to preserve financial history.',
+      card: updated,
+    });
+  }
+
+  await prisma.card.delete({ where: { id } });
+
+  return sendSuccess(res, { deleted: true, message: 'Card permanently deleted.' });
 }

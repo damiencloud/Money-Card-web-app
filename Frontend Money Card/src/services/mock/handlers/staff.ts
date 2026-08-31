@@ -12,6 +12,14 @@ import type {
 } from '@/types';
 
 export const mockStaffHandlers = {
+  async deleteStaff(id: string): Promise<ApiResult<any>> {
+    await mockDelay();
+    const staff = mockStore.staffEntities.find((s) => s.id === id);
+    if (!staff) return createMockError('NOT_FOUND', 'Staff member not found');
+    mockStore.staffEntities = mockStore.staffEntities.filter((s) => s.id !== id);
+    return createMockSuccess({ deleted: true, message: 'Staff member deleted.' });
+  },
+
   async resendInvite(_id: string): Promise<ApiResult<any>> {
     await mockDelay();
     return createMockSuccess({ message: 'Invitation email resent successfully' });
@@ -161,6 +169,8 @@ export const mockStaffHandlers = {
   async updateStaffPermissions(id: string, permissions: Permission[]): Promise<ApiResult<Staff>> {
     return this.updateStaff(id, { permissions });
   },
+
+  
 
   async getPermissions(): Promise<ApiResult<{ code: Permission; name: string; area: string }[]>> {
     await mockDelay();

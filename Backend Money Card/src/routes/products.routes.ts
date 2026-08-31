@@ -10,6 +10,7 @@ import {
   getInventoryMovements,
   getCsvTemplate,
   importInventoryCsv,
+  deleteInventoryItem,
 } from '../controllers/products.controller.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
 import { requirePermission } from '../middlewares/permission.middleware.js';
@@ -33,3 +34,6 @@ inventoryRouter.post('/adjust', requirePermission(PermissionCode.INVENTORY_MANAG
 inventoryRouter.patch('/:branchId/:productId', requirePermission(PermissionCode.INVENTORY_MANAGE), updateInventoryStock);
 inventoryRouter.patch('/:id', requirePermission(PermissionCode.INVENTORY_MANAGE), updateInventoryStock);
 inventoryRouter.post('/import', requirePermission(PermissionCode.INVENTORY_IMPORT), importInventoryCsv);
+
+inventoryRouter.delete('/:branchId/:productId', requirePermission(PermissionCode.INVENTORY_MANAGE), deleteInventoryItem);
+inventoryRouter.delete('/:id', requirePermission(PermissionCode.INVENTORY_MANAGE), deleteInventoryItem);

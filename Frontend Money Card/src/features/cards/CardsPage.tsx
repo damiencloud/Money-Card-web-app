@@ -50,6 +50,7 @@ import {
   Check,
   Tag,
   ShieldAlert,
+  Trash2,
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 
@@ -78,6 +79,8 @@ export function CardsPage() {
   const [showQrImportModal, setShowQrImportModal] = useState(false);
   const [showSingleRegisterModal, setShowSingleRegisterModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showDeleteCardModal, setShowDeleteCardModal] = useState(false);
+  const [deleteCardApiError, setDeleteCardApiError] = useState<string | null>(null);
   const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showBlockModal, setShowBlockModal] = useState(false);
@@ -505,6 +508,35 @@ export function CardsPage() {
     }
   };
 
+  // ─── Delete Card Action ───────────────────────────────────────────
+  const handleOpenDeleteCard = (card: CardEntity) => {
+    setSelectedCard(card);
+    setDeleteCardApiError(null);
+    setShowDeleteCardModal(true);
+  };
+
+  const handleDeleteCardSubmit = async () => {
+    if (!selectedCard) return;
+    setDeleteCardApiError(null);
+    try {
+      const res = await apiService.cards.deleteCard(selectedCard.id);
+      if (!res.success) {
+        setDeleteCardApiError(res.error.message || 'Failed to delete card');
+        return;
+      }
+
+      toast.success(
+        res.data?.archived
+          ? `Card ${selectedCard.physicalCardNumber || selectedCard.qrToken} deactivated to preserve transaction history`
+          : `Card ${selectedCard.physicalCardNumber || selectedCard.qrToken} permanently deleted`,
+      );
+      setShowDeleteCardModal(false);
+      fetchCardsData();
+    } catch {
+      setDeleteCardApiError('Network error while deleting card');
+    }
+  };
+
   // ─── Block / Unblock Actions ──────────────────────────────────────
   const handleConfirmBlock = async () => {
     if (!selectedCard) return;
@@ -693,6 +725,18 @@ export function CardsPage() {
                     }}
                   >
                     <Unlock className="h-3 w-3" />
+                  </Button>
+                )}
+                {/* Delete / Deactivate Card */}
+                {canBlock && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs py-1 px-2 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40"
+                    title="Delete / Deactivate Card"
+                    onClick={() => handleOpenDeleteCard(card)}
+                  >
+                    <Trash2 className="h-3 w-3" />
                   </Button>
                 )}
               </>
@@ -1443,6 +1487,48 @@ export function CardsPage() {
           </ModalFooter>
         </Modal>
       )}
+      {/* ── Delete Card Confirmation Modal ──────────────────────── */}
+      <Modal
+        isOpen={showDeleteCardModal}
+        onClose={() => setShowDeleteCardModal(false)}
+        title="Delete Card"
+        description="Permanently delete unassigned card or safely deactivate"
+        size="md"
+      >
+        <div className="space-y-4">
+          {deleteCardApiError && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold">Action Blocked</p>
+                <p>{deleteCardApiError}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 space-y-2">
+            <p className="text-sm text-slate-200 font-medium">
+              Are you sure you want to remove card{' '}
+              <span className="text-emerald-400 font-mono font-bold">
+                {selectedCard?.physicalCardNumber || selectedCard?.qrToken}
+              </span>
+              ?
+            </p>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Cards with no session or transaction history will be permanently deleted from the organization registry. Cards with historical sessions/transactions will be safely deactivated/blocked so that previous customer statements and receipts remain intact.
+            </p>
+          </div>
+
+          <ModalFooter>
+            <Button variant="ghost" onClick={() => setShowDeleteCardModal(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleDeleteCardSubmit}>
+              Confirm Deletion
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
     </div>
   );
 }

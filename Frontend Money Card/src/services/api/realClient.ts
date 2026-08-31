@@ -239,6 +239,10 @@ export const realClient: typeof mockClient = {
     async updateBranch(id: string, data: { name?: string; status?: string }): Promise<ApiResult<Branch>> {
       return handleApiCall(() => apiClient.patch<Branch>(`/v1/branches/${id}`, data));
     },
+
+    async deleteBranch(id: string, options?: { force?: boolean; archive?: boolean }): Promise<ApiResult<any>> {
+      return handleApiCall(() => apiClient.delete(`/v1/branches/${id}`, { params: options }));
+    },
   },
 
   staff: {
@@ -289,6 +293,10 @@ export const realClient: typeof mockClient = {
         };
       }
       return res;
+    },
+
+    async deleteStaff(id: string): Promise<ApiResult<any>> {
+      return handleApiCall(() => apiClient.delete(`/v1/staff/${id}`));
     },
   },
 
@@ -354,6 +362,10 @@ export const realClient: typeof mockClient = {
 
     async bulkAssignCardNumbers(req: BulkAssignCardNumbersRequest): Promise<ApiResult<BulkAssignCardNumbersResponseData>> {
       return handleApiCall(() => apiClient.post<BulkAssignCardNumbersResponseData>('/v1/cards/bulk-assign', req));
+    },
+
+    async deleteCard(id: string): Promise<ApiResult<any>> {
+      return handleApiCall(() => apiClient.delete(`/v1/cards/${id}`));
     },
   },
 
@@ -452,6 +464,10 @@ export const realClient: typeof mockClient = {
     async updateProduct(id: string, req: UpdateProductRequest): Promise<ApiResult<ProductWithInventory>> {
       return handleApiCall(() => apiClient.patch<ProductWithInventory>(`/v1/products/${id}`, req));
     },
+
+    async deleteProduct(id: string): Promise<ApiResult<any>> {
+      return handleApiCall(() => apiClient.delete(`/v1/products/${id}`));
+    },
   },
 
   inventory: {
@@ -476,6 +492,14 @@ export const realClient: typeof mockClient = {
 
     async importInventory(req: any): Promise<ApiResult<any>> {
       return handleApiCall(() => apiClient.post('/v1/inventory/import', req));
+    },
+
+    async deleteInventory(id: string): Promise<ApiResult<any>> {
+      return handleApiCall(() => apiClient.delete(`/v1/inventory/${id}`));
+    },
+
+    async deleteInventoryByBranchAndProduct(branchId: string, productId: string): Promise<ApiResult<any>> {
+      return handleApiCall(() => apiClient.delete(`/v1/inventory/${branchId}/${productId}`));
     },
   },
 

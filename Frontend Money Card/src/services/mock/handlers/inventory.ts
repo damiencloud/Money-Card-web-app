@@ -18,6 +18,18 @@ import type {
 const storedPreviews: Map<string, CsvImportPreview> = new Map();
 
 export const mockInventoryHandlers = {
+  async deleteInventory(id: string): Promise<ApiResult<any>> {
+    await mockDelay();
+    mockStore.inventory = mockStore.inventory.filter((i) => i.id !== id);
+    return createMockSuccess({ deleted: true, message: 'Inventory item removed.' });
+  },
+
+  async deleteInventoryByBranchAndProduct(branchId: string, productId: string): Promise<ApiResult<any>> {
+    await mockDelay();
+    mockStore.inventory = mockStore.inventory.filter((i) => !(i.branchId === branchId && i.productId === productId));
+    return createMockSuccess({ deleted: true, message: 'Inventory item removed.' });
+  },
+
   // GET /api/v1/inventory
   async getInventory(params?: PaginationParams): Promise<ApiResult<PaginatedData<InventoryItem>>> {
     await mockDelay();

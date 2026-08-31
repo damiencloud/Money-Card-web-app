@@ -35,6 +35,7 @@ import {
   TrendingUp,
   AlertTriangle,
   Layers,
+  Trash2,
 } from 'lucide-react';
 
 export interface InventoryItemWithDetails extends InventoryItem {
@@ -102,6 +103,10 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
   const [inventoryStatusFilter, setInventoryStatusFilter] = useState('ALL');
 
   const [showAdjustModal, setShowAdjustModal] = useState(false);
+  const [showDeleteProductModal, setShowDeleteProductModal] = useState(false);
+  const [showDeleteInventoryModal, setShowDeleteInventoryModal] = useState(false);
+  const [selectedProductToDelete, setSelectedProductToDelete] = useState<ProductWithInventory | null>(null);
+  const [selectedInventoryToDelete, setSelectedInventoryToDelete] = useState<InventoryItemWithDetails | null>(null);
   const [selectedInventory, setSelectedInventory] = useState<InventoryItemWithDetails | null>(null);
 
   const [adjustQtyInput, setAdjustQtyInput] = useState('');
@@ -349,6 +354,65 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     }
   };
 
+  // ─── Delete Product / Inventory Handlers ─────────────────────────────────
+  const handleOpenDeleteProduct = (product: ProductWithInventory) => {
+    setSelectedProductToDelete(product);
+    setProductModalApiError(null);
+    setShowDeleteProductModal(true);
+  };
+
+  const handleDeleteProductSubmit = async () => {
+    if (!selectedProductToDelete) return;
+    setIsProductSubmitting(true);
+    setProductModalApiError(null);
+
+    try {
+      const res = await apiService.products.deleteProduct(selectedProductToDelete.id);
+      if (!res.success) {
+        setProductModalApiError(res.error.message || 'Failed to archive product');
+        return;
+      }
+
+      notify.success(`Product '${selectedProductToDelete.itemName}' archived successfully`);
+      setShowDeleteProductModal(false);
+      fetchProductsData();
+      fetchInventoryData();
+    } catch {
+      setProductModalApiError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsProductSubmitting(false);
+    }
+  };
+
+  const handleOpenDeleteInventory = (item: InventoryItemWithDetails) => {
+    setSelectedInventoryToDelete(item);
+    setProductModalApiError(null);
+    setShowDeleteInventoryModal(true);
+  };
+
+  const handleDeleteInventorySubmit = async () => {
+    if (!selectedInventoryToDelete) return;
+    setIsProductSubmitting(true);
+    setProductModalApiError(null);
+
+    try {
+      const res = await apiService.inventory.deleteInventory(selectedInventoryToDelete.id);
+      if (!res.success) {
+        setProductModalApiError(res.error.message || 'Failed to remove inventory stock');
+        return;
+      }
+
+      notify.success(res.data?.message || 'Inventory stock removed for this branch');
+      setShowDeleteInventoryModal(false);
+      fetchInventoryData();
+      fetchProductsData();
+    } catch {
+      setProductModalApiError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsProductSubmitting(false);
+    }
+  };
+
   // ─── Metrics Calculations (Clean 3-Card Grid) ─────────────────────────────
   const productMetrics = useMemo(() => {
     const total = products.length;
@@ -444,6 +508,19 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
               {product.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
             </Button>
           )}
+            {/* Delete Product */}
+            {canManageProducts && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleOpenDeleteProduct(product)}
+                className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 ml-1.5"
+                leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                title="Archive Product"
+              >
+                Delete
+              </Button>
+            )}
         </div>
       ),
     },
@@ -539,6 +616,19 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
               Adjust Stock
             </Button>
           )}
+            {/* Delete Inventory Link */}
+            {canManageInventory && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleOpenDeleteInventory(item)}
+                className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 ml-1.5"
+                leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                title="Remove Stock from Branch"
+              >
+                Delete
+              </Button>
+            )}
         </div>
       ),
     },
@@ -994,6 +1084,99 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
             </Button>
           </ModalFooter>
         </form>
+      </Modal>
+      {/* ── Delete Product Confirmation Modal ───────────────────── */}
+      <Modal
+        isOpen={showDeleteProductModal}
+        onClose={() => !isProductSubmitting && setShowDeleteProductModal(false)}
+        title="Delete Product"
+        description="Archive product from master catalog"
+        size="md"
+      >
+        <div className="space-y-4">
+          {productModalApiError && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold">Action Failed</p>
+                <p>{productModalApiError}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 space-y-2">
+            <p className="text-sm text-slate-200 font-medium">
+              Are you sure you want to delete <span className="text-violet-300 font-bold font-mono">{selectedProductToDelete?.itemName}</span>?
+            </p>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              This product will be archived and hidden from POS sale menus. All historical receipts, purchase items, and past financial reports will continue to show this product's name and details.
+            </p>
+          </div>
+
+          <ModalFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setShowDeleteProductModal(false)}
+              disabled={isProductSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteProductSubmit}
+              isLoading={isProductSubmitting}
+            >
+              Archive & Delete Product
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
+
+      {/* ── Delete Branch Inventory Confirmation Modal ────────────── */}
+      <Modal
+        isOpen={showDeleteInventoryModal}
+        onClose={() => !isProductSubmitting && setShowDeleteInventoryModal(false)}
+        title="Remove Branch Stock"
+        description="Remove product stock allocation from branch"
+        size="md"
+      >
+        <div className="space-y-4">
+          {productModalApiError && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold">Action Failed</p>
+                <p>{productModalApiError}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 space-y-2">
+            <p className="text-sm text-slate-200 font-medium">
+              Remove stock for <span className="text-violet-300 font-bold font-mono">{selectedInventoryToDelete?.productName}</span> at <span className="text-amber-300 font-semibold">{selectedInventoryToDelete?.branchName}</span>?
+            </p>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              This only removes this branch's stock record. The product itself will remain intact in the organization's master product catalog and in other branch inventories.
+            </p>
+          </div>
+
+          <ModalFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setShowDeleteInventoryModal(false)}
+              disabled={isProductSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteInventorySubmit}
+              isLoading={isProductSubmitting}
+            >
+              Remove Branch Stock
+            </Button>
+          </ModalFooter>
+        </div>
       </Modal>
     </div>
   );

@@ -16,6 +16,14 @@ import type {
 } from '@/types';
 
 export const mockProductsHandlers = {
+  async deleteProduct(id: string): Promise<ApiResult<any>> {
+    await mockDelay();
+    const product = mockStore.products.find((p) => p.id === id);
+    if (!product) return createMockError('NOT_FOUND', 'Product not found');
+    product.status = 'INACTIVE';
+    return createMockSuccess({ deleted: true, message: 'Product archived.' });
+  },
+
   // GET /api/v1/products
   async getProducts(
     params?: PaginationParams & { category?: string },

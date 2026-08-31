@@ -8,6 +8,7 @@ import {
   updateStaffBranches,
   updateStaffPermissions,
   resendStaffInvite,
+  deleteStaffMember,
 } from '../controllers/staff.controller.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
 import { requireRole } from '../middlewares/role.middleware.js';
@@ -58,3 +59,5 @@ staffRouter.post(
   requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN),
   resendStaffInvite,
 );
+
+staffRouter.delete('/:id', requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN), deleteStaffMember);

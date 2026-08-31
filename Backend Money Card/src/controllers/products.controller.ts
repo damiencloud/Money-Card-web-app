@@ -696,3 +696,45 @@ export async function importInventoryCsv(req: Request, res: Response) {
     importedCount: createdProducts.length,
   });
 }
+
+export async function deleteInventoryItem(req: Request, res: Response) {
+  const { branchId, productId, id } = req.params;
+  const orgId = req.user?.organizationId;
+  if (!orgId) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
+  }
+
+  let inventoryRecord = null;
+
+  if (id) {
+    inventoryRecord = await prisma.branchInventory.findFirst({
+      where: {
+        id,
+        branch: { organizationId: orgId },
+      },
+      include: { branch: true, product: true },
+    });
+  } else if (branchId && productId) {
+    inventoryRecord = await prisma.branchInventory.findFirst({
+      where: {
+        branchId,
+        productId,
+        branch: { organizationId: orgId },
+      },
+      include: { branch: true, product: true },
+    });
+  }
+
+  if (!inventoryRecord) {
+    return sendError(res, 404, 'NOT_FOUND', 'Inventory item not found');
+  }
+
+  await prisma.branchInventory.delete({
+    where: { id: inventoryRecord.id },
+  });
+
+  return sendSuccess(res, {
+    deleted: true,
+    message: `Inventory stock removed for product "${inventoryRecord.product.itemName}" at branch "${inventoryRecord.branch.name}". Catalog product preserved.`,
+  });
+}
