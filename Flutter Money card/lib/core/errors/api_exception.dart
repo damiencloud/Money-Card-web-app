@@ -43,18 +43,29 @@ class ApiException implements Exception {
       );
     }
 
+    final targetUri = dioException.requestOptions.uri;
+    final host = targetUri.host.isNotEmpty ? targetUri.host : 'backend';
+    final port = targetUri.port != 0 && targetUri.port != 80 && targetUri.port != 443
+        ? ':${targetUri.port}'
+        : '';
+    final targetDisplay = '$host$port';
+
     switch (dioException.type) {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
-        return const ApiException(
+        return ApiException(
           code: ApiErrorCode.timeoutError,
-          message: 'Connection timed out. Please check your internet connection.',
+          message:
+              'Connection to $targetDisplay timed out. Ensure your phone and laptop are on the same Wi-Fi.',
         );
       case DioExceptionType.connectionError:
-        return const ApiException(
+        final isLoopback = host == 'localhost' || host == '127.0.0.1';
+        return ApiException(
           code: ApiErrorCode.networkError,
-          message: 'Network connection failed. Please check your connection.',
+          message: isLoopback
+              ? 'Cannot connect to localhost from a physical device. Tap Server Settings to set your Laptop LAN IP.'
+              : 'Cannot connect to server at $targetDisplay. Ensure backend server is running on laptop.',
         );
       case DioExceptionType.cancel:
         return const ApiException(
@@ -64,7 +75,7 @@ class ApiException implements Exception {
       case DioExceptionType.badCertificate:
         return const ApiException(
           code: ApiErrorCode.networkError,
-          message: 'Security certificate error.',
+          message: 'Security certificate verification error.',
         );
       case DioExceptionType.badResponse:
       case DioExceptionType.unknown:
@@ -87,37 +98,37 @@ class ApiException implements Exception {
       case 401:
         return ApiException(
           code: ApiErrorCode.unauthorized,
-          message: customMessage ?? 'Session expired. Please log in.',
+          message: customMessage ?? 'Invalid email or password. Please try again.',
           statusCode: 401,
         );
       case 403:
         return ApiException(
           code: ApiErrorCode.forbidden,
-          message: customMessage ?? 'Access forbidden. Insufficient permissions.',
+          message: customMessage ?? 'Access forbidden. You do not have permission for this branch.',
           statusCode: 403,
         );
       case 404:
         return ApiException(
           code: ApiErrorCode.notFound,
-          message: customMessage ?? 'Resource not found.',
+          message: customMessage ?? 'Resource or endpoint not found on server.',
           statusCode: 404,
         );
       case 409:
         return ApiException(
           code: ApiErrorCode.duplicateRequest,
-          message: customMessage ?? 'Conflict or duplicate request.',
+          message: customMessage ?? 'Conflict or duplicate record.',
           statusCode: 409,
         );
       case 410:
         return ApiException(
           code: ApiErrorCode.sessionNotFound,
-          message: customMessage ?? 'Session expired or resource gone.',
+          message: customMessage ?? 'Card session expired or settled.',
           statusCode: 410,
         );
       case 422:
         return ApiException(
           code: ApiErrorCode.validationError,
-          message: customMessage ?? 'Business validation error.',
+          message: customMessage ?? 'Validation failed. Please check your data.',
           statusCode: 422,
         );
       case 500:
@@ -126,7 +137,7 @@ class ApiException implements Exception {
       default:
         return ApiException(
           code: ApiErrorCode.serverError,
-          message: customMessage ?? 'Server error. Please try again later.',
+          message: customMessage ?? 'Internal server error. Please check backend logs.',
           statusCode: statusCode,
         );
     }

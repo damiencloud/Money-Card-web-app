@@ -37,10 +37,14 @@ app.use('/api/v1/v1', apiRouter);
 app.use(notFoundHandler);
 app.use(globalErrorHandler);
 
-const server = app.listen(env.PORT, () => {
-  console.log(`🚀 Money Card Backend Server running on http://localhost:${env.PORT}`);
-  console.log(`📡 API Base: http://localhost:${env.PORT}/api/v1`);
-  console.log(`🏥 Healthcheck: http://localhost:${env.PORT}/api/v1/health`);
+const HOST = process.env.HOST || '0.0.0.0';
+const PORT = Number(env.PORT) || 3000;
+
+const server = app.listen(PORT, HOST, () => {
+  console.log(`🚀 Money Card Backend Server running on http://${HOST}:${PORT}`);
+  console.log(`💻 Local Loopback: http://localhost:${PORT}/api/v1`);
+  console.log(`📱 Network LAN: http://0.0.0.0:${PORT}/api/v1 (Accessible from physical Android phone on Wi-Fi)`);
+  console.log(`🏥 Healthcheck: http://localhost:${PORT}/api/v1/health`);
 });
 
 process.on('SIGTERM', () => {

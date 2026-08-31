@@ -11,6 +11,11 @@ class DioClient {
 
   DioClient._(this.dio);
 
+  void updateBaseUrl(String newUrl) {
+    final normalized = AppConfig.normalizeUrl(newUrl);
+    dio.options.baseUrl = normalized;
+  }
+
   factory DioClient.create({
     required TokenStorage tokenStorage,
     String? baseUrl,
@@ -34,18 +39,25 @@ class DioClient {
 
     final dio = Dio(baseOptions);
 
-    // Failover interceptor: If 127.0.0.1 (USB) fails, transparently try Wi-Fi IP, and vice versa
+    // Endpoint sync and failover interceptor
     dio.interceptors.add(
       InterceptorsWrapper(
+        onRequest: (options, handler) {
+          // Always ensure the active baseUrl from AppConfig is respected
+          if (options.baseUrl.isEmpty) {
+            options.baseUrl = AppConfig.baseUrl;
+          }
+          return handler.next(options);
+        },
         onError: (DioException err, ErrorInterceptorHandler handler) async {
           if (err.type == DioExceptionType.connectionError ||
               err.type == DioExceptionType.connectionTimeout) {
             final currentUrl = err.requestOptions.baseUrl;
-            final isPrimary = currentUrl.contains('127.0.0.1') || currentUrl.contains('localhost');
-            final alternateUrl = isPrimary ? AppConfig.alternateBaseUrl : AppConfig.defaultBaseUrl;
+            final isLoopback = currentUrl.contains('127.0.0.1') || currentUrl.contains('localhost');
+            final alternateUrl = isLoopback ? AppConfig.defaultLanBaseUrl : AppConfig.defaultBaseUrl;
 
-            // Only retry once to avoid infinite loop
-            if (err.requestOptions.extra['retried_alternate'] != true) {
+            // Only retry once if current is not already alternate
+            if (err.requestOptions.extra['retried_alternate'] != true && currentUrl != alternateUrl) {
               try {
                 final options = Options(
                   method: err.requestOptions.method,
@@ -61,8 +73,8 @@ class DioClient {
                 final retryDio = Dio(
                   BaseOptions(
                     baseUrl: alternateUrl,
-                    connectTimeout: const Duration(seconds: 8),
-                    receiveTimeout: const Duration(seconds: 8),
+                    connectTimeout: const Duration(seconds: 5),
+                    receiveTimeout: const Duration(seconds: 5),
                   ),
                 );
 
