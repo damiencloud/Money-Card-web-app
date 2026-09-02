@@ -85,7 +85,7 @@ export function SessionsPage() {
   // ─── Filters State ────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
   const [sessionStatusFilter, setSessionStatusFilter] = useState<SessionStatus | 'ALL'>('ALL');
-  const [actionFilter, setActionFilter] = useState<CardHistoryAction | 'ALL'>('ALL');
+  const [actionFilter, setActionFilter] = useState<CardHistoryAction | 'ALL'>('CARD_BLOCKED');
   const [branchFilter, setBranchFilter] = useState<string>('ALL');
   const [dateRangeFilter, setDateRangeFilter] = useState<'ALL' | 'today' | 'yesterday' | '7d' | '30d'>('ALL');
 
@@ -639,7 +639,7 @@ export function SessionsPage() {
           }`}
         >
           <ShieldAlert className="h-4 w-4" />
-          <span>Card Block / Unblock Audit Trail ({filteredEvents.length})</span>
+          <span>Blocked Cards Audit Trail ({filteredEvents.length})</span>
         </button>
       </div>
 
@@ -671,11 +671,11 @@ export function SessionsPage() {
           ) : (
             <Select
               value={actionFilter}
-            onChange={(e) => setActionFilter(e.target.value as any)}
+              onChange={(e) => setActionFilter(e.target.value as any)}
               options={[
+                { value: 'CARD_BLOCKED', label: 'Blocked Cards Only' },
+                { value: 'CARD_UNBLOCKED', label: 'Unblocked Cards Only' },
                 { value: 'ALL', label: 'All Card Actions' },
-                { value: 'CARD_BLOCKED', label: 'Card Blocked Events' },
-                { value: 'CARD_UNBLOCKED', label: 'Card Unblocked Events' },
               ]}
             />
           )}
