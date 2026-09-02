@@ -126,6 +126,48 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Change temporary/mandatory password for authenticated staff
+  Future<bool> changeTemporaryPassword({
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    state = state.copyWith(
+      status: AuthStatus.authenticating,
+      errorMessage: null,
+    );
+
+    try {
+      final updatedUser = await _authRepository.changePassword(
+        newPassword: newPassword,
+        confirmPassword: confirmPassword,
+      );
+
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        user: updatedUser,
+      );
+      return true;
+    } on ApiException catch (e) {
+      String userMessage = e.message.isNotEmpty
+          ? e.message
+          : 'Unable to change password. Please try again.';
+
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        user: state.user,
+        errorMessage: userMessage,
+      );
+      return false;
+    } catch (e) {
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        user: state.user,
+        errorMessage: 'Unable to connect. Check your internet connection and try again.',
+      );
+      return false;
+    }
+  }
+
   /// Invalidate session and log out
   Future<void> logout() async {
     state = state.copyWith(status: AuthStatus.authenticating);

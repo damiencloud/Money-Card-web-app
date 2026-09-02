@@ -524,3 +524,87 @@ export async function deleteStaffMember(req: Request, res: Response) {
 
   return sendSuccess(res, { deleted: true, message: 'Staff member permanently deleted.' });
 }
+
+export async function changeStaffPassword(req: Request, res: Response) {
+  const { id } = req.params;
+  const { newPassword, temporary } = req.body;
+
+  if (!req.user) {
+    return sendError(res, 401, 'UNAUTHORIZED', 'Authentication required');
+  }
+
+  const staff = await prisma.user.findUnique({
+    where: { id },
+    include: {
+      organization: true,
+      assignedBranches: {
+        include: { branch: true },
+      },
+      permissions: true,
+    },
+  });
+
+  if (!staff) {
+    return sendError(res, 404, 'NOT_FOUND', 'Staff member not found');
+  }
+
+  // Ensure target user is a staff member
+  if (staff.role !== Role.STAFF) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Target user is not a staff member');
+  }
+
+  // Enforce multi-tenant organization boundary for Org Admin
+  if (req.user.role !== Role.SUPER_ADMIN) {
+    if (!req.user.organizationId || staff.organizationId !== req.user.organizationId) {
+      return sendError(
+        res,
+        403,
+        'FORBIDDEN',
+        'You do not have permission to manage staff in another organization',
+      );
+    }
+  }
+
+  // Check account status
+  if (staff.status === UserStatus.DEACTIVATED) {
+    return sendError(
+      res,
+      400,
+      'VALIDATION_ERROR',
+      'Cannot change password for a deactivated staff account',
+    );
+  }
+
+  const newHash = await hashPassword(newPassword);
+
+  // Update password, increment tokenVersion (invalidating existing mobile & web sessions),
+  // and set mustChangePassword flag if requested
+  const updatedStaff = await prisma.user.update({
+    where: { id: staff.id },
+    data: {
+      passwordHash: newHash,
+      tokenVersion: { increment: 1 },
+      mustChangePassword: !!temporary,
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      status: true,
+      mustChangePassword: true,
+      organizationId: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  console.log(
+    `[AUTH_AUDIT_LOG] STAFF_PASSWORD_CHANGE targetUserId=${staff.id} targetEmail=${staff.email} changedByUserId=${req.user.id} organizationId=${req.user.organizationId} temporary=${!!temporary} timestamp=${new Date().toISOString()}`,
+  );
+
+  return sendSuccess(res, {
+    message: `Staff password changed successfully for ${staff.name}.`,
+    staff: updatedStaff,
+  });
+}

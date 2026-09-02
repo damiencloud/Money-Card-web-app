@@ -9,6 +9,7 @@ import {
   updateStaffPermissions,
   resendStaffInvite,
   deleteStaffMember,
+  changeStaffPassword,
 } from '../controllers/staff.controller.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
 import { requireRole } from '../middlewares/role.middleware.js';
@@ -19,6 +20,7 @@ import {
   updateStaffMemberSchema,
   updateStaffBranchesSchema,
   updateStaffPermissionsSchema,
+  changeStaffPasswordSchema,
 } from '../validation/index.js';
 
 export const permissionsRouter = Router();
@@ -58,6 +60,13 @@ staffRouter.post(
   '/:id/resend-invite',
   requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN),
   resendStaffInvite,
+);
+
+staffRouter.patch(
+  '/:id/password',
+  requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN),
+  validateRequest({ body: changeStaffPasswordSchema }),
+  changeStaffPassword,
 );
 
 staffRouter.delete('/:id', requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN), deleteStaffMember);

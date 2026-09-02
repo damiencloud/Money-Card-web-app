@@ -9,6 +9,7 @@ class AuthUser {
   final String name;
   final String role; // 'STAFF'
   final String? organizationId;
+  final bool mustChangePassword;
   final List<AppPermission> permissions;
   final List<String> assignedBranchIds;
   final List<Branch> assignedBranches;
@@ -21,6 +22,7 @@ class AuthUser {
     required this.name,
     this.role = 'STAFF',
     this.organizationId,
+    this.mustChangePassword = false,
     required this.permissions,
     required this.assignedBranchIds,
     this.assignedBranches = const [],
@@ -46,6 +48,7 @@ class AuthUser {
       name: json['name'] as String? ?? '',
       role: json['role'] as String? ?? 'STAFF',
       organizationId: json['organizationId'] as String?,
+      mustChangePassword: json['mustChangePassword'] as bool? ?? false,
       permissions: AppPermission.fromStringList(json['permissions'] as List<dynamic>?),
       assignedBranchIds: branchIds,
       assignedBranches: branches,
@@ -60,6 +63,7 @@ class AuthUser {
         'name': name,
         'role': role,
         'organizationId': organizationId,
+        'mustChangePassword': mustChangePassword,
         'permissions': permissions.map((p) => p.value).toList(),
         'assignedBranchIds': assignedBranchIds,
         'assignedBranches': assignedBranches.map((b) => b.toJson()).toList(),

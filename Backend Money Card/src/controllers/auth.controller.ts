@@ -300,15 +300,11 @@ export async function changePassword(req: Request, res: Response) {
   }
 
   const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'Current password and new password are required');
+  if (!newPassword) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'New password is required');
   }
 
-  if (newPassword.length < 6) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'New password must be at least 6 characters');
-  }
-
-  if (currentPassword === newPassword) {
+  if (currentPassword && currentPassword === newPassword) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'New password must be different from current password');
   }
 
@@ -325,9 +321,20 @@ export async function changePassword(req: Request, res: Response) {
     return sendError(res, 404, 'NOT_FOUND', 'User not found');
   }
 
-  const isValid = await comparePassword(currentPassword, user.passwordHash);
-  if (!isValid) {
-    return sendError(res, 400, 'INVALID_CREDENTIALS', 'Current password does not match');
+  // If user is not in mustChangePassword state, currentPassword is required and verified
+  if (!user.mustChangePassword) {
+    if (!currentPassword) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Current password is required');
+    }
+    const isValid = await comparePassword(currentPassword, user.passwordHash);
+    if (!isValid) {
+      return sendError(res, 400, 'INVALID_CREDENTIALS', 'Current password does not match');
+    }
+  } else if (currentPassword) {
+    const isValid = await comparePassword(currentPassword, user.passwordHash);
+    if (!isValid) {
+      return sendError(res, 400, 'INVALID_CREDENTIALS', 'Current password does not match');
+    }
   }
 
   const newHash = await hashPassword(newPassword);

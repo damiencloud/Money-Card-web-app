@@ -86,6 +86,30 @@ class AuthRepository {
     }
   }
 
+  /// Change password (POST /api/v1/auth/change-password)
+  Future<AuthUser> changePassword({
+    String? currentPassword,
+    required String newPassword,
+    String? confirmPassword,
+  }) async {
+    final response = await authService.changePassword(
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+      confirmPassword: confirmPassword,
+    );
+
+    // Save fresh access token returned by backend
+    if (response.accessToken.isNotEmpty) {
+      final existingRefreshToken = await tokenStorage.getRefreshToken();
+      await tokenStorage.saveTokens(
+        accessToken: response.accessToken,
+        refreshToken: response.refreshToken ?? existingRefreshToken,
+      );
+    }
+
+    return response.user;
+  }
+
   /// Check if an active session exists
   Future<bool> hasStoredSession() async {
     return tokenStorage.hasAccessToken();

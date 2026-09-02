@@ -28,7 +28,7 @@ export const resetPasswordSchema = z
 
 export const changePasswordSchema = z
   .object({
-    currentPassword: z.string({ required_error: 'Current password is required' }).min(1, 'Current password is required').max(128),
+    currentPassword: z.string().max(128).optional(),
     newPassword: strongPasswordSchema,
     confirmPassword: z.string().max(128).optional(),
   })

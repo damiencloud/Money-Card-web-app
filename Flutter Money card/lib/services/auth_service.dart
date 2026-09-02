@@ -93,17 +93,21 @@ class AuthService {
   }
 
   /// Change password for authenticated session (POST /api/v1/auth/change-password)
-  Future<void> changePassword({
-    required String currentPassword,
+  Future<AuthResponseData> changePassword({
+    String? currentPassword,
     required String newPassword,
+    String? confirmPassword,
   }) async {
-    await _apiService.post<dynamic>(
+    return _apiService.post<AuthResponseData>(
       ApiEndpoints.changePassword,
       data: {
-        'currentPassword': currentPassword,
+        if (currentPassword != null && currentPassword.isNotEmpty)
+          'currentPassword': currentPassword,
         'newPassword': newPassword,
+        if (confirmPassword != null && confirmPassword.isNotEmpty)
+          'confirmPassword': confirmPassword,
       },
-      fromJson: (data) => data,
+      fromJson: (data) => AuthResponseData.fromJson(data as Map<String, dynamic>),
     );
   }
 }

@@ -37,6 +37,18 @@ export const updateStaffPermissionsSchema = z
   })
   .strict();
 
+export const changeStaffPasswordSchema = z
+  .object({
+    newPassword: strongPasswordSchema,
+    confirmPassword: z.string().max(128).optional(),
+    temporary: z.boolean().optional(),
+  })
+  .strict()
+  .refine((data) => !data.confirmPassword || data.newPassword === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
+
 export const createOrganizationSchema = z
   .object({
     name: safeDisplayName,

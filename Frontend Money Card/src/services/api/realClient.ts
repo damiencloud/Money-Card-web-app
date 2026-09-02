@@ -295,6 +295,10 @@ export const realClient: typeof mockClient = {
       return res;
     },
 
+    async changePassword(id: string, data: { newPassword: string; confirmPassword?: string; temporary?: boolean }): Promise<ApiResult<any>> {
+      return handleApiCall(() => apiClient.patch(`/v1/staff/${id}/password`, data));
+    },
+
     async deleteStaff(id: string): Promise<ApiResult<any>> {
       return handleApiCall(() => apiClient.delete(`/v1/staff/${id}`));
     },

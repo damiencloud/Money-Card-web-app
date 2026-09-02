@@ -43,6 +43,9 @@ import {
   ArrowLeft,
   User,
   Trash2,
+  Lock,
+  Key,
+  EyeOff,
 } from 'lucide-react';
 
 export function StaffPage() {
@@ -79,7 +82,17 @@ export function StaffPage() {
 
   // ── Unified Staff Details/Edit Modal State ─────────────────
   const [showStaffModal, setShowStaffModal] = useState(false);
-  const [staffTab, setStaffTab] = useState<'overview' | 'permissions' | 'branches'>('overview');
+  const [staffTab, setStaffTab] = useState<'overview' | 'permissions' | 'branches' | 'security'>('overview');
+
+  // ── Staff Password Change State ─────────────────────────────
+  const [formNewPassword, setFormNewPassword] = useState('');
+  const [formConfirmPassword, setFormConfirmPassword] = useState('');
+  const [formMustChangePassword, setFormMustChangePassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
+  const [passwordChangeSuccess, setPasswordChangeSuccess] = useState<string | null>(null);
 
   // ── Add Staff Modal State & Multi-step Tabs ─────────────────
   const [showAddModal, setShowAddModal] = useState(false);
@@ -257,7 +270,7 @@ export function StaffPage() {
   // ── Open Unified Staff Details/Edit Modal ─────────────────
   const handleOpenStaffModal = (
     staff: Staff,
-    initialTab: 'overview' | 'permissions' | 'branches' = 'overview',
+    initialTab: 'overview' | 'permissions' | 'branches' | 'security' = 'overview',
   ) => {
     setSelectedStaff(staff);
     setFormName(staff.name);
@@ -267,7 +280,69 @@ export function StaffPage() {
     setStaffTab(initialTab);
     setFormErrors({});
     setModalApiError(null);
+    setFormNewPassword('');
+    setFormConfirmPassword('');
+    setFormMustChangePassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+    setPasswordChangeError(null);
+    setPasswordChangeSuccess(null);
     setShowStaffModal(true);
+  };
+
+  // ── Handle Staff Password Change ──────────────────────────
+  const validateStaffPassword = (): string | null => {
+    if (!formNewPassword) return 'New password is required';
+    if (formNewPassword.length < 8) return 'Password must be at least 8 characters long';
+    if (formNewPassword.length > 128) return 'Password cannot exceed 128 characters';
+    if (!/[A-Z]/.test(formNewPassword)) return 'Password must contain at least one uppercase letter [A-Z]';
+    if (!/[a-z]/.test(formNewPassword)) return 'Password must contain at least one lowercase letter [a-z]';
+    if (!/[0-9]/.test(formNewPassword)) return 'Password must contain at least one number [0-9]';
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(formNewPassword)) {
+      return 'Password must contain at least one special character (!@#$%^&*...)';
+    }
+    if (formNewPassword !== formConfirmPassword) {
+      return 'Passwords do not match';
+    }
+    return null;
+  };
+
+  const handleChangeStaffPassword = async () => {
+    if (!selectedStaff) return;
+    const validationErr = validateStaffPassword();
+    if (validationErr) {
+      setPasswordChangeError(validationErr);
+      return;
+    }
+
+    setPasswordChangeError(null);
+    setPasswordChangeSuccess(null);
+    setIsChangingPassword(true);
+
+    try {
+      const res = await apiService.staff.changePassword(selectedStaff.id, {
+        newPassword: formNewPassword,
+        confirmPassword: formConfirmPassword,
+        temporary: formMustChangePassword,
+      });
+
+      if (!res.success) {
+        setPasswordChangeError(res.error?.message || 'Failed to change staff password');
+        return;
+      }
+
+      notify.success('Staff password changed successfully.');
+      setPasswordChangeSuccess(
+        `Staff password changed successfully for ${selectedStaff.name}. All active mobile app and web sessions have been invalidated.`,
+      );
+      setFormNewPassword('');
+      setFormConfirmPassword('');
+      setFormMustChangePassword(false);
+    } catch {
+      setPasswordChangeError('An unexpected network error occurred. Please try again.');
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   // ── Save Unified Staff Details & Permissions & Branches ───
@@ -777,6 +852,19 @@ export function StaffPage() {
                 {formBranchIds.length}
               </Badge>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setStaffTab('security')}
+              className={`flex items-center gap-2 pb-3 px-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
+                staffTab === 'security'
+                  ? 'border-violet-500 text-violet-300 font-semibold'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Lock className="h-4 w-4" />
+              <span>Security</span>
+            </button>
           </div>
 
           {/* Tab Content Panes (Natural scrolling without nested scroll trapping) */}
@@ -849,6 +937,30 @@ export function StaffPage() {
                       </p>
                     </div>
                   </div>
+                </div>
+
+                {/* Quick Security & Password Summary */}
+                <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Lock className="h-4 w-4 text-violet-400" />
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                        Security & Credentials
+                      </h4>
+                    </div>
+                    {canManage && (
+                      <button
+                        type="button"
+                        onClick={() => setStaffTab('security')}
+                        className="text-xs text-violet-400 hover:text-violet-300 font-medium"
+                      >
+                        Change Password →
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Account password is secure and hashed. You can reset or update this staff member&apos;s password at any time.
+                  </p>
                 </div>
 
                 {/* Quick Branch Access Summary */}
@@ -1027,6 +1139,144 @@ export function StaffPage() {
                 </div>
 
 
+              </div>
+            )}
+
+            {/* ── TAB 4: SECURITY & CHANGE PASSWORD ── */}
+            {staffTab === 'security' && (
+              <div className="space-y-5">
+                <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 text-xs text-slate-300 space-y-1.5">
+                  <div className="flex items-center gap-2 font-semibold text-violet-300 text-sm">
+                    <ShieldCheck className="h-4 w-4 text-violet-400" />
+                    <span>Security & Password Management</span>
+                  </div>
+                  <p className="text-slate-400 text-xs leading-relaxed">
+                    Set a new password for <strong className="text-slate-200">{selectedStaff?.name}</strong>.
+                    For security, updating the password immediately invalidates all active sessions on the mobile Staff App and Web POS.
+                  </p>
+                </div>
+
+                {passwordChangeError && (
+                  <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
+                    <span>{passwordChangeError}</span>
+                  </div>
+                )}
+
+                {passwordChangeSuccess && (
+                  <div className="flex items-start gap-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                    <span>{passwordChangeSuccess}</span>
+                  </div>
+                )}
+
+                <div className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Change Password
+                  </h4>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="relative">
+                      <Input
+                        id="staff-new-password"
+                        type={showNewPassword ? 'text' : 'password'}
+                        label="New Password"
+                        placeholder="Enter new password"
+                        value={formNewPassword}
+                        onChange={(e) => {
+                          setFormNewPassword(e.target.value);
+                          if (passwordChangeError) setPasswordChangeError(null);
+                        }}
+                        disabled={!canManage || isChangingPassword}
+                        autoComplete="new-password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-3 top-8 text-slate-400 hover:text-slate-200 focus:outline-none"
+                        tabIndex={-1}
+                      >
+                        {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+
+                    <div className="relative">
+                      <Input
+                        id="staff-confirm-password"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        label="Confirm New Password"
+                        placeholder="Re-enter new password"
+                        value={formConfirmPassword}
+                        onChange={(e) => {
+                          setFormConfirmPassword(e.target.value);
+                          if (passwordChangeError) setPasswordChangeError(null);
+                        }}
+                        disabled={!canManage || isChangingPassword}
+                        autoComplete="new-password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-8 text-slate-400 hover:text-slate-200 focus:outline-none"
+                        tabIndex={-1}
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Password requirements checklist */}
+                  <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-xs space-y-1.5">
+                    <span className="font-semibold text-slate-400">Password Requirements:</span>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-slate-400">
+                      <div className={`flex items-center gap-1.5 ${formNewPassword.length >= 8 ? 'text-emerald-400 font-medium' : ''}`}>
+                        <span className="text-xs">•</span> At least 8 characters
+                      </div>
+                      <div className={`flex items-center gap-1.5 ${/[A-Z]/.test(formNewPassword) ? 'text-emerald-400 font-medium' : ''}`}>
+                        <span className="text-xs">•</span> One uppercase letter [A-Z]
+                      </div>
+                      <div className={`flex items-center gap-1.5 ${/[a-z]/.test(formNewPassword) ? 'text-emerald-400 font-medium' : ''}`}>
+                        <span className="text-xs">•</span> One lowercase letter [a-z]
+                      </div>
+                      <div className={`flex items-center gap-1.5 ${/[0-9]/.test(formNewPassword) ? 'text-emerald-400 font-medium' : ''}`}>
+                        <span className="text-xs">•</span> One number [0-9]
+                      </div>
+                      <div className={`flex items-center gap-1.5 ${/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(formNewPassword) ? 'text-emerald-400 font-medium' : ''}`}>
+                        <span className="text-xs">•</span> One special character (!@#$)
+                      </div>
+                      <div className={`flex items-center gap-1.5 ${formNewPassword && formNewPassword === formConfirmPassword ? 'text-emerald-400 font-medium' : ''}`}>
+                        <span className="text-xs">•</span> Passwords match
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Temporary / Must Change Password Option */}
+                  <label className="flex items-center gap-2.5 pt-1 cursor-pointer text-xs text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={formMustChangePassword}
+                      onChange={(e) => setFormMustChangePassword(e.target.checked)}
+                      disabled={!canManage || isChangingPassword}
+                      className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-violet-600 focus:ring-violet-500"
+                    />
+                    <span>Require staff member to change password upon next login</span>
+                  </label>
+
+                  {canManage && (
+                    <div className="pt-2 flex justify-end">
+                      <Button
+                        type="button"
+                        variant="primary"
+                        onClick={handleChangeStaffPassword}
+                        isLoading={isChangingPassword}
+                        disabled={isChangingPassword || !formNewPassword || !formConfirmPassword}
+                        leftIcon={<Key className="h-4 w-4" />}
+                      >
+                        Change Password
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
