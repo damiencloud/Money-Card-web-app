@@ -40,12 +40,13 @@ export const updateStaffPermissionsSchema = z
 export const createOrganizationSchema = z
   .object({
     name: safeDisplayName,
-    planId: safeId,
-    email: safeEmail,
+    planId: safeId.optional(),
+    email: safeEmail.optional(),
     phone: z.string().max(20).optional(),
     address: safeFreeText.optional(),
-    adminName: safeDisplayName,
+    adminName: safeDisplayName.optional(),
     adminEmail: safeEmail,
     adminPassword: strongPasswordSchema.optional(),
   })
   .strict();
+

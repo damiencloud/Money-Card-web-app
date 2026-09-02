@@ -747,8 +747,8 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
               <Input
                 placeholder="Search food or product item..."
                 value={productSearch}
-                onChange={(e) => setProductSearch(e.target.value)}
-                
+                onChange={(e) => setProductSearch(e.target.value.slice(0, 30))}
+                maxLength={30}
               />
 
               <Select

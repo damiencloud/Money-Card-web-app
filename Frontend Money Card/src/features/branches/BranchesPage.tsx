@@ -445,7 +445,8 @@ export function BranchesPage() {
             type="text"
             placeholder="Search branches by name..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            maxLength={30}
+            onChange={(e) => setSearchQuery(e.target.value.slice(0, 30))}
             className="w-full rounded-lg border border-slate-800 bg-slate-900/60 pl-10 pr-4 py-2 text-sm text-slate-100 placeholder-slate-500 transition-colors focus:border-violet-500 focus:outline-none"
           />
         </div>

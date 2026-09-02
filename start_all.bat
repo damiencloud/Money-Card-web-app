@@ -8,5 +8,6 @@ echo    [3] Frontend Web Admin (Port 5173)
 echo    [4] Flutter Staff POS App (Port 5000)
 echo ==================================================
 
-powershell -ExecutionPolicy Bypass -File "D:\Money Card Project\start_all.ps1"
+powershell -ExecutionPolicy Bypass -File "%~dp0start_all.ps1"
 pause
+
