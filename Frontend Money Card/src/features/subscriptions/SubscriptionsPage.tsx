@@ -221,6 +221,12 @@ function OrgAdminSubscriptionsView() {
       return;
     }
 
+    const trimmedReason = formReason.trim();
+    if (trimmedReason.length > 500) {
+      setFormValidationError('Message must not exceed 500 characters.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -248,6 +254,11 @@ function OrgAdminSubscriptionsView() {
   // ── Renew Subscription Handler ────────────────────────────
   const handleRenewSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    const trimmedReason = renewReason.trim();
+    if (trimmedReason.length > 500) {
+      setModalApiError('Renewal notes must not exceed 500 characters.');
+      return;
+    }
     setIsSubmitting(true);
     setModalApiError(null);
     try {
@@ -825,12 +836,24 @@ function OrgAdminSubscriptionsView() {
             disabled={isSubmitting}
           />
 
-          {/* Optional Message / Reason */}
+          {/* Message / Reason with 60 Character Limit */}
           <div className="space-y-1 text-xs">
-            <label className="font-semibold text-slate-300">Message / Reason (Optional)</label>
+            <div className="flex items-center justify-between">
+              <label htmlFor="contact-plan-message" className="font-semibold text-slate-300">
+                Message / Reason (Optional)
+              </label>
+              <span className={`text-[10px] font-mono ${formReason.length >= 500 ? 'text-rose-400 font-bold' : 'text-slate-400'}`}>
+                {formReason.length}/500
+              </span>
+            </div>
             <textarea
+              id="contact-plan-message"
               value={formReason}
-              onChange={(e) => setFormReason(e.target.value)}
+              onChange={(e) => {
+                setFormReason(e.target.value.slice(0, 500));
+                if (formValidationError) setFormValidationError(null);
+              }}
+              maxLength={500}
               placeholder="Provide context or details for the Super Admin regarding this plan request..."
               rows={3}
               disabled={isSubmitting}
@@ -895,10 +918,19 @@ function OrgAdminSubscriptionsView() {
           </p>
 
           <div className="space-y-1 text-xs">
-            <label className="font-semibold text-slate-300">Renewal Notes / Reference (Optional)</label>
+            <div className="flex items-center justify-between">
+              <label htmlFor="renew-plan-notes" className="font-semibold text-slate-300">
+                Renewal Notes / Reference (Optional)
+              </label>
+              <span className={`text-[10px] font-mono ${renewReason.length >= 500 ? 'text-rose-400 font-bold' : 'text-slate-400'}`}>
+                {renewReason.length}/500
+              </span>
+            </div>
             <textarea
+              id="renew-plan-notes"
               value={renewReason}
-              onChange={(e) => setRenewReason(e.target.value)}
+              onChange={(e) => setRenewReason(e.target.value.slice(0, 500))}
+              maxLength={500}
               placeholder="e.g. Offline payment made via Bank Transfer Ref #12345, please approve renewal..."
               rows={3}
               disabled={isSubmitting}

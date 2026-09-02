@@ -237,6 +237,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
   const validateProductForm = () => {
     const errs: Record<string, string> = {};
     if (!formItemName.trim()) errs.itemName = 'Product name is required';
+    if (formItemName.trim().length > 30) errs.itemName = 'Product name must be 30 characters or less';
     if (!formCategories || formCategories.length === 0) errs.categories = 'Select at least one category';
 
     const priceNum = parseFloat(formPrice);
@@ -264,7 +265,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
       const res = await apiService.products.createProduct({
         itemName: formItemName.trim(),
         category: formCategories,
-        price: parseFloat(formPrice),
+        price: Math.round(parseFloat(formPrice)),
         branchId: formBranchId,
         initialQuantity: parseInt(formStockQty, 10),
         status: formStatus,
@@ -925,7 +926,8 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
             <Input
               placeholder="e.g. Chicken Roll, Veg Burger"
               value={formItemName}
-              onChange={(e) => setFormItemName(e.target.value)}
+              maxLength={40}
+              onChange={(e) => setFormItemName(e.target.value.slice(0,40))}
               error={formErrors.itemName}
             />
           </div>
@@ -950,9 +952,9 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
               </label>
               <Input
                 type="number"
-                step="0.01"
-                min="0.01"
-                placeholder="e.g. 120.00"
+                step="1"
+                min="0"
+                placeholder="e.g. ₹120.00"
                 value={formPrice}
                 onChange={(e) => setFormPrice(e.target.value)}
                 error={formErrors.price}

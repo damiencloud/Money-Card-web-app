@@ -103,10 +103,12 @@ export function SessionsPage() {
     return [];
   };
 
-  // ─── Fetch Sessions, Cards, History Events & Branches ─────────────
-  const fetchCustomerHistoryData = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
+  // ─── Fetch Sessions, Cards, History Events & Branches (Realtime) ──
+  const fetchCustomerHistoryData = useCallback(async (silent = false) => {
+    if (!silent) {
+      setIsLoading(true);
+      setError(null);
+    }
     try {
       const [sessionsRes, cardsRes, branchesRes, eventsRes] = await Promise.all([
         apiService.sessions.getSessions({ limit: 300 }),
@@ -116,7 +118,7 @@ export function SessionsPage() {
       ]);
 
       if (!sessionsRes.success) {
-        setError(sessionsRes.error.message || 'Failed to load customer sessions');
+        if (!silent) setError(sessionsRes.error.message || 'Failed to load customer sessions');
         return;
       }
 
@@ -131,57 +133,38 @@ export function SessionsPage() {
         setHistoryEvents(extractArray<CustomerHistoryEvent>(eventsRes.data));
       }
     } catch {
-      setError('Unable to connect to the server. Please try again.');
+      if (!silent) setError('Unable to connect to the server. Please try again.');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    let isCancelled = false;
-    const load = async () => {
-      setError(null);
-      try {
-        const [sessionsRes, cardsRes, branchesRes, eventsRes] = await Promise.all([
-          apiService.sessions.getSessions({ limit: 300 }),
-          apiService.cards.getCards(),
-          apiService.branches.getBranches(),
-          apiService.cards.getCustomerHistoryEvents ? apiService.cards.getCustomerHistoryEvents({ limit: 200 }) : Promise.resolve({ success: true, data: { items: [] } } as any),
-        ]);
+    fetchCustomerHistoryData(false);
 
-        if (isCancelled) return;
+    // Background polling every 3 seconds for realtime card status synchronization
+    const interval = setInterval(() => {
+      fetchCustomerHistoryData(true);
+    }, 3000);
 
-        if (!sessionsRes.success) {
-          setError(sessionsRes.error.message || 'Failed to load customer sessions');
-          return;
-        }
-
-        setRawSessions(extractArray<CardSession>(sessionsRes.data));
-        if (cardsRes.success) {
-          setRawCards(extractArray<CardEntity>(cardsRes.data));
-        }
-        if (branchesRes.success) {
-          setBranches(extractArray<Branch>(branchesRes.data));
-        }
-        if (eventsRes?.success) {
-          setHistoryEvents(extractArray<CustomerHistoryEvent>(eventsRes.data));
-        }
-      } catch {
-        if (!isCancelled) {
-          setError('Unable to connect to the server. Please try again.');
-        }
-      } finally {
-        if (!isCancelled) {
-          setIsLoading(false);
-        }
-      }
+    // Window focus & custom event listeners
+    const onFocus = () => fetchCustomerHistoryData(true);
+    const onVisibility = () => {
+      if (!document.hidden) fetchCustomerHistoryData(true);
     };
+    const onCardsUpdated = () => fetchCustomerHistoryData(true);
 
-    load();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('cards-updated', onCardsUpdated);
+
     return () => {
-      isCancelled = true;
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('cards-updated', onCardsUpdated);
     };
-  }, []);
+  }, [fetchCustomerHistoryData]);
 
   // ─── Build Customer History Records ──────────────────────────────
   const customerHistoryItems = useMemo<any[]>(() => {
@@ -269,9 +252,45 @@ export function SessionsPage() {
     });
   }, [customerHistoryItems, searchQuery, sessionStatusFilter, branchFilter, dateRangeFilter]);
 
-  // ─── Filter Card Status Events ───────────────────────────────────
+  // ─── Realtime Active Blocked Cards ──────────────────────────────
+  const activeBlockedCardEvents = useMemo<CustomerHistoryEvent[]>(() => {
+    // Only include cards whose CURRENT live status in the database is BLOCKED
+    const blockedCards = rawCards.filter((c) => c.status === 'BLOCKED');
+
+    return blockedCards.map((card) => {
+      // Find latest CARD_BLOCKED event for this specific card
+      const latestBlockEvent = historyEvents.find(
+        (e) => (e.cardId === card.id || e.physicalCardNumber === card.physicalCardNumber) && e.action === 'CARD_BLOCKED'
+      );
+
+      if (latestBlockEvent) {
+        return latestBlockEvent;
+      }
+
+      // Fallback object with live card details if event is recent
+      const branchObj = branches.find((b) => b.id === card.branchId);
+      const fallback: CustomerHistoryEvent = {
+        id: `blocked-${card.id}`,
+        cardId: card.id,
+        physicalCardNumber: card.physicalCardNumber || card.qrToken,
+        action: 'CARD_BLOCKED' as any,
+        previousStatus: 'ACTIVE' as any,
+        newStatus: 'BLOCKED' as any,
+        customerName: null,
+        customerPhone: null,
+        performedByName: 'Staff Member',
+        branchName: branchObj?.name || 'Main Cafeteria',
+        branchId: card.branchId,
+        reason: 'Card Blocked',
+        createdAt: card.updatedAt || new Date().toISOString(),
+      };
+      return fallback;
+    });
+  }, [rawCards, historyEvents, branches]);
+
+  // ─── Filter Realtime Blocked Cards ────────────────────────────────
   const filteredEvents = useMemo(() => {
-    return historyEvents.filter((event) => {
+    return activeBlockedCardEvents.filter((event) => {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchesCustomer = event.customerName?.toLowerCase().includes(q) ?? false;
@@ -284,10 +303,6 @@ export function SessionsPage() {
         if (!matchesCustomer && !matchesPhone && !matchesCard && !matchesStaff && !matchesReason && !matchesBranch) {
           return false;
         }
-      }
-
-      if (actionFilter !== 'ALL' && event.action !== actionFilter) {
-        return false;
       }
 
       if (branchFilter !== 'ALL' && event.branchId && event.branchId !== branchFilter) {
@@ -317,7 +332,7 @@ export function SessionsPage() {
 
       return true;
     });
-  }, [historyEvents, searchQuery, actionFilter, branchFilter, dateRangeFilter]);
+  }, [activeBlockedCardEvents, searchQuery, branchFilter, dateRangeFilter]);
 
   // ─── KPI Metrics ─────────────────────────────────────────────────
   const activeCount = useMemo(
@@ -644,24 +659,26 @@ export function SessionsPage() {
       </div>
 
       {/* ─── Filter Bar ───────────────────────────────────────────── */}
-      <UiCard padding="md">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+      <UiCard padding="md" className="border-slate-800 bg-slate-900/60">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Search Bar (30 char limit) */}
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Search by customer, card (MC 105), staff..."
+              placeholder="Search customer, card (MC 105)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value.slice(0, 30))}
               maxLength={30}
-              className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+              className="w-full rounded-lg border border-slate-700 bg-slate-900/80 pl-9 pr-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 transition-all focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/20"
             />
           </div>
 
+          {/* Second Field: Status Filter in Sessions / Static 'Blocked' field in Audit */}
           {activeTab === 'sessions' ? (
             <Select
               value={sessionStatusFilter}
-              onChange={(val) => setSessionStatusFilter(val as any)}
+              onChange={(e) => setSessionStatusFilter(e.target.value as any)}
               options={[
                 { value: 'ALL', label: 'All Session Statuses' },
                 { value: 'ACTIVE', label: 'Active Sessions Only' },
@@ -669,17 +686,13 @@ export function SessionsPage() {
               ]}
             />
           ) : (
-            <Select
-              value={actionFilter}
-              onChange={(e) => setActionFilter(e.target.value as any)}
-              options={[
-                { value: 'CARD_BLOCKED', label: 'Blocked Cards Only' },
-                { value: 'CARD_UNBLOCKED', label: 'Unblocked Cards Only' },
-                { value: 'ALL', label: 'All Card Actions' },
-              ]}
-            />
+            <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/50 px-3.5 py-2.5 text-sm text-slate-300 select-none">
+              <Lock className="h-4 w-4 text-rose-400 shrink-0" />
+              <span className="font-medium text-slate-200">Blocked</span>
+            </div>
           )}
 
+          {/* Branch Filter */}
           <Select
             value={branchFilter}
             onChange={(e) => setBranchFilter(e.target.value)}
@@ -689,6 +702,7 @@ export function SessionsPage() {
             ]}
           />
 
+          {/* Date Range Filter */}
           <Select
             value={dateRangeFilter}
             onChange={(e) => setDateRangeFilter(e.target.value as any)}
@@ -702,6 +716,7 @@ export function SessionsPage() {
           />
         </div>
       </UiCard>
+
 
       {/* ─── Content Views ────────────────────────────────────────── */}
       {isLoading ? (

@@ -6,7 +6,9 @@ export const createStaffMemberSchema = z
     name: safeDisplayName,
     email: safeEmail,
     password: strongPasswordSchema.optional(),
+    assignedBranchIds: z.array(safeId).optional(),
     branchIds: z.array(safeId).optional(),
+    permissions: z.array(z.string().max(50)).optional(),
     permissionCodes: z.array(z.string().max(50)).optional(),
   })
   .strict();

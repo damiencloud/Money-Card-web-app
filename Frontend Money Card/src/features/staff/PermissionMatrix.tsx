@@ -109,20 +109,18 @@ export function PermissionMatrix({
                 }
 
                 return (
-                  <label
+                  <button
+                    type="button"
                     key={perm.key}
-                    className={`flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 text-xs transition-all ${
+                    onClick={() => togglePermission(perm.key)}
+                    role="checkbox"
+                    aria-checked={active}
+                    className={`flex w-full cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 text-xs text-left transition-all select-none ${
                       active
                         ? 'border-violet-500/40 bg-violet-500/15 text-slate-100'
                         : 'border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700'
                     }`}
                   >
-                    <input
-                      type="checkbox"
-                      checked={active}
-                      onChange={() => togglePermission(perm.key)}
-                      className="sr-only"
-                    />
                     <div
                       className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border mt-0.5 transition-colors ${
                         active
@@ -138,7 +136,7 @@ export function PermissionMatrix({
                       </p>
                       <p className="mt-0.5 text-[11px] text-slate-400">{perm.description}</p>
                     </div>
-                  </label>
+                  </button>
                 );
               })}
             </div>

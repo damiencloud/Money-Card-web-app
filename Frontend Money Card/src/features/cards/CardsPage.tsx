@@ -546,6 +546,7 @@ export function CardsPage() {
         toast.success(`Card ${selectedCard.physicalCardNumber || selectedCard.qrToken} has been blocked.`);
         setShowBlockModal(false);
         fetchCardsData();
+        window.dispatchEvent(new CustomEvent('cards-updated'));
       } else {
         toast.error(res.error.message || 'Failed to block card');
       }
@@ -562,6 +563,7 @@ export function CardsPage() {
         toast.success(`Card ${selectedCard.physicalCardNumber || selectedCard.qrToken} has been unblocked.`);
         setShowUnblockModal(false);
         fetchCardsData();
+        window.dispatchEvent(new CustomEvent('cards-updated'));
       } else {
         toast.error(res.error.message || 'Failed to unblock card');
       }
