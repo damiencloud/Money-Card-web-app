@@ -45,7 +45,6 @@ import {
   Trash2,
   Lock,
   Key,
-  EyeOff,
 } from 'lucide-react';
 
 export function StaffPage() {

@@ -14,7 +14,6 @@ import type {
   Branch,
   CardSession,
   CustomerHistoryEvent,
-  CardHistoryAction,
 } from '@/types';
 import {
   Button,
@@ -85,7 +84,6 @@ export function SessionsPage() {
   // ─── Filters State ────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
   const [sessionStatusFilter, setSessionStatusFilter] = useState<SessionStatus | 'ALL'>('ALL');
-  const [actionFilter, setActionFilter] = useState<CardHistoryAction | 'ALL'>('CARD_BLOCKED');
   const [branchFilter, setBranchFilter] = useState<string>('ALL');
   const [dateRangeFilter, setDateRangeFilter] = useState<'ALL' | 'today' | 'yesterday' | '7d' | '30d'>('ALL');
 
@@ -268,7 +266,7 @@ export function SessionsPage() {
       }
 
       // Fallback object with live card details if event is recent
-      const branchObj = branches.find((b) => b.id === card.branchId);
+      const branchObj = branches.find((b) => b.id === card.currentBranchId);
       const fallback: CustomerHistoryEvent = {
         id: `blocked-${card.id}`,
         cardId: card.id,
@@ -280,7 +278,7 @@ export function SessionsPage() {
         customerPhone: null,
         performedByName: 'Staff Member',
         branchName: branchObj?.name || 'Main Cafeteria',
-        branchId: card.branchId,
+        branchId: card.currentBranchId,
         reason: 'Card Blocked',
         createdAt: card.updatedAt || new Date().toISOString(),
       };
@@ -593,7 +591,7 @@ export function SessionsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={fetchCustomerHistoryData}
+            onClick={() => fetchCustomerHistoryData()}
             isLoading={isLoading}
             className="gap-2"
           >
