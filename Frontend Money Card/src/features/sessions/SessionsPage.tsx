@@ -385,16 +385,16 @@ export function SessionsPage() {
       header: 'Customer',
       render: (item: CustomerHistoryItem) => (
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 font-bold text-sm">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400 font-bold text-sm">
             {item.customerName ? item.customerName.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
           </div>
           <div>
-            <p className="font-semibold text-slate-900 dark:text-slate-100">
+            <p className="font-bold text-slate-100 dark:text-slate-100">
               {item.customerName || 'Walk-in Customer'}
             </p>
             {item.customerPhone && (
-              <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                <Phone className="h-3 w-3" />
+              <p className="text-xs text-slate-300 dark:text-slate-300 font-medium flex items-center gap-1">
+                <Phone className="h-3 w-3 text-slate-400" />
                 {item.customerPhone}
               </p>
             )}
@@ -407,8 +407,8 @@ export function SessionsPage() {
       header: 'Card Number',
       render: (item: CustomerHistoryItem) => (
         <div className="flex items-center gap-2">
-          <CreditCard className="h-4 w-4 text-emerald-600" />
-          <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
+          <CreditCard className="h-4 w-4 text-emerald-400" />
+          <span className="font-mono font-bold text-slate-100 dark:text-slate-100">
             {item.physicalCardNumber}
           </span>
         </div>
@@ -427,7 +427,7 @@ export function SessionsPage() {
       key: 'balance',
       header: 'Balance',
       render: (item: CustomerHistoryItem) => (
-        <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
+        <span className="font-mono font-bold text-slate-100 dark:text-slate-100">
           {formatCurrency(item.balance)}
         </span>
       ),
@@ -436,8 +436,8 @@ export function SessionsPage() {
       key: 'branchName',
       header: 'Branch',
       render: (item: CustomerHistoryItem) => (
-        <span className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-          <Building2 className="h-3.5 w-3.5 text-slate-400" />
+        <span className="text-sm font-medium text-slate-200 dark:text-slate-200 flex items-center gap-1.5">
+          <Building2 className="h-3.5 w-3.5 text-slate-300" />
           {item.branchName}
         </span>
       ),
@@ -446,7 +446,7 @@ export function SessionsPage() {
       key: 'startedAt',
       header: 'Issued At',
       render: (item: CustomerHistoryItem) => (
-        <span className="text-xs text-slate-500 dark:text-slate-400">
+        <span className="text-xs font-medium text-slate-200 dark:text-slate-200">
           {formatDate(item.startedAt)}
         </span>
       ),
@@ -458,10 +458,10 @@ export function SessionsPage() {
         <Button
           variant="outline"
           size="sm"
-          className="gap-1.5"
+          className="gap-1.5 border-slate-700 text-slate-100 hover:bg-slate-800"
           onClick={() => handleOpenDetails(item)}
         >
-          <Eye className="h-3.5 w-3.5 text-emerald-600" />
+          <Eye className="h-3.5 w-3.5 text-emerald-400" />
           <span>Inspect</span>
         </Button>
       ),
@@ -475,15 +475,15 @@ export function SessionsPage() {
       header: 'Customer',
       render: (event: CustomerHistoryEvent) => (
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 font-bold text-xs">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/20 text-violet-300 font-bold text-xs">
             {event.customerName ? event.customerName.charAt(0).toUpperCase() : <User className="h-3.5 w-3.5" />}
           </div>
           <div>
-            <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
+            <p className="font-bold text-slate-100 dark:text-slate-100 text-sm">
               {event.customerName || 'Registered Customer'}
             </p>
             {event.customerPhone && (
-              <p className="text-xs text-slate-500">{event.customerPhone}</p>
+              <p className="text-xs text-slate-300 dark:text-slate-300">{event.customerPhone}</p>
             )}
           </div>
         </div>
@@ -493,7 +493,7 @@ export function SessionsPage() {
       key: 'physicalCardNumber',
       header: 'Card',
       render: (event: CustomerHistoryEvent) => (
-        <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
+        <span className="font-mono font-bold text-slate-100 dark:text-slate-100">
           {event.physicalCardNumber}
         </span>
       ),
@@ -507,8 +507,8 @@ export function SessionsPage() {
           <span
             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
               isBlock
-                ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
-                : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                ? 'bg-rose-950/80 text-rose-200 border border-rose-800'
+                : 'bg-emerald-950/80 text-emerald-200 border border-emerald-800'
             }`}
           >
             {isBlock ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
@@ -521,8 +521,8 @@ export function SessionsPage() {
       key: 'transition',
       header: 'Status Transition',
       render: (e: CustomerHistoryEvent) => (
-        <span className="text-xs text-slate-600 dark:text-slate-300 font-mono">
-          {e.previousStatus} → <strong>{e.newStatus}</strong>
+        <span className="text-xs text-slate-200 dark:text-slate-200 font-mono font-semibold">
+          {e.previousStatus} → <strong className="text-white">{e.newStatus}</strong>
         </span>
       ),
     },
@@ -530,7 +530,7 @@ export function SessionsPage() {
       key: 'performedByName',
       header: 'Performed By',
       render: (event: CustomerHistoryEvent) => (
-        <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+        <span className="text-sm font-semibold text-slate-100 dark:text-slate-100">
           {event.performedByName || 'Staff'}
         </span>
       ),
@@ -539,14 +539,14 @@ export function SessionsPage() {
       key: 'branchName',
       header: 'Branch',
       render: (event: CustomerHistoryEvent) => (
-        <span className="text-xs text-slate-500">{event.branchName}</span>
+        <span className="text-xs font-medium text-slate-200 dark:text-slate-200">{event.branchName}</span>
       ),
     },
     {
       key: 'createdAt',
       header: 'Date & Time',
       render: (event: CustomerHistoryEvent) => (
-        <span className="text-xs text-slate-500 dark:text-slate-400">
+        <span className="text-xs font-medium text-slate-200 dark:text-slate-200">
           {formatDate(event.createdAt)}
         </span>
       ),
@@ -555,7 +555,7 @@ export function SessionsPage() {
       key: 'reason',
       header: 'Reason',
       render: (event: CustomerHistoryEvent) => (
-        <span className="text-xs text-slate-600 dark:text-slate-400 italic max-w-xs truncate block">
+        <span className="text-xs text-slate-300 dark:text-slate-300 italic max-w-xs truncate block font-medium">
           {event.reason || '—'}
         </span>
       ),
