@@ -54,7 +54,7 @@ export function DataTable<T>({
                 <th
                   key={colKey}
                   className={cn(
-                    'px-3 sm:px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 select-none whitespace-nowrap',
+                    'px-3 sm:px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-200 select-none whitespace-nowrap',
                     col.className,
                   )}
                 >
@@ -91,7 +91,7 @@ export function DataTable<T>({
                 return (
                   <td
                     key={colKey}
-                    className={cn('px-3 sm:px-4 py-3.5 text-xs sm:text-sm text-slate-300', col.className)}
+                    className={cn('px-3 sm:px-4 py-3.5 text-xs sm:text-sm text-slate-100 dark:text-slate-100 font-medium', col.className)}
                   >
                     {renderedContent}
                   </td>

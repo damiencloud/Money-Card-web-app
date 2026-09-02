@@ -37,7 +37,7 @@ import {
   Send,
   RefreshCw,
   AlertCircle,
-  Eye,
+  Eye, EyeOff,
   Check,
   ArrowRight,
   ArrowLeft,
@@ -106,6 +106,7 @@ export function StaffPage() {
   const [formName, setFormName] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formPassword, setFormPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [formBranchIds, setFormBranchIds] = useState<string[]>([]);
   const [formPermissions, setFormPermissions] = useState<Permission[]>([]);
 
@@ -206,15 +207,17 @@ export function StaffPage() {
   const validateBasicInfo = (): boolean => {
     const errors: Record<string, string> = {};
     if (!formName.trim()) errors.name = 'Staff name is required';
-    if (!formEmail.trim()) {
-      errors.email = 'Email address is required';
-    } else if (!/\S+@\S+\.\S+/.test(formEmail)) {
-      errors.email = 'Enter a valid email address';
+    else if (formName.trim().length > 20) errors.name = 'Staff name must be at most 20 characters';
+    const trimmedEmail = formEmail.trim();
+    if (!trimmedEmail) {
+      errors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      errors.email = 'Please enter a valid email address';
     }
     if (!formPassword.trim()) {
-      errors.password = 'Initial password is required';
-    } else if (formPassword.length < 6) {
-      errors.password = 'Password must be at least 6 characters';
+      errors.password = 'Password is required';
+    } else if (formPassword.length < 8) {
+      errors.password = 'Password must be at least 8 characters';
     }
 
     setFormErrors(errors);
@@ -749,7 +752,8 @@ export function StaffPage() {
             type="text"
             placeholder="Search staff by name or email..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            maxLength={30}
+            onChange={(e) => setSearchQuery(e.target.value.slice(0, 30))}
             className="w-full rounded-lg border border-slate-800 bg-slate-900/60 pl-10 pr-4 py-2 text-sm text-slate-100 placeholder-slate-500 transition-colors focus:border-violet-500 focus:outline-none"
           />
         </div>
@@ -1088,13 +1092,24 @@ export function StaffPage() {
                   {branches.map((b) => {
                     const isAssigned = formBranchIds.includes(b.id);
                     return (
-                      <label
+                      <button
+                        type="button"
                         key={b.id}
-                        className={`flex cursor-pointer items-center justify-between rounded-xl border p-3.5 text-xs transition-all ${
+                        onClick={() => {
+                          if (isAssigned) {
+                            setFormBranchIds(formBranchIds.filter((id) => id !== b.id));
+                          } else {
+                            setFormBranchIds([...formBranchIds, b.id]);
+                          }
+                        }}
+                        role="checkbox"
+                        aria-checked={isAssigned}
+                        disabled={!canManage}
+                        className={`flex w-full cursor-pointer items-center justify-between rounded-xl border p-3.5 text-xs text-left transition-all select-none ${!canManage ? "pointer-events-none opacity-80" : ""} ${
                           isAssigned
                             ? 'border-violet-500/40 bg-violet-500/15 text-slate-100'
                             : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-700'
-                        } ${!canManage ? 'pointer-events-none' : ''}`}
+                        }`}
                       >
                         <div className="flex items-center gap-3">
                           <div
@@ -1115,21 +1130,7 @@ export function StaffPage() {
                         <Badge variant={b.status === 'ACTIVE' ? 'success' : 'outline'} className="text-[10px]">
                           {b.status}
                         </Badge>
-
-                        <input
-                          type="checkbox"
-                          checked={isAssigned}
-                          disabled={!canManage}
-                          onChange={() => {
-                            if (isAssigned) {
-                              setFormBranchIds(formBranchIds.filter((id) => id !== b.id));
-                            } else {
-                              setFormBranchIds([...formBranchIds, b.id]);
-                            }
-                          }}
-                          className="sr-only"
-                        />
-                      </label>
+                      </button>
                     );
                   })}
                 </div>
@@ -1365,7 +1366,7 @@ export function StaffPage() {
                   <Input
                     id="add-staff-name"
                     label="Staff Full Name"
-                    placeholder="e.g. John Cashier"
+                    placeholder="e.g. John Cashier" maxLength={20}
                     value={formName}
                     onChange={(e) => {
                       setFormName(e.target.value);
@@ -1381,6 +1382,7 @@ export function StaffPage() {
                     type="email"
                     label="Email Address"
                     placeholder="john@cafeteria.com"
+                    maxLength={30}
                     value={formEmail}
                     onChange={(e) => {
                       setFormEmail(e.target.value);
@@ -1392,18 +1394,28 @@ export function StaffPage() {
                 </div>
 
                 <Input
-                  id="add-staff-password"
-                  type="password"
-                  label="Initial Password"
-                  placeholder="At least 6 characters"
-                  value={formPassword}
-                  onChange={(e) => {
-                    setFormPassword(e.target.value);
-                    if (formErrors.password) setFormErrors((prev) => ({ ...prev, password: '' }));
-                  }}
-                  error={formErrors.password}
-                  disabled={isSubmitting}
-                />
+                    id="add-staff-password"
+                    type={showPassword ? 'text' : 'password'}
+                    label="Initial Password"
+                    placeholder="At least 8 characters"
+                    value={formPassword}
+                    onChange={(e) => {
+                      setFormPassword(e.target.value);
+                      if (formErrors.password) setFormErrors((prev) => ({ ...prev, password: '' }));
+                    }}
+                    error={formErrors.password}
+                    disabled={isSubmitting}
+                    rightElement={
+                      <button
+                        type="button"
+                        className="text-slate-400 hover:text-slate-200 transition-colors p-1 flex items-center justify-center focus:outline-none"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        title={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    }
+                  />
 
                 {orgOverview?.usage && (
                   <p className="text-xs text-slate-400 pt-2">
@@ -1419,17 +1431,17 @@ export function StaffPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between pb-2">
                   <p className="text-xs text-slate-400">
-                    Authorize the branches this staff member can operate within.
+                    Assign this staff member to one or more physical branches.
                   </p>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setFormBranchIds(branches.map((b) => b.id))}
                       className="text-xs text-violet-400 hover:text-violet-300 font-medium"
                     >
-                      Select All
+                      Select All ({branches.length})
                     </button>
-                    <span className="text-slate-700">|</span>
+                    <span className="text-slate-600">•</span>
                     <button
                       type="button"
                       onClick={() => setFormBranchIds([])}
@@ -1444,9 +1456,19 @@ export function StaffPage() {
                   {branches.map((b) => {
                     const isAssigned = formBranchIds.includes(b.id);
                     return (
-                      <label
+                      <button
+                        type="button"
                         key={b.id}
-                        className={`flex cursor-pointer items-center justify-between rounded-xl border p-3.5 text-xs transition-all ${
+                        onClick={() => {
+                          if (isAssigned) {
+                            setFormBranchIds(formBranchIds.filter((id) => id !== b.id));
+                          } else {
+                            setFormBranchIds([...formBranchIds, b.id]);
+                          }
+                        }}
+                        role="checkbox"
+                        aria-checked={isAssigned}
+                        className={`flex w-full cursor-pointer items-center justify-between rounded-xl border p-3.5 text-xs text-left transition-all select-none ${
                           isAssigned
                             ? 'border-violet-500/40 bg-violet-500/15 text-slate-100'
                             : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-700'
@@ -1471,20 +1493,7 @@ export function StaffPage() {
                         <Badge variant={b.status === 'ACTIVE' ? 'success' : 'outline'} className="text-[10px]">
                           {b.status}
                         </Badge>
-
-                        <input
-                          type="checkbox"
-                          checked={isAssigned}
-                          onChange={() => {
-                            if (isAssigned) {
-                              setFormBranchIds(formBranchIds.filter((id) => id !== b.id));
-                            } else {
-                              setFormBranchIds([...formBranchIds, b.id]);
-                            }
-                          }}
-                          className="sr-only"
-                        />
-                      </label>
+                      </button>
                     );
                   })}
                 </div>

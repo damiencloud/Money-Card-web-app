@@ -188,9 +188,20 @@ export const realClient: typeof mockClient = {
       adminEmail?: string;
       password?: string;
       planId?: string;
+      email?: string;
+      adminName?: string;
     }): Promise<ApiResult<OrganizationOverview>> {
-      return handleApiCall(() => apiClient.post<OrganizationOverview>('/v1/admin/organizations', data));
+      const payload = {
+        name: data.name,
+        email: data.email || data.adminEmail,
+        adminEmail: data.adminEmail,
+        adminName: data.adminName || `${data.name} Admin`,
+        adminPassword: data.password,
+        planId: data.planId,
+      };
+      return handleApiCall(() => apiClient.post<OrganizationOverview>('/v1/admin/organizations', payload));
     },
+
 
     async getOrganizationById(id: string): Promise<ApiResult<OrganizationOverview>> {
       return handleApiCall(() => apiClient.get<OrganizationOverview>(`/v1/admin/organizations/${id}`));

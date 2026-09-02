@@ -680,6 +680,7 @@ export function CardsPage() {
         setAdditionalBlockReason('');
         setBlockReasonCategory('Lost or Stolen Card');
         fetchCardsData();
+        window.dispatchEvent(new CustomEvent('cards-updated'));
       } else {
         toast.error(res.error.message || 'Failed to block card');
       }
@@ -696,6 +697,7 @@ export function CardsPage() {
         toast.success(`Card ${selectedCard.physicalCardNumber || selectedCard.qrToken} has been unblocked.`);
         setShowUnblockModal(false);
         fetchCardsData();
+        window.dispatchEvent(new CustomEvent('cards-updated'));
       } else {
         toast.error(res.error.message || 'Failed to unblock card');
       }
@@ -988,7 +990,8 @@ export function CardsPage() {
               type="text"
               placeholder="Search card number, QR, customer..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              maxLength={30}
+              onChange={(e) => setSearchQuery(e.target.value.slice(0, 30))}
               className="w-full rounded-lg border border-slate-800 bg-slate-950 pl-9 pr-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
             />
           </div>

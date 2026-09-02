@@ -79,7 +79,9 @@ export async function createStaffMember(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
   }
 
-  const { name, email, password, assignedBranchIds, permissions } = req.body;
+  const { name, email, password, assignedBranchIds, branchIds, permissions, permissionCodes } = req.body;
+  const resolvedBranchIds = assignedBranchIds ?? branchIds;
+  const resolvedPermissions = permissions ?? permissionCodes;
 
   if (!name || !name.trim()) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'Staff name is required');
@@ -468,7 +470,6 @@ export async function deleteStaffMember(req: Request, res: Response) {
     where: {
       id,
       ...(orgId ? { organizationId: orgId } : {}),
-      role: Role.STAFF,
     },
     include: {
       _count: {
@@ -483,6 +484,15 @@ export async function deleteStaffMember(req: Request, res: Response) {
 
   if (!user) {
     return sendError(res, 404, 'NOT_FOUND', 'Staff member not found');
+  }
+
+  if (user.role === Role.SUPER_ADMIN) {
+    return sendError(
+      res,
+      403,
+      'FORBIDDEN',
+      'Super Admin accounts cannot be deleted.',
+    );
   }
 
   const activeSessionsCount = await prisma.cardSession.count({
