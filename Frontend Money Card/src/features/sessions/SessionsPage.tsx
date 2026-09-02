@@ -652,7 +652,8 @@ export function SessionsPage() {
               type="text"
               placeholder="Search by customer, card (MC 105), staff..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => setSearchQuery(e.target.value.slice(0, 30))}
+              maxLength={30}
               className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
             />
           </div>

@@ -15,7 +15,7 @@ describe('Org Admin Dashboard: Reports Catalog & Validation (30 Items)', () => {
     expect(res.success).toBe(true);
     if (!res.success) return;
 
-    res.data.forEach((report, index) => {
+    res.data.forEach((report) => {
       expect(report.id).toBeTruthy();
       expect(report.title.length).toBeGreaterThan(5);
       expect(report.type).toBeTruthy();
