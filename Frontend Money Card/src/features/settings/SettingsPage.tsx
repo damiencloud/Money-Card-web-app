@@ -18,7 +18,7 @@ import {
   LoadingState,
   ErrorState,
 } from '@/components/ui';
-import { ChangePasswordForm } from '@/features/auth';
+import { ChangePasswordForm, UnauthorizedPage } from '@/features/auth';
 import { notify, formatDate } from '@/utils';
 import {
   Settings as SettingsIcon,
@@ -29,13 +29,21 @@ import {
 } from 'lucide-react';
 
 export function SettingsPage() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+
+  if (isLoading && !user) {
+    return <LoadingState message="Loading settings..." />;
+  }
 
   if (user?.role === 'SUPER_ADMIN') {
     return <SuperAdminSettingsView user={user} />;
   }
 
-  return <OrgAdminSettingsView />;
+  if (user?.role === 'ORG_ADMIN') {
+    return <OrgAdminSettingsView />;
+  }
+
+  return <UnauthorizedPage />;
 }
 
 // ─── Super Admin Settings (Platform Account Only) ───────────

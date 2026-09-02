@@ -87,7 +87,6 @@ export function StaffPage() {
   // ── Staff Password Change State ─────────────────────────────
   const [formNewPassword, setFormNewPassword] = useState('');
   const [formConfirmPassword, setFormConfirmPassword] = useState('');
-  const [formMustChangePassword, setFormMustChangePassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
@@ -282,7 +281,6 @@ export function StaffPage() {
     setModalApiError(null);
     setFormNewPassword('');
     setFormConfirmPassword('');
-    setFormMustChangePassword(false);
     setShowNewPassword(false);
     setShowConfirmPassword(false);
     setPasswordChangeError(null);
@@ -323,7 +321,6 @@ export function StaffPage() {
       const res = await apiService.staff.changePassword(selectedStaff.id, {
         newPassword: formNewPassword,
         confirmPassword: formConfirmPassword,
-        temporary: formMustChangePassword,
       });
 
       if (!res.success) {
@@ -337,7 +334,6 @@ export function StaffPage() {
       );
       setFormNewPassword('');
       setFormConfirmPassword('');
-      setFormMustChangePassword(false);
     } catch {
       setPasswordChangeError('An unexpected network error occurred. Please try again.');
     } finally {
@@ -1250,17 +1246,6 @@ export function StaffPage() {
                     </div>
                   </div>
 
-                  {/* Temporary / Must Change Password Option */}
-                  <label className="flex items-center gap-2.5 pt-1 cursor-pointer text-xs text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={formMustChangePassword}
-                      onChange={(e) => setFormMustChangePassword(e.target.checked)}
-                      disabled={!canManage || isChangingPassword}
-                      className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-violet-600 focus:ring-violet-500"
-                    />
-                    <span>Require staff member to change password upon next login</span>
-                  </label>
 
                   {canManage && (
                     <div className="pt-2 flex justify-end">

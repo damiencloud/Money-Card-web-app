@@ -52,7 +52,7 @@ class NumberedCanvas(canvas.Canvas):
         # Footer
         self.line(36, 42, 576, 42)
         self.setFont("Helvetica", 7.5)
-        self.drawString(36, 30, "Confidential — Internal Engineering, Architecture & QA Reference")
+        self.drawString(36, 30, "Confidential — Money Card Enterprise Architecture & Business Logic Reference")
         self.drawRightString(576, 30, f"Page {self._pageNumber} of {page_count}")
         self.restoreState()
 
@@ -254,7 +254,7 @@ def build_pdf():
     meta_data = [
         [
             Paragraph("<b>Document Version:</b> 1.0.0 (Release Candidate)", table_cell),
-            Paragraph("<b>Specification:</b> Damien M0 V10 Multi-Tenant Audited", table_cell),
+            Paragraph("<b>Specification:</b> Money Card Core M0 V10 Multi-Tenant Audited", table_cell),
         ],
         [
             Paragraph("<b>Release Date:</b> August 19, 2026", table_cell),

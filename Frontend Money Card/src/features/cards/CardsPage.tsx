@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { apiService } from '@/services/api';
-import { usePermissions } from '@/hooks';
+import { usePermissions, useAuth } from '@/hooks';
 import type {
   Card as CardEntity,
   CardStatus,
@@ -34,7 +34,6 @@ import { DataTable } from '@/components/tables';
 import { UnauthorizedPage } from '@/features/auth';
 import {
   CreditCard,
-  Plus,
   Search,
   Lock,
   Unlock,
@@ -51,11 +50,20 @@ import {
   Tag,
   ShieldAlert,
   Trash2,
+  Camera,
+  CameraOff,
+  Scan,
+  X,
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
+import { CameraQrScanner } from '@/components/scanner/CameraQrScanner';
 
 export function CardsPage() {
   const { hasPermission } = usePermissions();
+  const { user } = useAuth();
+
+  const [blockReasonCategory, setBlockReasonCategory] = useState('Lost or Stolen Card');
+  const [additionalBlockReason, setAdditionalBlockReason] = useState('');
 
   const canView = hasPermission('CARD_VIEW');
   const canIssue = hasPermission('CARD_ISSUE');
@@ -77,11 +85,9 @@ export function CardsPage() {
 
   // Modals
   const [showQrImportModal, setShowQrImportModal] = useState(false);
-  const [showSingleRegisterModal, setShowSingleRegisterModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showDeleteCardModal, setShowDeleteCardModal] = useState(false);
   const [deleteCardApiError, setDeleteCardApiError] = useState<string | null>(null);
-  const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [showUnblockModal, setShowUnblockModal] = useState(false);
@@ -99,23 +105,32 @@ export function CardsPage() {
   const [assignError, setAssignError] = useState<string | null>(null);
   const [isAssigning, setIsAssigning] = useState(false);
 
-  // Single Card Registration Form State
-  const [singleCardNumber, setSingleCardNumber] = useState('');
-  const [singleCustomQr, setSingleCustomQr] = useState('');
-  const [singleRegError, setSingleRegError] = useState<string | null>(null);
-  const [isSingleRegistering, setIsSingleRegistering] = useState(false);
-
   // External Bulk QR Import State
   const [importFileName, setImportFileName] = useState<string | null>(null);
   const [importPreview, setImportPreview] = useState<QrImportPreview | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Bulk Assign CSV Mapping State
-  const [bulkAssignFileName, setBulkAssignFileName] = useState<string | null>(null);
-  const [bulkAssignMappings, setBulkAssignMappings] = useState<{ qrCode: string; cardNumber: string; valid: boolean; error?: string }[]>([]);
-  const [isBulkAssigning, setIsBulkAssigning] = useState(false);
-  const bulkAssignInputRef = useRef<HTMLInputElement>(null);
+  // Multi-QR Scan & Auto-Register with Prefix State
+  const [importMode, setImportMode] = useState<'SCAN' | 'CSV'>('SCAN');
+  const [cardPrefix, setCardPrefix] = useState('MC-');
+  const [startSequence, setStartSequence] = useState<number>(1);
+  const [padZeros, setPadZeros] = useState(true);
+  const [autoRegisterOnScan, setAutoRegisterOnScan] = useState(true);
+  const [scannerInputValue, setScannerInputValue] = useState('');
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [scannedCardsList, setScannedCardsList] = useState<
+    Array<{
+      id: string;
+      qrCode: string;
+      cardNumber: string;
+      status: 'SUCCESS' | 'QUEUED' | 'ERROR';
+      error?: string;
+      timestamp: Date;
+    }>
+  >([]);
+  const [isSubmittingBatch, setIsSubmittingBatch] = useState(false);
+  const scannerInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Fetch Cards Data ─────────────────────────────────────────────
   const fetchCardsData = useCallback(async () => {
@@ -377,113 +392,224 @@ export function CardsPage() {
     }
   };
 
-  // ─── Execute Single Card Registration ─────────────────────────────
-  const handleSingleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanNum = singleCardNumber.trim().toUpperCase();
-    if (!cleanNum) {
-      setSingleRegError('Card number is required');
+  // ─── Multi-QR Scan, Camera & Auto-Register Logic ─────────────────
+  const initSequenceForPrefix = useCallback(
+    (prefix: string) => {
+      const cleanPrefix = prefix.trim().toUpperCase();
+      let maxNum = 0;
+      for (const c of allCards) {
+        if (c.physicalCardNumber) {
+          const upper = c.physicalCardNumber.trim().toUpperCase();
+          if (upper.startsWith(cleanPrefix)) {
+            const numPart = upper.slice(cleanPrefix.length).trim();
+            const val = parseInt(numPart, 10);
+            if (!isNaN(val) && val > maxNum) {
+              maxNum = val;
+            }
+          }
+        }
+      }
+      return maxNum + 1;
+    },
+    [allCards],
+  );
+
+  const getNextAvailableNumber = useCallback(
+    (prefix: string, baseSeq: number, excludeList: string[] = []): number => {
+      const cleanPrefix = prefix.trim().toUpperCase();
+      const existingNumbers = new Set(
+        allCards
+          .map((c) => (c.physicalCardNumber || '').trim().toUpperCase())
+          .filter(Boolean),
+      );
+      excludeList.forEach((n) => existingNumbers.add(n.toUpperCase()));
+
+      let current = Math.max(1, baseSeq);
+      while (true) {
+        const formatted = padZeros
+          ? `${cleanPrefix}${String(current).padStart(3, '0')}`
+          : `${cleanPrefix}${current}`;
+        if (!existingNumbers.has(formatted)) {
+          return current;
+        }
+        current++;
+      }
+    },
+    [allCards, padZeros],
+  );
+
+  const playBeep = (isSuccess = true) => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = isSuccess ? 'sine' : 'triangle';
+      osc.frequency.setValueAtTime(isSuccess ? 880 : 330, ctx.currentTime);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + (isSuccess ? 0.12 : 0.25));
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + (isSuccess ? 0.12 : 0.25));
+    } catch {
+      // Ignore audio policy restrictions
+    }
+  };
+
+  const handleProcessScannedQr = async (rawQr: string) => {
+    let cleanQr = rawQr.trim();
+    if (!cleanQr) return;
+
+    // Normalize QR if URL
+    if (cleanQr.includes('/')) {
+      const parts = cleanQr.split('/');
+      cleanQr = parts[parts.length - 1].split('?')[0].trim();
+    }
+
+    // Check duplicate in current scanned session
+    if (scannedCardsList.some((s) => s.qrCode.toLowerCase() === cleanQr.toLowerCase())) {
+      toast.warning(`QR code '${cleanQr}' has already been scanned in this session.`);
+      playBeep(false);
+      setScannerInputValue('');
       return;
     }
 
-    setIsSingleRegistering(true);
-    setSingleRegError(null);
-    try {
-      const res = await apiService.cards.createCard({
-        physicalCardNumber: cleanNum,
-        qrToken: singleCustomQr.trim() || undefined,
-      });
-
-      if (!res.success) {
-        setSingleRegError(res.error.message || 'Failed to register card');
-        return;
-      }
-
-      toast.success(`Card ${cleanNum} registered successfully!`);
-      setShowSingleRegisterModal(false);
-      setSingleCardNumber('');
-      setSingleCustomQr('');
-      fetchCardsData();
-    } catch {
-      setSingleRegError('Network error while registering card');
-    } finally {
-      setIsSingleRegistering(false);
+    // Check if already registered in organization
+    const existingCard = allCards.find((c) => c.qrToken.toLowerCase() === cleanQr.toLowerCase());
+    if (existingCard) {
+      toast.error(
+        `QR '${cleanQr}' is already registered (Card Number: ${existingCard.physicalCardNumber || 'Unassigned'}).`,
+      );
+      playBeep(false);
+      setScannerInputValue('');
+      return;
     }
+
+    // Quota check
+    const plannedCount = allCards.length + (autoRegisterOnScan ? 1 : scannedCardsList.length + 1);
+    if (plannedCount > effectiveCardLimit) {
+      toast.error(`Subscription limit reached (${effectiveCardLimit} cards max). Cannot register more.`);
+      playBeep(false);
+      setScannerInputValue('');
+      return;
+    }
+
+    // Compute next card number
+    const queuedNumbers = scannedCardsList.map((s) => s.cardNumber);
+    const nextSeq = getNextAvailableNumber(cardPrefix, startSequence, queuedNumbers);
+    const assignedCardNumber = padZeros
+      ? `${cardPrefix.trim().toUpperCase()}${String(nextSeq).padStart(3, '0')}`
+      : `${cardPrefix.trim().toUpperCase()}${nextSeq}`;
+
+    setScannerInputValue('');
+
+    if (autoRegisterOnScan) {
+      try {
+        const res = await apiService.cards.importQrCodes({
+          mappings: [{ qrCode: cleanQr, cardNumber: assignedCardNumber }],
+        });
+
+        if (!res.success) {
+          toast.error(res.error.message || 'Failed to auto-register card');
+          playBeep(false);
+          setScannedCardsList((prev) => [
+            {
+              id: Math.random().toString(),
+              qrCode: cleanQr,
+              cardNumber: assignedCardNumber,
+              status: 'ERROR',
+              error: res.error.message,
+              timestamp: new Date(),
+            },
+            ...prev,
+          ]);
+          return;
+        }
+
+        playBeep(true);
+        toast.success(`✓ Auto-Registered: ${assignedCardNumber}`);
+        setScannedCardsList((prev) => [
+          {
+            id: Math.random().toString(),
+            qrCode: cleanQr,
+            cardNumber: assignedCardNumber,
+            status: 'SUCCESS',
+            timestamp: new Date(),
+          },
+          ...prev,
+        ]);
+        setStartSequence(nextSeq + 1);
+        fetchCardsData();
+      } catch {
+        toast.error('Network error while auto-registering card');
+        playBeep(false);
+      }
+    } else {
+      // Queued mode
+      playBeep(true);
+      toast.info(`Scanned ${assignedCardNumber} (Queued)`);
+      setScannedCardsList((prev) => [
+        {
+          id: Math.random().toString(),
+          qrCode: cleanQr,
+          cardNumber: assignedCardNumber,
+          status: 'QUEUED',
+          timestamp: new Date(),
+        },
+        ...prev,
+      ]);
+      setStartSequence(nextSeq + 1);
+    }
+
+    setTimeout(() => {
+      scannerInputRef.current?.focus();
+    }, 50);
   };
 
-  // ─── Execute Bulk Assignment CSV Upload ───────────────────────────
-  const handleBulkAssignCsvSelect = (file: File) => {
-    setBulkAssignFileName(file.name);
-    const reader = new FileReader();
-
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      if (!text) return;
-
-      const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-      if (lines.length === 0) return;
-
-      const hasHeader = lines[0].toLowerCase().includes('qr') || lines[0].toLowerCase().includes('card');
-      const dataRows = hasHeader ? lines.slice(1) : lines;
-
-      const existingNums = new Set(allCards.filter((c) => !!c.physicalCardNumber).map((c) => (c.physicalCardNumber || '').toUpperCase()));
-      const seenNums = new Set<string>();
-
-      const mappings = dataRows.map((row) => {
-        const parts = row.split(',').map((p) => p.trim().replace(/^["']|["']$/g, ''));
-        const qr = parts[0] || '';
-        const num = (parts[1] || '').toUpperCase();
-
-        if (!qr || !num) {
-          return { qrCode: qr, cardNumber: num, valid: false, error: 'Missing QR code or Card Number' };
-        }
-
-        const card = allCards.find((c) => c.qrToken.toLowerCase() === qr.toLowerCase());
-        if (!card) {
-          return { qrCode: qr, cardNumber: num, valid: false, error: 'QR Code not found in organization registry' };
-        }
-
-        if (seenNums.has(num)) {
-          return { qrCode: qr, cardNumber: num, valid: false, error: 'Duplicate card number in upload batch' };
-        }
-        seenNums.add(num);
-
-        if (existingNums.has(num) && card.physicalCardNumber?.toUpperCase() !== num) {
-          return { qrCode: qr, cardNumber: num, valid: false, error: 'Card number already in use by another card' };
-        }
-
-        return { qrCode: qr, cardNumber: num, valid: true };
-      });
-
-      setBulkAssignMappings(mappings);
-    };
-
-    reader.readAsText(file);
+  const handleOpenQrImportModal = () => {
+    const nextSeq = initSequenceForPrefix(cardPrefix);
+    setStartSequence(nextSeq);
+    setImportMode('SCAN');
+    setImportFileName(null);
+    setImportPreview(null);
+    setIsCameraActive(false);
+    setShowQrImportModal(true);
+    setTimeout(() => scannerInputRef.current?.focus(), 150);
   };
 
-  const handleConfirmBulkAssign = async () => {
-    const validList = bulkAssignMappings.filter((m) => m.valid);
-    if (validList.length === 0) return;
+  const handleCloseQrImportModal = () => {
+    setShowQrImportModal(false);
+    setIsCameraActive(false);
+    setImportPreview(null);
+    setImportFileName(null);
+    setScannerInputValue('');
+  };
 
-    setIsBulkAssigning(true);
+  const handleRegisterBatchQueued = async () => {
+    const queued = scannedCardsList.filter((s) => s.status === 'QUEUED');
+    if (queued.length === 0) return;
+
+    setIsSubmittingBatch(true);
     try {
-      const assignments = validList.map((m) => ({ qrCode: m.qrCode, cardNumber: m.cardNumber }));
-      const res = await apiService.cards.bulkAssignCardNumbers({ assignments });
+      const mappings = queued.map((s) => ({ qrCode: s.qrCode, cardNumber: s.cardNumber }));
+      const res = await apiService.cards.importQrCodes({ mappings });
 
       if (!res.success) {
-        toast.error(res.error.message || 'Failed to bulk assign card numbers');
+        toast.error(res.error.message || 'Failed to register cards');
         return;
       }
 
-      toast.success(`Successfully assigned ${res.data.assignedCount} card numbers!`);
-      setShowBulkAssignModal(false);
-      setBulkAssignMappings([]);
-      setBulkAssignFileName(null);
+      toast.success(`Successfully registered ${res.data.importedCount} cards with prefix!`);
+      setScannedCardsList((prev) =>
+        prev.map((item) => (item.status === 'QUEUED' ? { ...item, status: 'SUCCESS' } : item)),
+      );
       fetchCardsData();
     } catch {
-      toast.error('Network error during bulk assignment');
+      toast.error('Network error registering batch');
     } finally {
-      setIsBulkAssigning(false);
+      setIsSubmittingBatch(false);
     }
   };
 
@@ -541,10 +667,18 @@ export function CardsPage() {
   const handleConfirmBlock = async () => {
     if (!selectedCard) return;
     try {
-      const res = await apiService.cards.blockCard(selectedCard.id);
+      const blockerStr = user ? `${user.name} (${user.role === 'ORG_ADMIN' ? 'Org Admin' : user.role})` : 'Org Admin';
+      const notes = additionalBlockReason.trim();
+      const fullReason = notes
+        ? `[Blocked by ${blockerStr}] ${blockReasonCategory}: ${notes}`
+        : `[Blocked by ${blockerStr}] ${blockReasonCategory}`;
+
+      const res = await apiService.cards.blockCard(selectedCard.id, fullReason);
       if (res.success) {
         toast.success(`Card ${selectedCard.physicalCardNumber || selectedCard.qrToken} has been blocked.`);
         setShowBlockModal(false);
+        setAdditionalBlockReason('');
+        setBlockReasonCategory('Lost or Stolen Card');
         fetchCardsData();
       } else {
         toast.error(res.error.message || 'Failed to block card');
@@ -638,7 +772,18 @@ export function CardsPage() {
       header: 'Card Status',
       render: (card: CardEntity) => {
         if (card.status === 'ACTIVE') return <Badge variant="success">Active</Badge>;
-        if (card.status === 'BLOCKED') return <Badge variant="danger">Blocked</Badge>;
+        if (card.status === 'BLOCKED') {
+          return (
+            <div className="flex flex-col gap-0.5">
+              <Badge variant="danger">Blocked</Badge>
+              {card.blockedReason && (
+                <span className="text-[10px] text-rose-300 max-w-[150px] truncate" title={card.blockedReason}>
+                  {card.blockedReason}
+                </span>
+              )}
+            </div>
+          );
+        }
         return <Badge variant="outline">Available</Badge>;
       },
     },
@@ -773,44 +918,15 @@ export function CardsPage() {
             <span className="hidden sm:inline">Refresh</span>
           </Button>
 
-          <Button
-            variant="outline"
-            size="md"
-            className="gap-2 border-slate-700 hover:border-slate-600 text-slate-200"
-            onClick={() => setShowBulkAssignModal(true)}
-          >
-            <FileSpreadsheet className="h-4 w-4 text-blue-400" />
-            <span>Bulk Assign Numbers</span>
-          </Button>
-
-          <Button
-            variant="outline"
-            size="md"
-            className="gap-2 border-slate-700 hover:border-slate-600 text-slate-200"
-            onClick={() => {
-              setSingleCardNumber('');
-              setSingleCustomQr('');
-              setSingleRegError(null);
-              setShowSingleRegisterModal(true);
-            }}
-          >
-            <Plus className="h-4 w-4 text-slate-400" />
-            <span>Register Card</span>
-          </Button>
-
           {canIssue && (
             <Button
               variant="primary"
               size="md"
               className="gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold shadow-lg shadow-emerald-950/50"
-              onClick={() => {
-                setImportFileName(null);
-                setImportPreview(null);
-                setShowQrImportModal(true);
-              }}
+              onClick={handleOpenQrImportModal}
             >
-              <QrCode className="h-4 w-4" />
-              <span>Import QR Codes</span>
+              <Scan className="h-4 w-4" />
+              <span>Import & Scan QR Codes</span>
             </Button>
           )}
         </div>
@@ -940,25 +1056,54 @@ export function CardsPage() {
         <DataTable data={filteredCards} columns={cardColumns} keyExtractor={(c) => c.id} />
       )}
 
-      {/* ─── MODAL 1: External Bulk QR Import ────────────────────────── */}
+      {/* ─── MODAL 1: Multi-QR Scanner & Bulk QR Import ───────────────── */}
       {showQrImportModal && (
         <Modal
           isOpen={showQrImportModal}
-          onClose={() => {
-            setShowQrImportModal(false);
-            setImportPreview(null);
-            setImportFileName(null);
-          }}
-          title="Import External Bulk QR Codes"
+          onClose={handleCloseQrImportModal}
+          title="Import & Scan Physical Cards"
           size="lg"
         >
-          <div className="space-y-5">
-            <p className="text-sm text-slate-400">
-              Upload externally generated QR codes in CSV format. QR codes will be registered in your organization as <strong>Unassigned</strong>, ready for card number assignment.
-            </p>
+          <div className="space-y-4">
+            {/* Mode Selector Tabs */}
+            <div className="flex rounded-lg bg-slate-900 p-1 border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setImportMode('SCAN')}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-bold transition-all cursor-pointer',
+                  importMode === 'SCAN'
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60',
+                )}
+              >
+                <Scan className="h-4 w-4" />
+                <span>⚡ Multi-QR Scanner & Auto-Register</span>
+                <span className="text-[10px] bg-emerald-950/80 text-emerald-200 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                  Live
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setImportMode('CSV');
+                  setIsCameraActive(false);
+                }}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-bold transition-all cursor-pointer',
+                  importMode === 'CSV'
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60',
+                )}
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                <span>📁 Upload CSV Spreadsheet</span>
+              </button>
+            </div>
 
             {/* Quota Banner */}
-            <div className="flex items-center justify-between p-3 rounded-lg bg-slate-900 border border-slate-800 text-xs">
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
               <span className="text-slate-400">
                 Organization Quota: <strong className="text-slate-200">{totalCardsCount} / {effectiveCardLimit}</strong> cards registered
               </span>
@@ -967,136 +1112,395 @@ export function CardsPage() {
               </span>
             </div>
 
-            {/* CSV File Upload Zone */}
-            {!importPreview ? (
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 hover:border-emerald-500 rounded-xl cursor-pointer bg-slate-900/50 hover:bg-slate-900 transition-all text-center group"
-              >
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform mb-3">
-                  <Upload className="h-7 w-7" />
-                </div>
-                <p className="text-sm font-semibold text-slate-200">
-                  Click to select CSV or drag and drop
-                </p>
-                <p className="text-xs text-slate-500 mt-1">
-                  Accepts CSV containing <code className="text-emerald-400 bg-slate-800 px-1 py-0.5 rounded">qrCode</code> column (or 2-column <code className="text-slate-300">qrCode,cardNumber</code>)
-                </p>
+            {importMode === 'SCAN' ? (
+              <div className="space-y-3.5">
+                {/* Prefix & Auto-Increment Configuration Bar */}
+                <div className="rounded-xl border border-slate-700/80 bg-slate-900/90 p-3.5 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <Tag className="h-4 w-4 text-emerald-400" />
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                        Card Number Prefix & Auto-Assignment
+                      </span>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={autoRegisterOnScan}
+                        onChange={(e) => setAutoRegisterOnScan(e.target.checked)}
+                        className="rounded border-slate-700 bg-slate-800 text-emerald-500 focus:ring-emerald-500 h-3.5 w-3.5"
+                      />
+                      <span className="font-semibold text-emerald-300">Auto-Register Immediately on Scan</span>
+                    </label>
+                  </div>
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv,.txt"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleQrCsvSelect(file);
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* File summary & stats */}
-                <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                  <div className="flex items-center gap-3">
-                    <FileSpreadsheet className="h-5 w-5 text-emerald-400" />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                      <p className="font-semibold text-slate-200 text-sm">{importFileName}</p>
-                      <p className="text-xs text-slate-400">{importPreview.totalRows} total rows found in file</p>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                        Card Number Prefix <span className="text-rose-400">*</span>
+                      </label>
+                      <Input
+                        type="text"
+                        value={cardPrefix}
+                        placeholder="e.g. MC-, CARD-, STU-"
+                        onChange={(e) => {
+                          const p = e.target.value;
+                          setCardPrefix(p);
+                          setStartSequence(initSequenceForPrefix(p));
+                        }}
+                        className="h-9 text-xs font-mono font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                        Next Sequence Number
+                      </label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={startSequence}
+                        onChange={(e) => setStartSequence(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="h-9 text-xs font-mono font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                        Next Card Number
+                      </label>
+                      <div className="h-9 flex items-center justify-between px-3 rounded-lg border border-emerald-500/40 bg-emerald-950/30 text-xs">
+                        <span className="font-mono font-extrabold text-emerald-300 text-sm tracking-wide">
+                          {padZeros
+                            ? `${cardPrefix.trim().toUpperCase()}${String(startSequence).padStart(3, '0')}`
+                            : `${cardPrefix.trim().toUpperCase()}${startSequence}`}
+                        </span>
+                        <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-slate-400">
+                          <input
+                            type="checkbox"
+                            checked={padZeros}
+                            onChange={(e) => setPadZeros(e.target.checked)}
+                            className="rounded border-slate-700 bg-slate-800 text-emerald-500 h-3 w-3"
+                          />
+                          <span>Pad 001</span>
+                        </label>
+                      </div>
                     </div>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setImportPreview(null);
-                      setImportFileName(null);
-                    }}
-                  >
-                    Change File
-                  </Button>
                 </div>
 
-                {/* Validation Counts */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-900/50 text-center">
-                    <p className="text-xs font-medium text-emerald-400">Valid & Ready</p>
-                    <p className="text-2xl font-bold text-emerald-300 mt-0.5">{importPreview.validCount}</p>
+                {/* Continuous Barcode & Camera Scanner Input Section */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Scan className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-400" />
+                      <input
+                        ref={scannerInputRef}
+                        type="text"
+                        value={scannerInputValue}
+                        onChange={(e) => setScannerInputValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (scannerInputValue.trim()) {
+                              handleProcessScannedQr(scannerInputValue);
+                            }
+                          }
+                        }}
+                        placeholder="Scan with handheld 2D QR gun or type token & press Enter..."
+                        className="w-full pl-10 pr-24 py-2.5 rounded-xl border-2 border-emerald-500/50 bg-slate-900 text-sm font-mono text-slate-100 placeholder-slate-500 focus:border-emerald-400 focus:outline-none shadow-inner"
+                        autoFocus
+                      />
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs py-1 px-3 bg-emerald-600 hover:bg-emerald-500 font-bold"
+                        disabled={!scannerInputValue.trim()}
+                        onClick={() => {
+                          if (scannerInputValue.trim()) {
+                            handleProcessScannedQr(scannerInputValue);
+                          }
+                        }}
+                      >
+                        Enter
+                      </Button>
+                    </div>
+
+                    <Button
+                      variant={isCameraActive ? 'danger' : 'outline'}
+                      size="md"
+                      onClick={() => setIsCameraActive(!isCameraActive)}
+                      className={cn(
+                        'gap-1.5 text-xs font-semibold shrink-0',
+                        isCameraActive
+                          ? 'bg-rose-600 hover:bg-rose-500 text-white'
+                          : 'border-slate-700 hover:border-slate-600 text-slate-300',
+                      )}
+                    >
+                      {isCameraActive ? (
+                        <>
+                          <CameraOff className="h-4 w-4" />
+                          <span>Stop Camera</span>
+                        </>
+                      ) : (
+                        <>
+                          <Camera className="h-4 w-4 text-emerald-400" />
+                          <span>Use Camera</span>
+                        </>
+                      )}
+                    </Button>
                   </div>
-                  <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-900/50 text-center">
-                    <p className="text-xs font-medium text-rose-400">Duplicates / Errors</p>
-                    <p className="text-2xl font-bold text-rose-300 mt-0.5">{importPreview.errorCount}</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 text-center">
-                    <p className="text-xs font-medium text-slate-400">Remaining Quota</p>
-                    <p className="text-2xl font-bold text-slate-200 mt-0.5">{remainingQuota}</p>
-                  </div>
+
+                  {/* Live Camera Viewport (powered by Html5Qrcode) */}
+                  {isCameraActive && (
+                    <CameraQrScanner
+                      isActive={isCameraActive}
+                      onScan={(decoded) => handleProcessScannedQr(decoded)}
+                      onToggleActive={(active) => setIsCameraActive(active)}
+                    />
+                  )}
                 </div>
 
-                {importPreview.exceedsPlanLimit && (
-                  <div className="flex items-start gap-2.5 p-3 rounded-lg bg-rose-950/50 border border-rose-800 text-rose-300 text-xs">
-                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span>
-                      Importing {importPreview.validCount} cards exceeds your remaining quota of {remainingQuota} cards. Please upgrade your plan or select a smaller batch.
+                {/* Session Scanned Cards Registry Table */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                      <span>
+                        Scanned Cards ({scannedCardsList.length} total
+                        {scannedCardsList.filter((s) => s.status === 'SUCCESS').length > 0 &&
+                          `, ${scannedCardsList.filter((s) => s.status === 'SUCCESS').length} registered`}
+                        )
+                      </span>
                     </span>
+                    {scannedCardsList.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setScannedCardsList([])}
+                        className="text-slate-400 hover:text-rose-400 text-[11px] underline cursor-pointer"
+                      >
+                        Clear session list
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="border border-slate-800 rounded-lg overflow-hidden max-h-48 overflow-y-auto">
+                    {scannedCardsList.length === 0 ? (
+                      <div className="p-6 text-center text-xs text-slate-500 space-y-1">
+                        <Scan className="h-6 w-6 mx-auto text-slate-600 mb-2" />
+                        <p className="font-medium text-slate-300">Ready for continuous scanning</p>
+                        <p>
+                          Point your 2D barcode scanner gun at card QR codes. Each scanned code will automatically be registered as{' '}
+                          <strong className="text-emerald-400 font-mono">
+                            {padZeros
+                              ? `${cardPrefix.trim().toUpperCase()}${String(startSequence).padStart(3, '0')}`
+                              : `${cardPrefix.trim().toUpperCase()}${startSequence}`}
+                          </strong>
+                          , then increment automatically.
+                        </p>
+                      </div>
+                    ) : (
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead className="bg-slate-900 sticky top-0 border-b border-slate-800 text-slate-400">
+                          <tr>
+                            <th className="p-2">#</th>
+                            <th className="p-2">Card Number</th>
+                            <th className="p-2">Scanned QR Token</th>
+                            <th className="p-2">Status</th>
+                            <th className="p-2 text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60">
+                          {scannedCardsList.map((item, idx) => (
+                            <tr key={item.id} className="hover:bg-slate-900/40">
+                              <td className="p-2 font-mono text-slate-500">{scannedCardsList.length - idx}</td>
+                              <td className="p-2 font-mono font-bold text-emerald-400">{item.cardNumber}</td>
+                              <td className="p-2 font-mono text-slate-300 max-w-[180px] truncate" title={item.qrCode}>
+                                {item.qrCode}
+                              </td>
+                              <td className="p-2">
+                                {item.status === 'SUCCESS' && (
+                                  <Badge variant="success" className="text-2xs py-0.5">
+                                    ✓ Registered
+                                  </Badge>
+                                )}
+                                {item.status === 'QUEUED' && (
+                                  <Badge variant="outline" className="text-2xs py-0.5 text-amber-400 border-amber-500/40">
+                                    Queued
+                                  </Badge>
+                                )}
+                                {item.status === 'ERROR' && (
+                                  <span title={item.error}>
+                                    <Badge variant="danger" className="text-2xs py-0.5">
+                                      Error
+                                    </Badge>
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-2 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => setScannedCardsList((prev) => prev.filter((s) => s.id !== item.id))}
+                                  className="text-slate-500 hover:text-rose-400 p-0.5 cursor-pointer"
+                                  title="Remove from session list"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* CSV Upload Zone */
+              <div className="space-y-4">
+                {!importPreview ? (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 hover:border-emerald-500 rounded-xl cursor-pointer bg-slate-900/50 hover:bg-slate-900 transition-all text-center group"
+                  >
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform mb-3">
+                      <Upload className="h-7 w-7" />
+                    </div>
+                    <p className="text-sm font-semibold text-slate-200">
+                      Click to select CSV or drag and drop
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Accepts CSV containing <code className="text-emerald-400 bg-slate-800 px-1 py-0.5 rounded">qrCode</code> column (or 2-column <code className="text-slate-300">qrCode,cardNumber</code>)
+                    </p>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".csv,.txt"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleQrCsvSelect(file);
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-800">
+                      <div className="flex items-center gap-3">
+                        <FileSpreadsheet className="h-5 w-5 text-emerald-400" />
+                        <div>
+                          <p className="font-semibold text-slate-200 text-sm">{importFileName}</p>
+                          <p className="text-xs text-slate-400">{importPreview.totalRows} total rows found in file</p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setImportPreview(null);
+                          setImportFileName(null);
+                        }}
+                      >
+                        Change File
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3 text-center">
+                      <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-900/50">
+                        <p className="text-xs font-medium text-emerald-400">Valid</p>
+                        <p className="text-xl font-bold text-emerald-300">{importPreview.validCount}</p>
+                      </div>
+                      <div className="p-2.5 rounded-lg bg-rose-950/40 border border-rose-900/50">
+                        <p className="text-xs font-medium text-rose-400">Errors</p>
+                        <p className="text-xl font-bold text-rose-300">{importPreview.errorCount}</p>
+                      </div>
+                      <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+                        <p className="text-xs font-medium text-slate-400">Quota</p>
+                        <p className="text-xl font-bold text-slate-200">{remainingQuota}</p>
+                      </div>
+                    </div>
+
+                    <div className="border border-slate-800 rounded-lg overflow-hidden max-h-48 overflow-y-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead className="bg-slate-900 sticky top-0 border-b border-slate-800 text-slate-400">
+                          <tr>
+                            <th className="p-2">Row</th>
+                            <th className="p-2">QR Code</th>
+                            <th className="p-2">Card Number</th>
+                            <th className="p-2">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60">
+                          {importPreview.entries.map((e: any, idx: number) => (
+                            <tr key={idx} className={e.status === 'VALID' ? 'hover:bg-slate-900/40' : 'bg-rose-950/20'}>
+                              <td className="p-2 font-mono text-slate-500">{e.rowNumber}</td>
+                              <td className="p-2 font-mono text-slate-200">{e.qrCode || '—'}</td>
+                              <td className="p-2 font-mono text-slate-300">{e.cardNumber || <span className="text-slate-500 italic">Unassigned</span>}</td>
+                              <td className="p-2">
+                                {e.status === 'VALID' ? (
+                                  <Badge variant="success" className="text-2xs py-0.5">Valid</Badge>
+                                ) : (
+                                  <span className="text-rose-400 text-xs flex items-center gap-1" title={e.errorMessage}>
+                                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                                    {e.errorMessage || e.status}
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
-
-                {/* Preview Table */}
-                <div className="border border-slate-800 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-slate-900 sticky top-0 border-b border-slate-800 text-slate-400">
-                      <tr>
-                        <th className="p-2.5">Row</th>
-                        <th className="p-2.5">QR Code Value</th>
-                        <th className="p-2.5">Mapped Card Number</th>
-                        <th className="p-2.5">Validation Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      {importPreview.entries.map((e: any, idx: number) => (
-                        <tr key={idx} className={e.status === 'VALID' ? 'hover:bg-slate-900/40' : 'bg-rose-950/20'}>
-                          <td className="p-2.5 font-mono text-slate-500">{e.rowNumber}</td>
-                          <td className="p-2.5 font-mono font-semibold text-slate-200">{e.qrCode || '—'}</td>
-                          <td className="p-2.5 font-mono text-slate-300">{e.cardNumber || <span className="text-slate-500 italic">Unassigned</span>}</td>
-                          <td className="p-2.5">
-                            {e.status === 'VALID' ? (
-                              <Badge variant="success" className="text-2xs py-0.5">Valid</Badge>
-                            ) : (
-                              <span className="text-rose-400 text-xs flex items-center gap-1" title={e.errorMessage}>
-                                <AlertTriangle className="h-3 w-3 shrink-0" />
-                                {e.errorMessage || e.status}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
               </div>
             )}
           </div>
 
           <ModalFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowQrImportModal(false);
-                setImportPreview(null);
-                setImportFileName(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              disabled={!importPreview || importPreview.validCount === 0 || importPreview.exceedsPlanLimit || isImporting}
-              onClick={handleConfirmQrImport}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
-            >
-              {isImporting ? 'Importing...' : `Import ${importPreview?.validCount ?? 0} QR Codes`}
-            </Button>
+            {importMode === 'SCAN' ? (
+              <>
+                {scannedCardsList.some((s) => s.status === 'QUEUED') && (
+                  <Button
+                    variant="primary"
+                    disabled={isSubmittingBatch}
+                    onClick={handleRegisterBatchQueued}
+                    className="bg-emerald-600 hover:bg-emerald-500 font-bold"
+                  >
+                    {isSubmittingBatch
+                      ? 'Registering...'
+                      : `Register All Queued (${scannedCardsList.filter((s) => s.status === 'QUEUED').length})`}
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={handleCloseQrImportModal}
+                >
+                  Done / Close
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setImportPreview(null);
+                    setImportFileName(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  disabled={!importPreview || importPreview.validCount === 0 || importPreview.exceedsPlanLimit || isImporting}
+                  onClick={handleConfirmQrImport}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                >
+                  {isImporting ? 'Importing...' : `Import ${importPreview?.validCount ?? 0} QR Codes`}
+                </Button>
+              </>
+            )}
           </ModalFooter>
         </Modal>
       )}
@@ -1163,163 +1567,6 @@ export function CardsPage() {
                 className="bg-emerald-600 hover:bg-emerald-500 font-bold"
               >
                 {isAssigning ? 'Assigning...' : 'Assign Card Number'}
-              </Button>
-            </ModalFooter>
-          </form>
-        </Modal>
-      )}
-
-      {/* ─── MODAL 3: Bulk Assign Numbers CSV Mapping ────────────────── */}
-      {showBulkAssignModal && (
-        <Modal
-          isOpen={showBulkAssignModal}
-          onClose={() => {
-            setShowBulkAssignModal(false);
-            setBulkAssignMappings([]);
-            setBulkAssignFileName(null);
-          }}
-          title="Bulk Assign Card Numbers (CSV Mapping)"
-          size="lg"
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-slate-400">
-              Upload a 2-column CSV mapping (<code>qrCode,cardNumber</code>) to assign card numbers to multiple unassigned QR cards in batch.
-            </p>
-
-            {!bulkAssignFileName ? (
-              <div
-                onClick={() => bulkAssignInputRef.current?.click()}
-                className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-xl cursor-pointer bg-slate-900/50 hover:bg-slate-900 transition-all text-center group"
-              >
-                <FileSpreadsheet className="h-8 w-8 text-blue-400 mb-2 group-hover:scale-110 transition-transform" />
-                <p className="text-sm font-semibold text-slate-200">Select Mapping CSV</p>
-                <p className="text-xs text-slate-500 mt-1">Format: <code>qrCode,cardNumber</code></p>
-                <input
-                  ref={bulkAssignInputRef}
-                  type="file"
-                  accept=".csv,.txt"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleBulkAssignCsvSelect(file);
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 rounded-lg bg-slate-900 border border-slate-800 text-xs">
-                  <span className="font-semibold text-slate-200">{bulkAssignFileName} ({bulkAssignMappings.length} mappings)</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setBulkAssignMappings([]);
-                      setBulkAssignFileName(null);
-                    }}
-                  >
-                    Change File
-                  </Button>
-                </div>
-
-                <div className="border border-slate-800 rounded-lg overflow-hidden max-h-52 overflow-y-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-slate-900 sticky top-0 border-b border-slate-800 text-slate-400">
-                      <tr>
-                        <th className="p-2">QR Code</th>
-                        <th className="p-2">Target Card Number</th>
-                        <th className="p-2">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      {bulkAssignMappings.map((m, idx) => (
-                        <tr key={idx} className={m.valid ? '' : 'bg-rose-950/20'}>
-                          <td className="p-2 font-mono text-slate-200">{m.qrCode}</td>
-                          <td className="p-2 font-mono font-bold text-emerald-400">{m.cardNumber}</td>
-                          <td className="p-2">
-                            {m.valid ? (
-                              <Badge variant="success" className="text-2xs py-0.5">Ready</Badge>
-                            ) : (
-                              <span className="text-rose-400 text-xs">{m.error}</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <ModalFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowBulkAssignModal(false);
-                setBulkAssignMappings([]);
-                setBulkAssignFileName(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              disabled={bulkAssignMappings.filter((m) => m.valid).length === 0 || isBulkAssigning}
-              onClick={handleConfirmBulkAssign}
-              className="bg-blue-600 hover:bg-blue-500 font-bold"
-            >
-              {isBulkAssigning ? 'Assigning...' : `Assign ${bulkAssignMappings.filter((m) => m.valid).length} Numbers`}
-            </Button>
-          </ModalFooter>
-        </Modal>
-      )}
-
-      {/* ─── MODAL 4: Single Card Registration ────────────────────────── */}
-      {showSingleRegisterModal && (
-        <Modal
-          isOpen={showSingleRegisterModal}
-          onClose={() => setShowSingleRegisterModal(false)}
-          title="Register Single Physical Card"
-          size="md"
-        >
-          <form onSubmit={handleSingleRegister} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                Card Number <span className="text-rose-400">*</span>
-              </label>
-              <Input
-                type="text"
-                placeholder="e.g. MC 105"
-                value={singleCardNumber}
-                onChange={(e) => setSingleCardNumber(e.target.value)}
-                autoFocus
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                Custom Pre-Printed QR (Optional)
-              </label>
-              <Input
-                type="text"
-                placeholder="Leave blank to auto-generate unique cryptographic QR token"
-                value={singleCustomQr}
-                onChange={(e) => setSingleCustomQr(e.target.value)}
-              />
-            </div>
-
-            {singleRegError && (
-              <div className="p-3 rounded-lg bg-rose-950/60 border border-rose-800 text-rose-300 text-xs">
-                {singleRegError}
-              </div>
-            )}
-
-            <ModalFooter>
-              <Button variant="outline" type="button" onClick={() => setShowSingleRegisterModal(false)}>
-                Cancel
-              </Button>
-              <Button variant="primary" type="submit" disabled={isSingleRegistering || !singleCardNumber.trim()}>
-                {isSingleRegistering ? 'Registering...' : 'Register Card'}
               </Button>
             </ModalFooter>
           </form>
@@ -1399,6 +1646,16 @@ export function CardsPage() {
                 <p className="text-slate-500">QR Identifier</p>
                 <p className="font-mono text-slate-300 truncate">{selectedCard.qrToken}</p>
               </div>
+
+              {selectedCard.status === 'BLOCKED' && (
+                <div className="col-span-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+                  <p className="font-semibold text-rose-400">Card is Blocked</p>
+                  <p className="mt-1">{selectedCard.blockedReason || 'Blocked by Administrator'}</p>
+                  {selectedCard.blockedBy && (
+                    <p className="mt-0.5 text-slate-400">Blocked By: {selectedCard.blockedBy}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>
@@ -1454,13 +1711,79 @@ export function CardsPage() {
           isOpen={showBlockModal}
           onClose={() => setShowBlockModal(false)}
           title={`Block Card — ${selectedCard.physicalCardNumber || selectedCard.qrToken}`}
-          size="sm"
+          size="md"
         >
-          <p className="text-sm text-slate-300">
-            Are you sure you want to block this card? It will immediately prevent all purchases, recharges, and session operations across all cafeteria counters.
-          </p>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+              <p>
+                Are you sure you want to block this card? It will immediately prevent all purchases, recharges, and session operations across all cafeteria counters.
+              </p>
+            </div>
+
+            {/* Blocked By (Default: who is blocking) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-300">
+                Blocked By (Default)
+              </label>
+              <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-sm text-slate-200">
+                <ShieldAlert className="h-4 w-4 text-emerald-400 shrink-0" />
+                <span className="font-medium">
+                  {user ? `${user.name} (${user.role === 'ORG_ADMIN' ? 'Org Admin' : user.role})` : 'Org Admin'}
+                </span>
+                <span className="ml-auto text-[11px] text-slate-400 bg-slate-700 px-2 py-0.5 rounded">
+                  Current Operator
+                </span>
+              </div>
+            </div>
+
+            {/* Default Reason Category */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-300">
+                Primary Reason <span className="text-rose-400">*</span>
+              </label>
+              <select
+                value={blockReasonCategory}
+                onChange={(e) => setBlockReasonCategory(e.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-rose-500 focus:outline-none"
+              >
+                <option value="Lost or Stolen Card">Lost or Stolen Card</option>
+                <option value="Damaged / Hardware Fault">Damaged / Hardware Fault</option>
+                <option value="Suspicious Activity / Fraud">Suspicious Activity / Fraud</option>
+                <option value="Customer Request">Customer Request</option>
+                <option value="Administrative Block">Administrative Block</option>
+                <option value="Staff Discretion">Staff Discretion</option>
+                <option value="Other Reason">Other Reason</option>
+              </select>
+            </div>
+
+            {/* Additional Reason Option */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-300">
+                Additional Reason / Notes (Optional)
+              </label>
+              <textarea
+                value={additionalBlockReason}
+                onChange={(e) => setAdditionalBlockReason(e.target.value)}
+                placeholder="Type additional reason, remarks, or context (e.g. customer misplaced wallet at cafeteria, reported via phone)..."
+                rows={2}
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-rose-500 focus:outline-none resize-none"
+              />
+            </div>
+
+            {/* Summary preview */}
+            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-2.5 text-[11px] text-slate-400">
+              <span className="font-semibold text-slate-300">Audit Record Preview: </span>
+              <span className="text-rose-300">
+                {`[Blocked by ${user ? `${user.name} (${user.role === 'ORG_ADMIN' ? 'Org Admin' : user.role})` : 'Org Admin'}] ${blockReasonCategory}${additionalBlockReason.trim() ? `: ${additionalBlockReason.trim()}` : ''}`}
+              </span>
+            </div>
+          </div>
+
           <ModalFooter>
-            <Button variant="outline" onClick={() => setShowBlockModal(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowBlockModal(false)}>
+              Cancel
+            </Button>
             <Button variant="danger" onClick={handleConfirmBlock} className="bg-rose-600 hover:bg-rose-500 font-bold">
               Confirm Block
             </Button>

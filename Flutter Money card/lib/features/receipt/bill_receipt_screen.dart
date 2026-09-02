@@ -336,9 +336,7 @@ class _BillReceiptScreenState extends State<BillReceiptScreen> {
                       const SizedBox(height: 10),
                     ],
 
-                    // Subtotal & Prominent Total
-                    if (!bill.isRecharge && bill.subtotal != bill.totalAmount)
-                      _buildReceiptRow('Subtotal', '₹${bill.subtotal.toStringAsFixed(2)}'),
+                    // Prominent Total (Subtotal merged into Total)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
@@ -363,26 +361,40 @@ class _BillReceiptScreenState extends State<BillReceiptScreen> {
                     _buildDashedLine(),
                     const SizedBox(height: 10),
 
-                    // Financial Breakdown
-                    _buildReceiptRow('Previous Balance', '₹${bill.previousBalance.toStringAsFixed(2)}'),
-                    if (!bill.isRecharge)
-                      _buildReceiptRow('Deducted', '₹${bill.amountDeducted.toStringAsFixed(2)}'),
-                    _buildReceiptRow(
-                      bill.isRecharge ? 'New Balance' : 'Remaining Balance',
-                      '₹${bill.remainingBalance.toStringAsFixed(2)}',
-                      isBold: true,
-                    ),
+                    // Financial Breakdown (Previous Balance, Deducted, Remaining Balance)
+                    Builder(builder: (context) {
+                      final effectiveDeducted = bill.amountDeducted > 0
+                          ? bill.amountDeducted
+                          : bill.totalAmount;
+                      final effectiveRemaining = bill.remainingBalance;
+                      final effectivePrevBalance = bill.previousBalance > 0
+                          ? bill.previousBalance
+                          : (bill.isRecharge
+                              ? (effectiveRemaining - bill.totalAmount).clamp(0.0, double.infinity)
+                              : (effectiveRemaining + effectiveDeducted));
+
+                      return Column(
+                        children: [
+                          _buildReceiptRow('Previous Balance', '₹${effectivePrevBalance.toStringAsFixed(2)}'),
+                          if (!bill.isRecharge)
+                            _buildReceiptRow('Deducted', '₹${effectiveDeducted.toStringAsFixed(2)}'),
+                          _buildReceiptRow(
+                            bill.isRecharge ? 'New Balance' : 'Remaining Balance',
+                            '₹${effectiveRemaining.toStringAsFixed(2)}',
+                            isBold: true,
+                          ),
+                        ],
+                      );
+                    }),
 
                     const SizedBox(height: 10),
                     _buildDashedLine(),
                     const SizedBox(height: 10),
 
-                    // Payment and Session Information
+                    // Payment & Branch Information (Session removed as requested)
                     _buildReceiptRow('Payment:', bill.paymentMethod),
                     if (bill.paymentReference != null && bill.paymentReference!.isNotEmpty)
                       _buildReceiptRow('UPI Reference:', bill.paymentReference!),
-                    if (bill.sessionId != null && bill.sessionId!.isNotEmpty)
-                      _buildReceiptRow('Session:', bill.sessionId!),
                     _buildReceiptRow('Branch:', bill.branchName),
 
                     const SizedBox(height: 16),

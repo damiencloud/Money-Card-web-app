@@ -110,6 +110,13 @@ class MoreScreen extends ConsumerWidget {
         const SizedBox(height: AppSpacing.xs),
 
         _buildMenuTile(
+          icon: Icons.lock_outline,
+          title: 'Change Password',
+          subtitle: 'Update your account password',
+          onTap: () => context.push('/change-password'),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _buildMenuTile(
           icon: Icons.logout,
           title: 'Sign Out',
           subtitle: 'End current staff session',

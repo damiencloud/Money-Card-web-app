@@ -336,7 +336,7 @@ export async function rechargeSession(req: Request, res: Response) {
 
     const txType = paymentMethod === 'UPI' ? TransactionType.RECHARGE_UPI : TransactionType.RECHARGE_CASH;
 
-    await tx.transaction.create({
+    const txRecord = await tx.transaction.create({
       data: {
         sessionId: session.id,
         branchId: session.branchId,
@@ -350,7 +350,15 @@ export async function rechargeSession(req: Request, res: Response) {
       },
     });
 
-    return updated;
+    return {
+      ...updated,
+      transactionId: txRecord.id,
+      amount: rechargeAmount,
+      balance: balanceAfter,
+      balanceBefore,
+      balanceAfter,
+      paymentMethod,
+    };
   });
 
   return sendSuccess(res, updatedSession);
@@ -481,7 +489,15 @@ export async function purchaseSession(req: Request, res: Response) {
         },
       });
 
-      return { session: updatedSession, transaction: txRecord };
+      return {
+        session: updatedSession,
+        transaction: txRecord,
+        transactionId: txRecord.id,
+        amount: totalCost,
+        balance: balanceAfter,
+        balanceBefore,
+        balanceAfter,
+      };
     });
 
     return sendSuccess(res, result);

@@ -384,28 +384,32 @@ export function SuperAdminDashboard() {
         <ErrorState title="Failed to load platform dashboard" message={error} onRetry={() => fetchPlatformData(false)} />
       ) : (
         <div className="space-y-6">
-          {/* Summary Stat Cards (Platform Level) */}
+          {/* Summary Stat Cards (Platform / Organization Scope) */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
-              label="Total Organizations"
-              value={orgs.length}
+              label={selectedOrgId ? "Selected Organization" : "Total Organizations"}
+              value={selectedOrgId ? selectedOrgName : orgs.length}
               icon={<Building2 className="h-5 w-5 text-violet-400" />}
             />
 
             <StatCard
-              label="Active Tenants"
-              value={activeOrgsCount}
+              label={selectedOrgId ? "Tenant Status" : "Active Tenants"}
+              value={
+                selectedOrgId
+                  ? (orgs.find((o) => o.id === selectedOrgId)?.status || 'ACTIVE')
+                  : activeOrgsCount
+              }
               icon={<ShieldCheck className="h-5 w-5 text-emerald-400" />}
             />
 
             <StatCard
-              label="Platform Sales Volume"
+              label={selectedOrgId ? `${selectedOrgName} Sales` : "Platform Sales Volume"}
               value={formatCurrency(analytics?.totalPurchaseVolume || 0)}
               icon={<TrendingUp className="h-5 w-5 text-emerald-400" />}
             />
 
             <StatCard
-              label="Total System Txns"
+              label={selectedOrgId ? `${selectedOrgName} Txns` : "Total System Txns"}
               value={(analytics?.totalTransactions || 0).toLocaleString()}
               icon={<BarChart3 className="h-5 w-5 text-indigo-400" />}
             />
@@ -597,7 +601,7 @@ export function SuperAdminDashboard() {
                 )}
               </div>
 
-              {/* 4 Filtered Stat Cards inside the box */}
+              {/* Operational & Financial Stat Cards inside the box */}
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard
                   label="Purchase Sales Volume"
@@ -612,7 +616,33 @@ export function SuperAdminDashboard() {
                 />
 
                 <StatCard
-                  label={startDate || endDate ? "Cards Issued in Period" : "Active Cards Issued"}
+                  label="Total Refunds"
+                  value={formatCurrency(analytics?.totalRefundVolume || 0)}
+                  icon={<Receipt className="h-5 w-5 text-rose-400" />}
+                />
+
+                <StatCard
+                  label="Net Revenue"
+                  value={formatCurrency(
+                    Math.max(0, (analytics?.totalPurchaseVolume || 0) - (analytics?.totalRefundVolume || 0))
+                  )}
+                  icon={<Receipt className="h-5 w-5 text-teal-400" />}
+                />
+
+                <StatCard
+                  label="Total Transactions"
+                  value={(analytics?.totalTransactions || 0).toLocaleString()}
+                  icon={<BarChart3 className="h-5 w-5 text-indigo-400" />}
+                />
+
+                <StatCard
+                  label="Active Card Sessions"
+                  value={analytics?.activeSessionsCount || 0}
+                  icon={<Clock className="h-5 w-5 text-amber-400" />}
+                />
+
+                <StatCard
+                  label="Cards Issued / Available"
                   value={analytics?.activeCardsCount || 0}
                   icon={<CreditCard className="h-5 w-5 text-sky-400" />}
                 />
@@ -623,6 +653,77 @@ export function SuperAdminDashboard() {
                   icon={<AlertTriangle className="h-5 w-5 text-amber-400" />}
                 />
               </div>
+
+              {/* Branch Breakdown Table for Selected Organization / Scope */}
+              {analytics?.branchPerformance && analytics.branchPerformance.length > 0 && (
+                <div className="space-y-3 pt-3 border-t border-slate-800/80">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-violet-400" />
+                      <h3 className="text-sm font-bold text-slate-200">
+                        {selectedOrgId ? `${selectedOrgName} Branch Breakdown` : 'Platform Branch Performance Breakdown'}
+                      </h3>
+                    </div>
+                    <span className="text-xs text-slate-400 font-mono">
+                      {analytics.branchPerformance.length} {analytics.branchPerformance.length === 1 ? 'branch' : 'branches'}
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60">
+                    <table className="w-full text-left text-xs text-slate-300">
+                      <thead className="border-b border-slate-800 bg-slate-900/50 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                        <tr>
+                          <th className="px-4 py-3">Branch Name</th>
+                          <th className="px-4 py-3">Status</th>
+                          <th className="px-4 py-3 text-right">Sales Volume</th>
+                          <th className="px-4 py-3 text-right">Recharges</th>
+                          <th className="px-4 py-3 text-right">Refunds</th>
+                          <th className="px-4 py-3 text-right">Transactions</th>
+                          <th className="px-4 py-3 text-right">Active Sessions</th>
+                          <th className="px-4 py-3 text-right">Low Stock</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {analytics.branchPerformance.map((bp) => (
+                          <tr key={bp.branchId} className="hover:bg-slate-900/40 transition-colors">
+                            <td className="px-4 py-3 font-semibold text-slate-100 flex items-center gap-2">
+                              <Building2 className="h-3.5 w-3.5 text-violet-400 shrink-0" />
+                              <span>{bp.branchName}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <Badge variant={bp.status === 'ACTIVE' ? 'success' : 'danger'}>
+                                {bp.status}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-3 text-right font-medium text-emerald-400">
+                              {formatCurrency(bp.purchaseVolume)}
+                            </td>
+                            <td className="px-4 py-3 text-right font-medium text-violet-300">
+                              {formatCurrency(bp.rechargeVolume)}
+                            </td>
+                            <td className="px-4 py-3 text-right font-medium text-rose-400">
+                              {formatCurrency(bp.refundVolume)}
+                            </td>
+                            <td className="px-4 py-3 text-right font-medium text-slate-200">
+                              {bp.transactionCount.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-3 text-right font-medium text-sky-300">
+                              {bp.activeSessionsCount}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {bp.lowStockItemCount > 0 ? (
+                                <Badge variant="warning">{bp.lowStockItemCount}</Badge>
+                              ) : (
+                                <span className="text-slate-500">0</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -664,8 +765,14 @@ export function SuperAdminDashboard() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-slate-100">Registered Platform Organizations</h2>
-                <p className="text-xs text-slate-400">Manage tenant accounts and active subscriptions.</p>
+                <h2 className="text-lg font-bold text-slate-100">
+                  {selectedOrgId ? `Organization Record: ${selectedOrgName}` : 'Registered Platform Organizations'}
+                </h2>
+                <p className="text-xs text-slate-400">
+                  {selectedOrgId
+                    ? `Active tenant overview and subscription details for ${selectedOrgName}.`
+                    : 'Manage tenant accounts and active subscriptions.'}
+                </p>
               </div>
 
               <Button
@@ -680,7 +787,7 @@ export function SuperAdminDashboard() {
 
             <Card padding="none">
               <DataTable<OrganizationOverview>
-                data={orgs.slice(0, 5)}
+                data={selectedOrgId ? orgs.filter((o) => o.id === selectedOrgId) : orgs.slice(0, 5)}
                 columns={orgColumns}
                 keyExtractor={(item: OrganizationOverview) => item.id}
               />

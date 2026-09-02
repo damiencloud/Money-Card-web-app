@@ -26,14 +26,18 @@ export const mockAnalyticsHandlers = {
       return createMockError('UNAUTHORIZED', 'Authentication required');
     }
 
+    const targetOrgId =
+      currentUser.role === 'SUPER_ADMIN'
+        ? filter?.organizationId || undefined
+        : currentUser.organizationId || 'org_001';
+
     const branchId = filter?.branchId;
     let filteredTransactions = mockStore.transactions;
 
-    // Scope check: If ORG_ADMIN, filter to organization's branches
-    if (currentUser.role === 'ORG_ADMIN') {
-      const orgId = currentUser.organizationId || 'org_001';
+    // Filter by organization if specified or if ORG_ADMIN
+    if (targetOrgId) {
       const orgBranchIds = mockStore.branches
-        .filter((b) => b.organizationId === orgId)
+        .filter((b) => b.organizationId === targetOrgId)
         .map((b) => b.id);
 
       filteredTransactions = filteredTransactions.filter((t) => orgBranchIds.includes(t.branchId));
@@ -47,6 +51,21 @@ export const mockAnalyticsHandlers = {
       );
     }
 
+    // Date range filter
+    if (filter?.startDate || filter?.endDate) {
+      const from = filter.startDate
+        ? new Date(filter.startDate.includes('T') ? filter.startDate : `${filter.startDate}T00:00:00.000Z`).getTime()
+        : 0;
+      const to = filter.endDate
+        ? new Date(filter.endDate.includes('T') ? filter.endDate : `${filter.endDate}T23:59:59.999Z`).getTime()
+        : Infinity;
+
+      filteredTransactions = filteredTransactions.filter((t) => {
+        const txTime = new Date(t.createdAt).getTime();
+        return txTime >= from && txTime <= to;
+      });
+    }
+
     let totalRechargeVolume = 0;
     let totalPurchaseVolume = 0;
     let totalRefundVolume = 0;
@@ -57,41 +76,40 @@ export const mockAnalyticsHandlers = {
       if (t.type === 'REFUND') totalRefundVolume += t.amount;
     }
 
-    const orgId = currentUser.organizationId || 'org_001';
-    const orgBranchIds = mockStore.branches
-      .filter((b) => b.organizationId === orgId)
-      .map((b) => b.id);
+    const targetBranchIds = targetOrgId
+      ? mockStore.branches.filter((b) => b.organizationId === targetOrgId).map((b) => b.id)
+      : null;
 
     const activeSessionsCount = mockStore.sessions.filter((s) => {
       if (s.status !== 'ACTIVE') return false;
       if (branchId && branchId !== 'ALL' && s.branchId !== branchId) return false;
-      if (currentUser.role === 'ORG_ADMIN' && !orgBranchIds.includes(s.branchId)) return false;
+      if (targetBranchIds && !targetBranchIds.includes(s.branchId)) return false;
       if (currentUser.role === 'STAFF' && !currentUser.assignedBranchIds.includes(s.branchId))
         return false;
       return true;
     }).length;
 
     const activeCardsCount = mockStore.cards.filter((c) => {
-      if (c.status !== 'ACTIVE') return false;
-      if (currentUser.role === 'ORG_ADMIN' && c.organizationId !== orgId) return false;
+      if (c.status !== 'ACTIVE' && c.status !== 'AVAILABLE') return false;
+      if (targetOrgId && c.organizationId !== targetOrgId) return false;
       return true;
     }).length;
 
     const lowStockItemsCount = mockStore.inventory.filter((i) => {
       if (i.quantity >= 10) return false;
       if (branchId && branchId !== 'ALL' && i.branchId !== branchId) return false;
-      if (currentUser.role === 'ORG_ADMIN' && !orgBranchIds.includes(i.branchId)) return false;
+      if (targetBranchIds && !targetBranchIds.includes(i.branchId)) return false;
       return true;
     }).length;
 
     const orgBranches = mockStore.branches.filter((b) => {
-      if (currentUser.role === 'ORG_ADMIN') return b.organizationId === orgId;
+      if (targetOrgId) return b.organizationId === targetOrgId;
       if (currentUser.role === 'STAFF') return currentUser.assignedBranchIds.includes(b.id);
       return true;
     });
 
     const branchPerformance: BranchPerformanceMetric[] = orgBranches.map((b) => {
-      const bTxns = mockStore.transactions.filter((t) => t.branchId === b.id);
+      const bTxns = filteredTransactions.filter((t) => t.branchId === b.id);
       let bPurchaseCount = 0;
       let bPurchaseVol = 0;
       let bRechargeCount = 0;

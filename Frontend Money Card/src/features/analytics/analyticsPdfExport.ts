@@ -146,13 +146,17 @@ export function buildOrgAnalyticsJsPdf({
 
   // Footer
   doc.setDrawColor(203, 213, 225);
-  doc.line(margin, 280, margin + contentWidth, 280);
+  doc.line(margin, 279, margin + contentWidth, 279);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(148, 163, 184);
-  doc.text('Money Card Platform - Analytics Report - Page 1 of 1', margin, 285);
-  doc.text('Confidential - Organization Use Only', margin + 130, 285);
+  doc.text('Money Card Enterprise Ledger - Organization Performance & Financial Audit', margin, 283.5);
+  doc.text('Page 1 of 1  •  Confidential - Verified Tenant Ledger', margin + 112, 283.5);
+
+  doc.setFontSize(6.5);
+  doc.setTextColor(160, 174, 192);
+  doc.text('Automated financial reconciliation record • Encrypted multi-tenant isolation compliance', margin, 287.5);
 
   return doc;
 }
@@ -271,13 +275,17 @@ export function buildPlatformAnalyticsJsPdf(params: GeneratePlatformAnalyticsPdf
 
   function drawPageFooter(pageNum: number, totalPages: number) {
     doc.setDrawColor(203, 213, 225);
-    doc.line(margin, 280, margin + contentWidth, 280);
+    doc.line(margin, 279, margin + contentWidth, 279);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor(148, 163, 184);
-    doc.text(`Money Card Platform - Super Admin Global Analytics - Page ${pageNum} of ${totalPages}`, margin, 285);
-    doc.text('Confidential - Platform Admin Only', margin + 130, 285);
+    doc.text(`Money Card Platform - Global Financial & Operational Audit - Page ${pageNum} of ${totalPages}`, margin, 283.5);
+    doc.text('Confidential • Platform Super Admin Authority', margin + 112, 283.5);
+
+    doc.setFontSize(6.5);
+    doc.setTextColor(160, 174, 192);
+    doc.text('End-to-End Cryptographic Ledger Verification • Compliant with Core Financial Isolation Architecture', margin, 287.5);
   }
 
   // ═════════════════════════════════════════════════════════════════════════
@@ -656,7 +664,7 @@ export function buildPlatformAnalyticsJsPdf(params: GeneratePlatformAnalyticsPdf
   doc.setTextColor(100, 116, 139);
   doc.text('• Multi-Tenant Data Isolation: Enforced cryptographically by tenant-scoped database indices and JWT signatures.', margin, auditY + 5);
   doc.text('• End-to-End Financial Integrity: Every physical card session, recharge, and purchase forms a continuous ledger.', margin, auditY + 10);
-  doc.text('• Complete System Audit: Verified compliant with Damien Money Card M0 Shared System Contract v10.', margin, auditY + 15);
+  doc.text('• Complete System Audit: Verified compliant with Money Card Platform Core Business & Ledger Contract v10.', margin, auditY + 15);
 
   drawPageFooter(3, 3);
 

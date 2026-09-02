@@ -7,6 +7,7 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/constants/permission_constants.dart';
 import '../../models/card.dart';
 import '../../models/card_session.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/branch_provider.dart';
 import '../../providers/card_operations_provider.dart';
 import '../../providers/session_operations_provider.dart';
@@ -94,6 +95,7 @@ class _CardDetailsScreenState extends ConsumerState<CardDetailsScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
+          scrollable: true,
           title: const Text('Confirm Card Activation'),
           content: SingleChildScrollView(
             child: Column(
@@ -228,24 +230,150 @@ class _CardDetailsScreenState extends ConsumerState<CardDetailsScreen> {
   }
 
   Future<void> _handleBlockCard() async {
-    final confirm = await AppDialog.show(
-      context,
-      title: 'Block Card',
-      message: 'Are you sure you want to block this card? It will be disabled for purchases.',
-      confirmLabel: 'Block',
-      isDestructive: true,
+    final currentUser = ref.read(currentUserProvider);
+    final currentBranch = ref.read(currentBranchProvider);
+    final blockerName = currentUser?.name ?? 'Staff';
+    final blockerRole = currentUser?.role ?? 'STAFF';
+    final branchName = currentBranch?.name ?? 'Main Branch';
+    final defaultBlockerStr = '$blockerName ($blockerRole - $branchName)';
+
+    String selectedReason = 'Lost or Stolen Card';
+    final additionalReasonCtrl = TextEditingController();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => AlertDialog(
+          scrollable: true,
+          shape: const RoundedRectangleBorder(borderRadius: AppSpacing.roundedLg),
+          title: Row(
+            children: const [
+              Icon(Icons.block, color: AppColors.error, size: 24),
+              SizedBox(width: AppSpacing.xs),
+              Text('Block Card', style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Are you sure you want to block this card? It will be disabled for purchases.',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+              const Divider(height: AppSpacing.lg),
+
+              // Default Who is Blocking
+              const Text(
+                'Blocked By (Default):',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondaryLight),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: AppSpacing.roundedSm,
+                  border: Border.all(color: AppColors.borderLight),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.person_pin, size: 16, color: AppColors.primary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        defaultBlockerStr,
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+
+              // Default Reason Selector
+              const Text(
+                'Primary Reason:',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondaryLight),
+              ),
+              const SizedBox(height: 4),
+              DropdownButtonFormField<String>(
+                initialValue: selectedReason,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'Lost or Stolen Card', child: Text('Lost or Stolen Card', style: TextStyle(fontSize: 13))),
+                  DropdownMenuItem(value: 'Damaged / Hardware Failure', child: Text('Damaged / Hardware Failure', style: TextStyle(fontSize: 13))),
+                  DropdownMenuItem(value: 'Suspicious Activity / Fraud', child: Text('Suspicious Activity / Fraud', style: TextStyle(fontSize: 13))),
+                  DropdownMenuItem(value: 'Customer Request', child: Text('Customer Request', style: TextStyle(fontSize: 13))),
+                  DropdownMenuItem(value: 'Staff Discretion', child: Text('Staff Discretion', style: TextStyle(fontSize: 13))),
+                  DropdownMenuItem(value: 'Other Reason', child: Text('Other Reason', style: TextStyle(fontSize: 13))),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setDialogState(() {
+                      selectedReason = val;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: AppSpacing.md),
+
+              // Additional Reason Option
+              const Text(
+                'Additional Reason / Notes (Optional):',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondaryLight),
+              ),
+              const SizedBox(height: 4),
+              TextField(
+                controller: additionalReasonCtrl,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  hintText: 'Type additional notes (e.g. customer left card at Counter 3)...',
+                  hintStyle: TextStyle(fontSize: 12),
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.error,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Block'),
+            ),
+          ],
+        ),
+      ),
     );
 
     if (confirm == true) {
+      final additional = additionalReasonCtrl.text.trim();
+      final combinedReason = additional.isNotEmpty
+          ? '[Blocked by $defaultBlockerStr] $selectedReason: $additional'
+          : '[Blocked by $defaultBlockerStr] $selectedReason';
+
       final success = await ref.read(cardDetailsNotifierProvider.notifier).blockCard(
-            reason: 'Blocked by Staff',
+            reason: combinedReason,
           );
       if (success && mounted) {
         ref.read(cardListNotifierProvider.notifier).loadCards();
         ref.read(availableCardsNotifierProvider.notifier).loadAvailableCards();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Card has been blocked.'),
+          SnackBar(
+            content: Text('Card has been blocked: $combinedReason'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -368,6 +496,58 @@ class _CardDetailsScreenState extends ConsumerState<CardDetailsScreen> {
                         ],
                       );
                     },
+                  ),
+                ],
+                if (isBlocked) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Container(
+                    width: double.infinity,
+                    padding: AppSpacing.paddingSm,
+                    decoration: BoxDecoration(
+                      color: AppColors.errorLight,
+                      borderRadius: AppSpacing.roundedSm,
+                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: const [
+                            Icon(Icons.block, size: 16, color: AppColors.error),
+                            SizedBox(width: 6),
+                            Text(
+                              'Card is Blocked',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.error,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (card.blockedReason != null && card.blockedReason!.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            card.blockedReason!,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textPrimaryLight,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                        if (card.blockedBy != null && card.blockedBy!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Blocked by: ${card.blockedBy}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondaryLight,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ],
               ],

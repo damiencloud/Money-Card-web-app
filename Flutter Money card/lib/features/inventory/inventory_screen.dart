@@ -220,25 +220,41 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
         ),
         const Divider(height: 1),
 
-        // Success / Error Feedback
-        if (state.successMessage != null) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-            color: AppColors.successLight.withValues(alpha: 0.3),
-            child: Row(
-              children: [
-                const Icon(Icons.check_circle_outline, color: AppColors.success, size: 18),
-                const SizedBox(width: AppSpacing.xs),
-                Expanded(
-                  child: Text(
-                    state.successMessage!,
-                    style: const TextStyle(color: AppColors.success, fontSize: 12),
+        // Success Feedback (auto-dismisses after 3 seconds)
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          child: state.successMessage != null
+              ? Container(
+                  key: ValueKey(state.successMessage),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                  color: AppColors.successLight.withValues(alpha: 0.3),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline, color: AppColors.success, size: 18),
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(
+                        child: Text(
+                          state.successMessage!,
+                          style: const TextStyle(
+                            color: AppColors.success,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      InkWell(
+                        onTap: notifier.clearMessages,
+                        borderRadius: BorderRadius.circular(12),
+                        child: const Padding(
+                          padding: EdgeInsets.all(2),
+                          child: Icon(Icons.close, color: AppColors.success, size: 16),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
-          ),
-        ],
+                )
+              : const SizedBox.shrink(key: ValueKey('no_msg')),
+        ),
 
         // Stock List
         Expanded(

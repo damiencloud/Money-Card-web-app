@@ -351,23 +351,33 @@ export async function updateStaffBranches(req: Request, res: Response) {
 export async function updateStaffPermissions(req: Request, res: Response) {
   const { id } = req.params;
   const orgId = req.user?.organizationId;
-  const { permissions } = req.body;
+  const { permissions, permissionCodes } = req.body;
+  const targetPermissions = permissions ?? permissionCodes;
 
-  if (!Array.isArray(permissions)) {
+  if (!Array.isArray(targetPermissions)) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'permissions must be an array of permission codes');
   }
 
   const staff = await prisma.user.findFirst({
-    where: { id, organizationId: orgId || undefined },
+    where: {
+      id,
+      ...(orgId && req.user?.role !== Role.SUPER_ADMIN ? { organizationId: orgId } : {}),
+      role: Role.STAFF,
+    },
   });
 
   if (!staff) {
     return sendError(res, 404, 'NOT_FOUND', 'Staff member not found');
   }
 
+  const validPermissions = Object.values(PermissionCode);
+  const uniquePerms = Array.from(new Set(targetPermissions)).filter((p) =>
+    validPermissions.includes(p as PermissionCode),
+  );
+
   await prisma.$transaction(async (tx) => {
     await tx.userPermission.deleteMany({ where: { userId: id } });
-    for (const perm of permissions) {
+    for (const perm of uniquePerms) {
       await tx.userPermission.create({
         data: { userId: id, permission: perm as PermissionCode },
       });
@@ -527,7 +537,7 @@ export async function deleteStaffMember(req: Request, res: Response) {
 
 export async function changeStaffPassword(req: Request, res: Response) {
   const { id } = req.params;
-  const { newPassword, temporary } = req.body;
+  const { newPassword } = req.body;
 
   if (!req.user) {
     return sendError(res, 401, 'UNAUTHORIZED', 'Authentication required');
@@ -578,13 +588,13 @@ export async function changeStaffPassword(req: Request, res: Response) {
   const newHash = await hashPassword(newPassword);
 
   // Update password, increment tokenVersion (invalidating existing mobile & web sessions),
-  // and set mustChangePassword flag if requested
+  // and ensure permanent password is set (mustChangePassword = false)
   const updatedStaff = await prisma.user.update({
     where: { id: staff.id },
     data: {
       passwordHash: newHash,
       tokenVersion: { increment: 1 },
-      mustChangePassword: !!temporary,
+      mustChangePassword: false,
     },
     select: {
       id: true,
@@ -600,7 +610,7 @@ export async function changeStaffPassword(req: Request, res: Response) {
   });
 
   console.log(
-    `[AUTH_AUDIT_LOG] STAFF_PASSWORD_CHANGE targetUserId=${staff.id} targetEmail=${staff.email} changedByUserId=${req.user.id} organizationId=${req.user.organizationId} temporary=${!!temporary} timestamp=${new Date().toISOString()}`,
+    `[AUTH_AUDIT_LOG] STAFF_PASSWORD_CHANGE targetUserId=${staff.id} targetEmail=${staff.email} changedByUserId=${req.user.id} organizationId=${req.user.organizationId} timestamp=${new Date().toISOString()}`,
   );
 
   return sendSuccess(res, {

@@ -88,7 +88,7 @@ class AuthRepository {
 
   /// Change password (POST /api/v1/auth/change-password)
   Future<AuthUser> changePassword({
-    String? currentPassword,
+    required String currentPassword,
     required String newPassword,
     String? confirmPassword,
   }) async {

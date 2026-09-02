@@ -7,7 +7,7 @@ import { useState, useMemo } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { cn } from '@/utils';
 import { useAuth, useBranch, usePermissions } from '@/hooks';
-import { Breadcrumbs, ProfileMenu } from '@/components/ui';
+import { Breadcrumbs, ProfileMenu, LoadingState } from '@/components/ui';
 import { NAVIGATION_ITEMS } from '@/config/navigation';
 import {
   LayoutDashboard,
@@ -51,7 +51,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
 };
 
 export function DashboardLayout() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const { currentBranch, branches, selectBranch } = useBranch();
   const { hasPermission } = usePermissions();
 
@@ -59,10 +59,11 @@ export function DashboardLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
 
-  const userRole = user?.role || 'ORG_ADMIN';
+  const userRole = user?.role;
 
   // ── Filter Navigation Items by Role & Permission ─────────
   const navItems = useMemo(() => {
+    if (!userRole) return [];
     return NAVIGATION_ITEMS.filter((item) => {
       // Role check
       if (!item.roles.includes(userRole)) return false;
@@ -77,12 +78,12 @@ export function DashboardLayout() {
     if (userRole === 'SUPER_ADMIN') {
       return 'Platform Super Admin';
     }
-    return user?.organizationId === 'org_001'
-      ? 'Acme Cafeterias'
-      : user?.organizationId === 'org_002'
-        ? 'Metro Food Court'
-        : 'Organization Admin';
-  }, [userRole, user?.organizationId]);
+    return user?.organizationName || 'Organization Admin';
+  }, [userRole, user?.organizationName]);
+
+  if (isLoading && !user) {
+    return <LoadingState message="Initializing session..." />;
+  }
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden">
@@ -129,7 +130,7 @@ export function DashboardLayout() {
         </div>
 
         {/* Organization / Branch Context in Sidebar (Expanded view) */}
-        {(!sidebarCollapsed || mobileDrawerOpen) && branches.length > 0 && (
+        {(!sidebarCollapsed || mobileDrawerOpen) && userRole === 'ORG_ADMIN' && branches.length > 0 && (
           <div className="border-b border-slate-800/60 px-3 py-3">
             <div className="relative">
               <button

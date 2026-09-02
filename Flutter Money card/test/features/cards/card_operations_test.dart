@@ -450,6 +450,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Are you sure you want to block this card? It will be disabled for purchases.'), findsOneWidget);
+      expect(find.text('Blocked By (Default):'), findsOneWidget);
+      expect(find.text('Alex Morgan (STAFF - Main Cafeteria)'), findsOneWidget);
+      expect(find.text('Primary Reason:'), findsOneWidget);
+      expect(find.text('Additional Reason / Notes (Optional):'), findsOneWidget);
+
       await tester.tap(find.widgetWithText(ElevatedButton, 'Block'));
       await tester.pumpAndSettle();
 

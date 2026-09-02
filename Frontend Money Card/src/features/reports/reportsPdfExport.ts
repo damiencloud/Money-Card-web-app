@@ -328,12 +328,21 @@ export function generateReportPdfBlob({
   streamLines.push('50 60 m 545 60 l S');
 
   streamLines.push('BT');
-  streamLines.push('/F1 8 Tf');
-  streamLines.push('0.5 0.5 0.6 rg');
-  streamLines.push('50 45 Td');
-  streamLines.push(`(Damien Money Card System - Official PDF Report - ${escapePdfText(report.title)}) Tj`);
-  streamLines.push('280 0 Td');
-  streamLines.push('(Confidential - Verified M0 Audit Record) Tj');
+  streamLines.push('/F1 7.5 Tf');
+  streamLines.push('0.45 0.45 0.55 rg');
+  streamLines.push('50 46 Td');
+  streamLines.push(`(Money Card Enterprise Ledger - Official Business Report: ${escapePdfText(report.title)}) Tj`);
+  streamLines.push('250 0 Td');
+  streamLines.push('(Confidential - Verified Financial Ledger Record) Tj');
+  streamLines.push('ET');
+
+  streamLines.push('BT');
+  streamLines.push('/F1 6.5 Tf');
+  streamLines.push('0.6 0.6 0.7 rg');
+  streamLines.push('50 35 Td');
+  streamLines.push('(Automated Multi-Tenant Reconciliation - Cryptographic Ledger Verification Compliant) Tj');
+  streamLines.push('270 0 Td');
+  streamLines.push('(Money Card Platform - All Rights Reserved) Tj');
   streamLines.push('ET');
 
   const contentStream = streamLines.join('\n');

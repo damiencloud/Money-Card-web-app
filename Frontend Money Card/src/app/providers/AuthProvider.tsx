@@ -19,14 +19,15 @@ import { storage, STORAGE_KEYS } from '@/utils';
 
 function createInitialState(): AuthState {
   const savedToken = storage.get<string>(STORAGE_KEYS.ACCESS_TOKEN);
+  const savedUser = storage.get<AuthUser>(STORAGE_KEYS.USER);
   if (savedToken) {
     apiClient.setAccessToken(savedToken);
   }
   return {
-    user: null,
+    user: savedUser,
     accessToken: savedToken,
-    isAuthenticated: false,
-    isLoading: !!savedToken,
+    isAuthenticated: !!savedToken && !!savedUser,
+    isLoading: !!savedToken && !savedUser,
   };
 }
 
@@ -43,6 +44,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const clearAuthState = useCallback((isExpired = false) => {
     apiClient.setAccessToken(null);
     storage.remove(STORAGE_KEYS.ACCESS_TOKEN);
+    storage.remove(STORAGE_KEYS.USER);
     storage.remove(STORAGE_KEYS.SELECTED_BRANCH_ID);
     setState({
       user: null,
@@ -65,6 +67,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const login = useCallback((user: AuthUser, accessToken: string) => {
     apiClient.setAccessToken(accessToken);
     storage.set(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+    storage.set(STORAGE_KEYS.USER, user);
     setState({
       user,
       accessToken,
@@ -83,6 +86,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // ── Update User ───────────────────────────────────────────
   const updateUser = useCallback((user: AuthUser) => {
+    storage.set(STORAGE_KEYS.USER, user);
     setState((prev) => ({ ...prev, user }));
   }, []);
 
@@ -107,6 +111,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
             return apiService.auth.getMe().then((meResult: ApiResult<AuthUser>) => {
               if (meResult.success) {
+                storage.set(STORAGE_KEYS.USER, meResult.data);
                 setState({
                   user: meResult.data,
                   accessToken: newToken,
@@ -143,6 +148,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       .getMe()
       .then((result: ApiResult<AuthUser>) => {
         if (result.success) {
+          storage.set(STORAGE_KEYS.USER, result.data);
           setState({
             user: result.data,
             accessToken: savedToken,

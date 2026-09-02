@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken } from '../utils/token.js';
 import { prisma } from '../config/database.js';
 import { sendError } from '../utils/response.js';
-import { PermissionCode, UserStatus } from '@prisma/client';
+import { PermissionCode, UserStatus, Role } from '@prisma/client';
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
@@ -77,14 +77,23 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       role: user.role,
       organizationId: user.organizationId,
       status: user.status,
-      mustChangePassword: user.mustChangePassword,
+      mustChangePassword: user.role === Role.STAFF ? false : user.mustChangePassword,
       permissions,
       assignedBranchIds,
       tokenVersion: user.tokenVersion,
     };
 
-    // If user must change password, restrict access strictly to change-password, me, and logout
-    if (user.mustChangePassword) {
+    // Auto-heal legacy staff records if they still had mustChangePassword set
+    if (user.role === Role.STAFF && user.mustChangePassword) {
+      prisma.user.update({
+        where: { id: user.id },
+        data: { mustChangePassword: false },
+      }).catch(() => {});
+    }
+
+    // If user must change password, restrict access strictly to change-password, me, and logout.
+    // Staff members do NOT have temporary passwords or forced password change requirements.
+    if (user.mustChangePassword && user.role !== Role.STAFF) {
       const allowedPaths = ['/auth/change-password', '/auth/me', '/auth/logout'];
       const isAllowed = allowedPaths.some((p) => req.originalUrl.includes(p));
       if (!isAllowed) {

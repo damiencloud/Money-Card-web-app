@@ -217,6 +217,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Stock updated to 57 units.'), findsOneWidget);
+
+      // Verify the message automatically goes away after 3 seconds
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(find.text('Stock updated to 57 units.'), findsNothing);
     });
 
     testWidgets('InventoryScreen allows switching between assigned branches seamlessly', (tester) async {

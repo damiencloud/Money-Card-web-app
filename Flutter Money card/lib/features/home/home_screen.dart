@@ -85,28 +85,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Hello, ${user?.name.split(' ').first ?? 'Staff'}',
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimaryLight,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Hello, ${user?.name.split(' ').first ?? 'Staff'}',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimaryLight,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      Text(
-                        currentBranch != null
-                            ? 'Branch: ${currentBranch.name}'
-                            : 'Ready for cafeteria transactions',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondaryLight,
-                          fontWeight: FontWeight.w500,
+                        Text(
+                          currentBranch != null
+                              ? 'Branch: ${currentBranch.name}'
+                              : 'Ready for cafeteria transactions',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondaryLight,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   if (user != null)
                     Container(
@@ -238,43 +242,48 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(AppSpacing.sm),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryLight,
-                            borderRadius: AppSpacing.roundedSm,
-                          ),
-                          child: const Icon(
-                            Icons.credit_card_outlined,
-                            color: AppColors.primaryDark,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Active Sessions',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(AppSpacing.sm),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryLight,
+                              borderRadius: AppSpacing.roundedSm,
                             ),
-                            Text(
-                              currentBranch != null
-                                  ? '${currentBranch.name} • Active only'
-                                  : 'Active card sessions',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textSecondaryLight,
-                              ),
+                            child: const Icon(
+                              Icons.credit_card_outlined,
+                              color: AppColors.primaryDark,
+                              size: 20,
                             ),
-                          ],
-                        ),
-                      ],
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Active Sessions',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  currentBranch != null
+                                      ? '${currentBranch.name} • Active only'
+                                      : 'Active card sessions',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondaryLight,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     Row(
                       children: [
@@ -519,12 +528,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     children: [
                       Row(
                         children: [
-                          Text(
-                            'Card: $cardIdentifier',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimaryLight,
+                          Flexible(
+                            child: Text(
+                              'Card: $cardIdentifier',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimaryLight,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           const SizedBox(width: AppSpacing.xs),

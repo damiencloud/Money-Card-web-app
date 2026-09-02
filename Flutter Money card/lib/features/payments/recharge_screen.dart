@@ -81,6 +81,7 @@ class _RechargeScreenState extends ConsumerState<RechargeScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        scrollable: true,
         title: const Text('Confirm Recharge'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -184,6 +185,14 @@ class _RechargeScreenState extends ConsumerState<RechargeScreen> {
       }
     ];
 
+    final rechargeAmt = result.amount > 0 ? result.amount : rechargeState.amount;
+    final newBal = result.balance;
+    final prevBal = (result.balanceBefore != null && result.balanceBefore! > 0)
+        ? result.balanceBefore!
+        : ((session?.balance != null && session!.balance > 0)
+            ? session.balance
+            : (newBal - rechargeAmt).clamp(0.0, double.infinity));
+
     DigitalReceiptDialog.show(
       context,
       branchName: branch?.name ?? 'Main Cafeteria',
@@ -193,9 +202,11 @@ class _RechargeScreenState extends ConsumerState<RechargeScreen> {
       timestamp: DateTime.now(),
       cardIdentifier: cardNum,
       items: itemsList,
-      totalAmount: result.amount,
-      remainingBalance: result.balance,
-      previousBalance: (result.balance - result.amount).clamp(0.0, double.infinity),
+      totalAmount: rechargeAmt,
+      remainingBalance: newBal,
+      previousBalance: prevBal,
+      amountDeducted: rechargeAmt,
+      subtotal: rechargeAmt,
       sessionId: session?.id ?? widget.sessionId,
       staffName: user?.name,
       title: 'Recharge Successful',

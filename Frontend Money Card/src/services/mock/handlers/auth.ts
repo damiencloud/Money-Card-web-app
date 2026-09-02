@@ -9,8 +9,9 @@ import type {
   ResetPasswordRequest,
   ChangePasswordRequest,
 } from '@/types';
+import { storage, STORAGE_KEYS } from '@/utils';
 
-let currentSessionUser: AuthUser | null = mockStore.staffUsers[2]; // Default to staff_001 for convenience in dev
+let currentSessionUser: AuthUser | null = null;
 
 export const mockAuthHandlers = {
   async activateAccount(_req: any): Promise<ApiResult<any>> {
@@ -76,6 +77,12 @@ export const mockAuthHandlers = {
 
   async getMe(): Promise<ApiResult<AuthUser>> {
     await mockDelay();
+    if (!currentSessionUser) {
+      const savedUser = storage.get<AuthUser>(STORAGE_KEYS.USER);
+      if (savedUser) {
+        currentSessionUser = savedUser;
+      }
+    }
     if (!currentSessionUser) {
       return createMockError('UNAUTHORIZED', 'Authentication token missing or invalid');
     }

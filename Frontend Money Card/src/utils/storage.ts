@@ -27,19 +27,30 @@ export const storage = {
   },
 
   remove(key: string): void {
-    localStorage.removeItem(prefixKey(key));
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(prefixKey(key));
+      }
+    } catch {
+      // Storage unavailable
+    }
   },
 
   clear(): void {
-    // Only clear our prefixed keys
-    const keys: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(STORAGE_PREFIX)) {
-        keys.push(key);
+    try {
+      if (typeof localStorage === 'undefined') return;
+      // Only clear our prefixed keys
+      const keys: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith(STORAGE_PREFIX)) {
+          keys.push(key);
+        }
       }
+      keys.forEach((key) => localStorage.removeItem(key));
+    } catch {
+      // Storage unavailable
     }
-    keys.forEach((key) => localStorage.removeItem(key));
   },
 };
 
@@ -47,6 +58,7 @@ export const storage = {
 
 export const STORAGE_KEYS = {
   ACCESS_TOKEN: 'access_token',
+  USER: 'user',
   SELECTED_BRANCH_ID: 'selected_branch_id',
   THEME: 'theme',
 } as const;

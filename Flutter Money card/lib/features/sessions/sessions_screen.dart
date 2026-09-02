@@ -69,11 +69,14 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
                   children: [
                     const Icon(Icons.storefront, size: 20, color: AppColors.primary),
                     const SizedBox(width: AppSpacing.xs),
-                    Text(
-                      'Branch: ${currentBranch?.name ?? "All Assigned Branches"}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
+                    Expanded(
+                      child: Text(
+                        'Branch: ${currentBranch?.name ?? "All Assigned Branches"}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -342,12 +345,15 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
                   children: [
                     const Icon(Icons.person_outline, size: 14, color: AppColors.primary),
                     const SizedBox(width: 4),
-                    Text(
-                      'Customer: ${session.customerName}${session.customerPhone != null && session.customerPhone!.isNotEmpty ? " (${session.customerPhone})" : ""}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimaryLight,
+                    Expanded(
+                      child: Text(
+                        'Customer: ${session.customerName}${session.customerPhone != null && session.customerPhone!.isNotEmpty ? " (${session.customerPhone})" : ""}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimaryLight,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -359,17 +365,24 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.storefront, size: 14, color: AppColors.textSecondaryLight),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Branch: ${branchName ?? session.branchId}',
-                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
-                      ),
-                    ],
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const Icon(Icons.storefront, size: 14, color: AppColors.textSecondaryLight),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            'Branch: ${branchName ?? session.branchId}',
+                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: AppSpacing.xs),
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(Icons.access_time, size: 14, color: AppColors.textSecondaryLight),
                       const SizedBox(width: 4),

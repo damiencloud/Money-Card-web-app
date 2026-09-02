@@ -126,8 +126,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  /// Change temporary/mandatory password for authenticated staff
-  Future<bool> changeTemporaryPassword({
+  /// Change password for authenticated staff
+  Future<bool> changePassword({
+    required String currentPassword,
     required String newPassword,
     required String confirmPassword,
   }) async {
@@ -138,6 +139,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
     try {
       final updatedUser = await _authRepository.changePassword(
+        currentPassword: currentPassword,
         newPassword: newPassword,
         confirmPassword: confirmPassword,
       );

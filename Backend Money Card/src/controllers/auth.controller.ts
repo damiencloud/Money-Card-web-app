@@ -116,7 +116,7 @@ export async function login(req: Request, res: Response) {
       organizationId: user.organizationId,
       organizationName: user.organization?.name || null,
       status: user.status,
-      mustChangePassword: user.mustChangePassword,
+      mustChangePassword: user.role === Role.STAFF ? false : user.mustChangePassword,
       permissions,
       assignedBranchIds,
       assignedBranches: activeAssignedBranches,
@@ -185,7 +185,7 @@ export async function getMe(req: Request, res: Response) {
     organizationId: user.organizationId,
     organizationName: user.organization?.name || null,
     status: user.status,
-    mustChangePassword: user.mustChangePassword,
+    mustChangePassword: user.role === Role.STAFF ? false : user.mustChangePassword,
     permissions: user.permissions.map((p) => p.permission),
     assignedBranchIds: user.assignedBranches
       .filter((b) => user.role !== Role.STAFF || b.branch.status === 'ACTIVE')

@@ -1,3 +1,4 @@
+import '../features/auth/change_password_screen.dart';
 import '../core/constants/permission_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -60,6 +61,13 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
+      ),
+
+      // Password Change (Mandatory & Voluntary)
+      GoRoute(
+        path: '/change-password',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const ChangePasswordScreen(),
       ),
 
       // Access Denied / Unauthorized Route

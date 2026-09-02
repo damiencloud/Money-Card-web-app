@@ -3,7 +3,7 @@
 **Document Version**: `1.0.0`  
 **Release Date**: August 29, 2026  
 **Status**: **APPROVED & PRODUCTION-READY (45 / 45 Tasks Completed — 100%)**  
-**Engineering Team**: Damien (Frontend & Flutter Lead) & Nishas (Backend Lead)  
+**Engineering Team**: Frontend & Flutter Mobile Lead & Backend Lead  
 
 ---
 

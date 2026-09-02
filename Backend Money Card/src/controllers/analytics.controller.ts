@@ -19,10 +19,10 @@ export async function getOrgAnalytics(req: Request, res: Response) {
   let toDate: Date | undefined;
 
   if (startDate) {
-    fromDate = new Date(startDate);
+    fromDate = new Date(startDate.includes('T') ? startDate : `${startDate}T00:00:00.000Z`);
   }
   if (endDate) {
-    toDate = new Date(endDate);
+    toDate = new Date(endDate.includes('T') ? endDate : `${endDate}T23:59:59.999Z`);
   }
 
   if (!fromDate && range) {
@@ -47,7 +47,14 @@ export async function getOrgAnalytics(req: Request, res: Response) {
   if (toDate) dateFilter.lte = toDate;
 
   const txWhere: any = {
-    ...(orgId ? { session: { organizationId: orgId } } : {}),
+    ...(orgId
+      ? {
+          OR: [
+            { session: { organizationId: orgId } },
+            { branch: { organizationId: orgId } },
+          ],
+        }
+      : {}),
     ...(branchId && branchId !== 'ALL' ? { branchId } : {}),
     ...(fromDate || toDate ? { createdAt: dateFilter } : {}),
   };
@@ -61,7 +68,6 @@ export async function getOrgAnalytics(req: Request, res: Response) {
     prisma.card.count({
       where: {
         ...(orgId ? { organizationId: orgId } : {}),
-        ...(fromDate || toDate ? { createdAt: dateFilter } : {}),
       },
     }),
     prisma.cardSession.count({
@@ -281,11 +287,18 @@ export async function getPeakAnalytics(req: Request, res: Response) {
   const { branchId, startDate, endDate } = req.query as Record<string, string>;
 
   const dateFilter: any = {};
-  if (startDate) dateFilter.gte = new Date(startDate);
-  if (endDate) dateFilter.lte = new Date(endDate);
+  if (startDate) dateFilter.gte = new Date(startDate.includes('T') ? startDate : `${startDate}T00:00:00.000Z`);
+  if (endDate) dateFilter.lte = new Date(endDate.includes('T') ? endDate : `${endDate}T23:59:59.999Z`);
 
   const txWhere: any = {
-    ...(orgId ? { session: { organizationId: orgId } } : {}),
+    ...(orgId
+      ? {
+          OR: [
+            { session: { organizationId: orgId } },
+            { branch: { organizationId: orgId } },
+          ],
+        }
+      : {}),
     ...(branchId && branchId !== 'ALL' ? { branchId } : {}),
     ...(startDate || endDate ? { createdAt: dateFilter } : {}),
   };

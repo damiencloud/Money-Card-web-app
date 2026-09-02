@@ -74,15 +74,71 @@ export function AppRoutes() {
         }
       >
         <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/branches" element={<BranchesPage />} />
-        <Route path="/staff" element={<StaffPage />} />
-        <Route path="/cards" element={<CardsPage />} />
-        <Route path="/sessions" element={<SessionsPage />} />
-        <Route path="/products" element={<ProductsPage />} />
-        <Route path="/inventory" element={<InventoryPage />} />
+        <Route
+          path="/branches"
+          element={
+            <PermissionGuard roles={['ORG_ADMIN']}>
+              <BranchesPage />
+            </PermissionGuard>
+          }
+        />
+        <Route
+          path="/staff"
+          element={
+            <PermissionGuard roles={['ORG_ADMIN']}>
+              <StaffPage />
+            </PermissionGuard>
+          }
+        />
+        <Route
+          path="/cards"
+          element={
+            <PermissionGuard roles={['ORG_ADMIN']}>
+              <CardsPage />
+            </PermissionGuard>
+          }
+        />
+        <Route
+          path="/sessions"
+          element={
+            <PermissionGuard roles={['ORG_ADMIN']}>
+              <SessionsPage />
+            </PermissionGuard>
+          }
+        />
+        <Route
+          path="/products"
+          element={
+            <PermissionGuard roles={['ORG_ADMIN']}>
+              <ProductsPage />
+            </PermissionGuard>
+          }
+        />
+        <Route
+          path="/inventory"
+          element={
+            <PermissionGuard roles={['ORG_ADMIN']}>
+              <InventoryPage />
+            </PermissionGuard>
+          }
+        />
         <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/peak" element={<PeakPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
+        <Route
+          path="/peak"
+          element={
+            <PermissionGuard roles={['ORG_ADMIN']}>
+              <PeakPage />
+            </PermissionGuard>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <PermissionGuard roles={['ORG_ADMIN']}>
+              <ReportsPage />
+            </PermissionGuard>
+          }
+        />
         <Route path="/subscriptions" element={<SubscriptionsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
 

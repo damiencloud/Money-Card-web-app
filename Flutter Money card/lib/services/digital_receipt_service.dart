@@ -50,6 +50,16 @@ class DigitalReceiptService {
           marginBottom: 6 * PdfPageFormat.mm,
         ),
         build: (pw.Context context) {
+          final effectiveDeducted = bill.amountDeducted > 0
+              ? bill.amountDeducted
+              : bill.totalAmount;
+          final effectiveRemaining = bill.remainingBalance;
+          final effectivePrevBalance = bill.previousBalance > 0
+              ? bill.previousBalance
+              : (bill.isRecharge
+                  ? (effectiveRemaining - bill.totalAmount).clamp(0.0, double.infinity)
+                  : (effectiveRemaining + effectiveDeducted));
+
           if (bill.isRecharge) {
             // Recharge Receipt Layout (CASH & UPI)
             return pw.Column(
@@ -137,10 +147,10 @@ class DigitalReceiptService {
                 pw.SizedBox(height: 4),
 
                 // Balances Breakdown
-                _buildBalanceRow('Previous Balance', 'INR ${bill.previousBalance.toStringAsFixed(2)}'),
+                _buildBalanceRow('Previous Balance', 'INR ${effectivePrevBalance.toStringAsFixed(2)}'),
                 _buildBalanceRow(
                   'New Balance',
-                  'INR ${bill.remainingBalance.toStringAsFixed(2)}',
+                  'INR ${effectiveRemaining.toStringAsFixed(2)}',
                   isBold: true,
                 ),
 
@@ -299,16 +309,14 @@ class DigitalReceiptService {
               _buildDashedDivider(),
               pw.SizedBox(height: 4),
 
-              // Subtotal & Total
-              if (bill.subtotal != bill.totalAmount)
-                _buildMetaRow('Subtotal', 'INR ${bill.subtotal.toStringAsFixed(2)}'),
+              // Prominent Total (Subtotal merged into Total)
               pw.Padding(
                 padding: const pw.EdgeInsets.symmetric(vertical: 1.5),
                 child: pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
                     pw.Text(
-                      'TOTAL',
+                      bill.isRecharge ? 'RECHARGE AMOUNT' : 'TOTAL',
                       style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
                     ),
                     pw.Text(
@@ -324,11 +332,12 @@ class DigitalReceiptService {
               pw.SizedBox(height: 4),
 
               // Balances Breakdown
-              _buildBalanceRow('Previous Balance', 'INR ${bill.previousBalance.toStringAsFixed(2)}'),
-              _buildBalanceRow('Amount Deducted', 'INR ${bill.amountDeducted.toStringAsFixed(2)}'),
+              _buildBalanceRow('Previous Balance', 'INR ${effectivePrevBalance.toStringAsFixed(2)}'),
+              if (!bill.isRecharge)
+                _buildBalanceRow('Amount Deducted', 'INR ${effectiveDeducted.toStringAsFixed(2)}'),
               _buildBalanceRow(
-                'Remaining Balance',
-                'INR ${bill.remainingBalance.toStringAsFixed(2)}',
+                bill.isRecharge ? 'New Balance' : 'Remaining Balance',
+                'INR ${effectiveRemaining.toStringAsFixed(2)}',
                 isBold: true,
               ),
 
@@ -336,12 +345,10 @@ class DigitalReceiptService {
               _buildDashedDivider(),
               pw.SizedBox(height: 4),
 
-              // Payment & Session Information
+              // Payment & Branch Information (Session removed as requested)
               _buildMetaRow('Payment:', bill.paymentMethod),
               if (bill.paymentReference != null && bill.paymentReference!.trim().isNotEmpty)
                 _buildMetaRow('Reference:', bill.paymentReference!.trim()),
-              if (bill.sessionId != null && bill.sessionId!.isNotEmpty)
-                _buildMetaRow('Session:', bill.sessionId!),
               _buildMetaRow('Branch:', bill.branchName),
 
               pw.SizedBox(height: 10),

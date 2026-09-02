@@ -277,7 +277,12 @@ export const realClient: typeof mockClient = {
     },
 
     async updateStaffPermissions(id: string, permissions: Permission[]): Promise<ApiResult<Staff>> {
-      return handleApiCall(() => apiClient.put<Staff>(`/v1/staff/${id}/permissions`, { permissions }));
+      return handleApiCall(() =>
+        apiClient.put<Staff>(`/v1/staff/${id}/permissions`, {
+          permissions,
+          permissionCodes: permissions,
+        }),
+      );
     },
 
     async getPermissions(): Promise<ApiResult<{ code: Permission; name: string; area: string }[]>> {
@@ -295,7 +300,7 @@ export const realClient: typeof mockClient = {
       return res;
     },
 
-    async changePassword(id: string, data: { newPassword: string; confirmPassword?: string; temporary?: boolean }): Promise<ApiResult<any>> {
+    async changePassword(id: string, data: { newPassword: string; confirmPassword?: string }): Promise<ApiResult<any>> {
       return handleApiCall(() => apiClient.patch(`/v1/staff/${id}/password`, data));
     },
 
@@ -332,8 +337,8 @@ export const realClient: typeof mockClient = {
       return handleApiCall(() => apiClient.get<ResolveQrResponseData>(`/v1/card-sessions/active/by-qr/${qrToken}`));
     },
 
-    async blockCard(id: string): Promise<ApiResult<Card>> {
-      return handleApiCall(() => apiClient.post<Card>(`/v1/cards/${id}/block`));
+    async blockCard(id: string, reason?: string): Promise<ApiResult<Card>> {
+      return handleApiCall(() => apiClient.post<Card>(`/v1/cards/${id}/block`, { reason }));
     },
 
     async getCustomerHistoryEvents(params?: any): Promise<ApiResult<PaginatedData<CustomerHistoryEvent>>> {

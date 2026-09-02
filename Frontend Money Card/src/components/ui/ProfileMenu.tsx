@@ -1,21 +1,18 @@
 // ─── Profile Menu Component ─────────────────────────────────
 // Accessible user profile dropdown for the top bar (SUPER_ADMIN & ORG_ADMIN).
-// Contains Profile Info, Settings, Change Password modal, and Sign Out.
+// Contains Profile Info, Settings, and Sign Out.
 // NO "Forgot Password" is in this dropdown.
 
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks';
-import { Modal, Button } from '@/components/ui';
-import { ChangePasswordForm } from '@/features/auth';
-import { LogOut, KeyRound, ChevronDown, ShieldCheck, Settings } from 'lucide-react';
+import { LogOut, ChevronDown, ShieldCheck, Settings } from 'lucide-react';
 import { cn } from '@/utils';
 
 export function ProfileMenu() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click
@@ -96,7 +93,7 @@ export function ProfileMenu() {
             </div>
             <div className="mt-2.5 flex items-center gap-1.5 rounded-md bg-slate-950 px-2 py-1 text-[11px] font-medium text-violet-400 border border-slate-800">
               <ShieldCheck className="h-3.5 w-3.5 text-violet-400 shrink-0" />
-              <span>Role: {user?.role || 'ORG_ADMIN'}</span>
+              <span>Role: {user?.role ? (user.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Org Admin') : 'Loading...'}</span>
             </div>
           </div>
 
@@ -113,18 +110,6 @@ export function ProfileMenu() {
               <Settings className="h-4 w-4 text-slate-400" />
               Account Settings
             </button>
-
-            <button
-              role="menuitem"
-              onClick={() => {
-                setIsOpen(false);
-                setShowChangePasswordModal(true);
-              }}
-              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-800/70 hover:text-slate-100 focus-visible:outline-none focus-visible:bg-slate-800"
-            >
-              <KeyRound className="h-4 w-4 text-slate-400" />
-              Change Password
-            </button>
           </div>
 
           {/* Footer Action */}
@@ -140,20 +125,6 @@ export function ProfileMenu() {
           </div>
         </div>
       )}
-
-      {/* Change Password Modal */}
-      <Modal
-        isOpen={showChangePasswordModal}
-        onClose={() => setShowChangePasswordModal(false)}
-        title="Account Security — Change Password"
-      >
-        <ChangePasswordForm />
-        <div className="mt-4 flex justify-end">
-          <Button variant="outline" size="sm" onClick={() => setShowChangePasswordModal(false)}>
-            Close
-          </Button>
-        </div>
-      </Modal>
     </div>
   );
 }

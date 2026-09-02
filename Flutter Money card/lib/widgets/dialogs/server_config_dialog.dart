@@ -142,6 +142,7 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      scrollable: true,
       backgroundColor: const Color(0xFF1E293B),
       title: Row(
         children: const [

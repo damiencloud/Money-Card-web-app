@@ -33,6 +33,8 @@ class Card {
   final String qrToken;
   final String physicalCardNumber;
   final CardStatus status;
+  final String? blockedReason;
+  final String? blockedBy;
   final String? currentBranchId;
   final String? currentBranchName;
   final CardSession? activeSession;
@@ -45,6 +47,8 @@ class Card {
     required this.qrToken,
     required this.physicalCardNumber,
     required this.status,
+    this.blockedReason,
+    this.blockedBy,
     this.currentBranchId,
     this.currentBranchName,
     this.activeSession,
@@ -77,6 +81,8 @@ class Card {
       qrToken: json['qrToken'] as String? ?? '',
       physicalCardNumber: json['physicalCardNumber'] as String? ?? '',
       status: CardStatus.fromString(json['status'] as String?),
+      blockedReason: json['blockedReason'] as String?,
+      blockedBy: json['blockedBy'] as String?,
       currentBranchId: json['currentBranchId'] as String? ?? session?.branchId,
       currentBranchName: branchName,
       activeSession: session,
@@ -91,6 +97,8 @@ class Card {
         'qrToken': qrToken,
         'physicalCardNumber': physicalCardNumber,
         'status': status.value,
+        if (blockedReason != null) 'blockedReason': blockedReason,
+        if (blockedBy != null) 'blockedBy': blockedBy,
         if (currentBranchId != null) 'currentBranchId': currentBranchId,
         if (createdAt != null) 'createdAt': createdAt,
         if (updatedAt != null) 'updatedAt': updatedAt,
@@ -102,6 +110,8 @@ class Card {
     String? qrToken,
     String? physicalCardNumber,
     CardStatus? status,
+    String? blockedReason,
+    String? blockedBy,
     String? currentBranchId,
     String? createdAt,
     String? updatedAt,
@@ -112,6 +122,8 @@ class Card {
       qrToken: qrToken ?? this.qrToken,
       physicalCardNumber: physicalCardNumber ?? this.physicalCardNumber,
       status: status ?? this.status,
+      blockedReason: blockedReason ?? this.blockedReason,
+      blockedBy: blockedBy ?? this.blockedBy,
       currentBranchId: currentBranchId ?? this.currentBranchId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

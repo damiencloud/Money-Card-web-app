@@ -12,6 +12,9 @@ export interface Card {
   physicalCardNumber?: string | null;
   assignmentStatus?: CardAssignmentStatus;
   status: CardStatus;
+  blockedReason?: string | null;
+  blockedBy?: string | null;
+  blockedAt?: string | null;
   currentBranchId?: string | null;
   activeSession?: {
     id: string;

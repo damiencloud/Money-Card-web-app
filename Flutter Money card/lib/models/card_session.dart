@@ -159,6 +159,7 @@ class RechargeResult {
   final String transactionId;
   final double amount;
   final double balance;
+  final double? balanceBefore;
   final PaymentMethod paymentMethod;
   final String status;
 
@@ -166,15 +167,22 @@ class RechargeResult {
     required this.transactionId,
     required this.amount,
     required this.balance,
+    this.balanceBefore,
     required this.paymentMethod,
     required this.status,
   });
 
   factory RechargeResult.fromJson(Map<String, dynamic> json) {
+    final amt = (json['amount'] as num?)?.toDouble() ?? 0.0;
+    final bal = (json['balance'] as num? ?? json['balanceAfter'] as num?)?.toDouble() ?? 0.0;
+    final before = (json['balanceBefore'] as num? ?? json['previousBalance'] as num?)?.toDouble() ??
+        (bal - amt).clamp(0.0, double.infinity);
+
     return RechargeResult(
-      transactionId: json['transactionId'] as String? ?? '',
-      amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
-      balance: (json['balance'] as num? ?? json['balanceAfter'] as num?)?.toDouble() ?? 0.0,
+      transactionId: json['transactionId'] as String? ?? json['id'] as String? ?? '',
+      amount: amt,
+      balance: bal,
+      balanceBefore: before,
       paymentMethod: PaymentMethod.fromString(json['paymentMethod'] as String?),
       status: json['status'] as String? ?? 'SUCCESS',
     );
@@ -184,6 +192,7 @@ class RechargeResult {
         'transactionId': transactionId,
         'amount': amount,
         'balance': balance,
+        'balanceBefore': balanceBefore,
         'paymentMethod': paymentMethod.value,
         'status': status,
       };
@@ -194,20 +203,47 @@ class PurchaseResult {
   final String transactionId;
   final double amount;
   final double balance;
+  final double? balanceBefore;
   final String status;
 
   const PurchaseResult({
     required this.transactionId,
     required this.amount,
     required this.balance,
+    this.balanceBefore,
     required this.status,
   });
 
   factory PurchaseResult.fromJson(Map<String, dynamic> json) {
+    final tx = json['transaction'] is Map<String, dynamic>
+        ? json['transaction'] as Map<String, dynamic>
+        : null;
+    final sess = json['session'] is Map<String, dynamic>
+        ? json['session'] as Map<String, dynamic>
+        : null;
+
+    final txId = tx?['id'] as String? ??
+        json['transactionId'] as String? ??
+        json['id'] as String? ??
+        '';
+    final amt = (tx?['amount'] as num?)?.toDouble() ??
+        (json['amount'] as num?)?.toDouble() ??
+        0.0;
+    final bal = (sess?['balance'] as num?)?.toDouble() ??
+        (tx?['balanceAfter'] as num?)?.toDouble() ??
+        (json['balance'] as num?)?.toDouble() ??
+        (json['remainingBalance'] as num?)?.toDouble() ??
+        0.0;
+    final before = (tx?['balanceBefore'] as num?)?.toDouble() ??
+        (json['balanceBefore'] as num?)?.toDouble() ??
+        (json['previousBalance'] as num?)?.toDouble() ??
+        (bal + amt);
+
     return PurchaseResult(
-      transactionId: json['transactionId'] as String? ?? '',
-      amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
-      balance: (json['balance'] as num?)?.toDouble() ?? 0.0,
+      transactionId: txId,
+      amount: amt,
+      balance: bal,
+      balanceBefore: before,
       status: json['status'] as String? ?? 'SUCCESS',
     );
   }
@@ -216,6 +252,7 @@ class PurchaseResult {
         'transactionId': transactionId,
         'amount': amount,
         'balance': balance,
+        'balanceBefore': balanceBefore,
         'status': status,
       };
 }

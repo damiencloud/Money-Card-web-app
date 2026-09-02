@@ -14,7 +14,12 @@ export const createStaffMemberSchema = z
 export const updateStaffMemberSchema = z
   .object({
     name: safeDisplayName.optional(),
+    email: safeEmail.optional(),
     status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).optional(),
+    branchIds: z.array(safeId).optional(),
+    assignedBranchIds: z.array(safeId).optional(),
+    permissions: z.array(z.string().max(50)).optional(),
+    permissionCodes: z.array(z.string().max(50)).optional(),
   })
   .strict();
 
@@ -27,21 +32,28 @@ export const updateProfileSchema = z
 
 export const updateStaffBranchesSchema = z
   .object({
-    branchIds: z.array(safeId).min(1, 'At least one branch must be assigned'),
+    branchIds: z.array(safeId).optional(),
+    assignedBranchIds: z.array(safeId).optional(),
   })
-  .strict();
+  .strict()
+  .refine((data) => data.branchIds !== undefined || data.assignedBranchIds !== undefined, {
+    message: 'Either branchIds or assignedBranchIds must be provided',
+  });
 
 export const updateStaffPermissionsSchema = z
   .object({
-    permissionCodes: z.array(z.string().max(50)),
+    permissions: z.array(z.string().max(50)).optional(),
+    permissionCodes: z.array(z.string().max(50)).optional(),
   })
-  .strict();
+  .strict()
+  .refine((data) => data.permissions !== undefined || data.permissionCodes !== undefined, {
+    message: 'Either permissions or permissionCodes must be provided',
+  });
 
 export const changeStaffPasswordSchema = z
   .object({
     newPassword: strongPasswordSchema,
     confirmPassword: z.string().max(128).optional(),
-    temporary: z.boolean().optional(),
   })
   .strict()
   .refine((data) => !data.confirmPassword || data.newPassword === data.confirmPassword, {

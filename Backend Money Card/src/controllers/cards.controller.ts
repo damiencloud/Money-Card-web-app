@@ -39,6 +39,11 @@ export async function getCards(req: Request, res: Response) {
           take: 1,
           include: { branch: true },
         },
+        historyEvents: {
+          where: { action: 'CARD_BLOCKED' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
       },
       orderBy: { createdAt: 'desc' },
       skip,
@@ -49,6 +54,7 @@ export async function getCards(req: Request, res: Response) {
 
   const formatted = cards.map((c) => {
     const activeSession = c.sessions[0];
+    const lastBlock = (c as any).historyEvents?.[0] || null;
     return {
       id: c.id,
       organizationId: c.organizationId,
@@ -56,6 +62,9 @@ export async function getCards(req: Request, res: Response) {
       qrToken: c.qrToken,
       assignmentStatus: c.assignmentStatus,
       status: c.status,
+      blockedReason: lastBlock?.reason || null,
+      blockedBy: lastBlock?.performedByName || null,
+      blockedAt: lastBlock?.createdAt || null,
       activeSession: activeSession
         ? {
             id: activeSession.id,
@@ -604,11 +613,16 @@ export async function resolveCard(req: Request, res: Response) {
   }
 
   if (card.status === CardStatus.BLOCKED) {
+    const lastBlock = await prisma.customerHistoryEvent.findFirst({
+      where: { cardId: card.id, action: 'CARD_BLOCKED' },
+      orderBy: { createdAt: 'desc' },
+    });
+    const blockDetail = lastBlock?.reason ? ` [Reason: ${lastBlock.reason}]` : '';
     return sendError(
       res,
       403,
       'CARD_BLOCKED',
-      `Card ${card.physicalCardNumber} is blocked and cannot be used for any operations.`,
+      `Card ${card.physicalCardNumber} is blocked${blockDetail}. Cannot be used for any operations.`,
     );
   }
 
@@ -653,6 +667,11 @@ export async function getCardById(req: Request, res: Response) {
         take: 20,
         include: { branch: true },
       },
+      historyEvents: {
+        where: { action: 'CARD_BLOCKED' },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
     },
   });
 
@@ -660,7 +679,14 @@ export async function getCardById(req: Request, res: Response) {
     return sendError(res, 404, 'NOT_FOUND', 'Card not found');
   }
 
-  return sendSuccess(res, card);
+  const lastBlock = (card as any).historyEvents?.[0] || null;
+
+  return sendSuccess(res, {
+    ...card,
+    blockedReason: lastBlock?.reason || null,
+    blockedBy: lastBlock?.performedByName || null,
+    blockedAt: lastBlock?.createdAt || null,
+  });
 }
 
 export async function deleteCard(req: Request, res: Response) {

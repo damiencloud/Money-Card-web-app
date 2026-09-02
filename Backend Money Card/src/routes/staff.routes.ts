@@ -53,7 +53,6 @@ staffRouter.put(
   requireRole(Role.SUPER_ADMIN, Role.ORG_ADMIN),
   validateRequest({ body: updateStaffPermissionsSchema }),
   updateStaffPermissions,
-  resendStaffInvite,
 );
 
 staffRouter.post(

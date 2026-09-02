@@ -14,6 +14,7 @@ import {
   updateProfileSchema,
   createStaffMemberSchema,
   updateStaffMemberSchema,
+  updateStaffPermissionsSchema,
 } from '../../src/validation/index.js';
 
 describe('Server-Side Validation & Sanitization Layer', () => {
@@ -157,6 +158,27 @@ describe('Server-Side Validation & Sanitization Layer', () => {
       };
 
       expect(() => updateStaffMemberSchema.parse(payload)).toThrow(/Unrecognized key/);
+    });
+
+    it('should accept updateStaffPermissionsSchema with permissions or permissionCodes', () => {
+      const withPermissions = {
+        permissions: ['CARD_VIEW', 'INVENTORY_VIEW', 'INVENTORY_MANAGE'],
+      };
+      expect(() => updateStaffPermissionsSchema.parse(withPermissions)).not.toThrow();
+
+      const withPermissionCodes = {
+        permissionCodes: ['CARD_VIEW', 'RECHARGE'],
+      };
+      expect(() => updateStaffPermissionsSchema.parse(withPermissionCodes)).not.toThrow();
+
+      const both = {
+        permissions: ['CARD_VIEW'],
+        permissionCodes: ['CARD_VIEW'],
+      };
+      expect(() => updateStaffPermissionsSchema.parse(both)).not.toThrow();
+
+      const emptyObj = {};
+      expect(() => updateStaffPermissionsSchema.parse(emptyObj)).toThrow();
     });
   });
 

@@ -255,6 +255,7 @@ class _DigitalReceiptDialogState extends State<DigitalReceiptDialog> {
     final isRecharge = widget.bill.isRecharge;
 
     return AlertDialog(
+      scrollable: true,
       shape: const RoundedRectangleBorder(borderRadius: AppSpacing.roundedLg),
       contentPadding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       title: Row(
@@ -270,65 +271,124 @@ class _DigitalReceiptDialogState extends State<DigitalReceiptDialog> {
           ),
         ],
       ),
-      content: SingleChildScrollView(
+      content: SizedBox(
+        width: double.maxFinite,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Total & Balance Card
-            AppCard(
-              padding: AppSpacing.paddingMd,
-              backgroundColor: AppColors.primaryLight.withValues(alpha: 0.35),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        isRecharge ? 'Recharge Amount:' : 'Total Paid:',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: AppColors.textSecondaryLight,
-                          fontWeight: FontWeight.w500,
+            // Total & Balance Breakdown Card
+            Builder(builder: (context) {
+              final effectiveDeducted = widget.bill.amountDeducted > 0
+                  ? widget.bill.amountDeducted
+                  : widget.bill.totalAmount;
+              final effectiveRemaining = widget.bill.remainingBalance;
+              final effectivePrevBalance = widget.bill.previousBalance > 0
+                  ? widget.bill.previousBalance
+                  : (isRecharge
+                      ? (effectiveRemaining - widget.bill.totalAmount).clamp(0.0, double.infinity)
+                      : (effectiveRemaining + effectiveDeducted));
+
+              return AppCard(
+                padding: AppSpacing.paddingMd,
+                backgroundColor: AppColors.primaryLight.withValues(alpha: 0.35),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isRecharge ? 'Recharge Amount:' : 'Total Paid:',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.textSecondaryLight,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                      Text(
-                        '₹${widget.bill.totalAmount.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryDark,
+                        Text(
+                          '₹${widget.bill.totalAmount.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primaryDark,
+                          ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Divider(height: 1),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Previous Balance:',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondaryLight,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          '₹${effectivePrevBalance.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimaryLight,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (!isRecharge) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Deducted:',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textSecondaryLight,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            '₹${effectiveDeducted.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.error,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 6),
-                  const Divider(height: 1),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        isRecharge ? 'New Balance:' : 'Remaining Balance:',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondaryLight,
-                          fontWeight: FontWeight.w500,
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isRecharge ? 'New Balance:' : 'Remaining Balance:',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondaryLight,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                      Text(
-                        '₹${widget.bill.remainingBalance.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.success,
+                        Text(
+                          '₹${effectiveRemaining.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.success,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
             const SizedBox(height: AppSpacing.md),
 
             // Metadata summary
@@ -383,9 +443,14 @@ class _DigitalReceiptDialogState extends State<DigitalReceiptDialog> {
             label,
             style: const TextStyle(fontSize: 13, color: AppColors.textSecondaryLight),
           ),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          const SizedBox(width: AppSpacing.sm),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),

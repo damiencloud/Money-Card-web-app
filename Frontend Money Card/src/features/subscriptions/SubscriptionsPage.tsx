@@ -33,6 +33,7 @@ import {
 import { DataTable } from '@/components/tables';
 import { notify, formatDate, formatCurrency } from '@/utils';
 import { AdminPlansSubscriptionsView } from './AdminPlansSubscriptionsView';
+import { UnauthorizedPage } from '@/features/auth';
 import {
   CreditCard,
   Check,
@@ -48,13 +49,21 @@ import {
 } from 'lucide-react';
 
 export function SubscriptionsPage() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+
+  if (isLoading && !user) {
+    return <LoadingState message="Loading subscriptions..." />;
+  }
 
   if (user?.role === 'SUPER_ADMIN') {
     return <AdminPlansSubscriptionsView />;
   }
 
-  return <OrgAdminSubscriptionsView />;
+  if (user?.role === 'ORG_ADMIN') {
+    return <OrgAdminSubscriptionsView />;
+  }
+
+  return <UnauthorizedPage />;
 }
 
 function OrgAdminSubscriptionsView() {

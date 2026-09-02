@@ -214,6 +214,7 @@ class _PosCheckoutScreenState extends ConsumerState<PosCheckoutScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        scrollable: true,
         title: const Text('Confirm Purchase'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -283,6 +284,15 @@ class _PosCheckoutScreenState extends ConsumerState<PosCheckoutScreen> {
       subtotal: item.itemTotal,
     )).toList();
 
+    final totalAmount = result.amount > 0 ? result.amount : cart.totalAmount;
+    final remainingBalance = result.balance;
+    final previousBalance = (result.balanceBefore != null && result.balanceBefore! > 0)
+        ? result.balanceBefore!
+        : ((session?.balance != null && session!.balance > 0)
+            ? session.balance
+            : (remainingBalance + totalAmount));
+    final amountDeducted = totalAmount;
+
     final bill = ReceiptBill(
       organizationName: 'MONEY CARD',
       branchName: branch?.name ?? 'Main Cafeteria',
@@ -295,11 +305,11 @@ class _PosCheckoutScreenState extends ConsumerState<PosCheckoutScreen> {
       sessionId: session?.id ?? widget.sessionId,
       staffName: user?.name,
       items: billItems,
-      subtotal: cart.totalAmount > 0 ? cart.totalAmount : result.amount,
-      totalAmount: result.amount,
-      previousBalance: result.balance + result.amount,
-      amountDeducted: result.amount,
-      remainingBalance: result.balance,
+      subtotal: totalAmount,
+      totalAmount: totalAmount,
+      previousBalance: previousBalance,
+      amountDeducted: amountDeducted,
+      remainingBalance: remainingBalance,
       paymentMethod: 'Card Session',
       sessionStatus: 'ACTIVE',
     );
@@ -601,7 +611,10 @@ class _PosCheckoutScreenState extends ConsumerState<PosCheckoutScreen> {
                       }).toList(),
                     ),
                     const SizedBox(height: 4),
-                    Row(
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: AppSpacing.sm,
+                      runSpacing: 2,
                       children: [
                         Text(
                           '₹${product.price.toStringAsFixed(2)}',
@@ -611,7 +624,6 @@ class _PosCheckoutScreenState extends ConsumerState<PosCheckoutScreen> {
                             color: AppColors.primary,
                           ),
                         ),
-                        const SizedBox(width: AppSpacing.sm),
                         Text(
                           product.currentStock > 0
                               ? '${product.currentStock} in stock'

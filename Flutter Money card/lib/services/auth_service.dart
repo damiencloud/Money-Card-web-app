@@ -94,15 +94,14 @@ class AuthService {
 
   /// Change password for authenticated session (POST /api/v1/auth/change-password)
   Future<AuthResponseData> changePassword({
-    String? currentPassword,
+    required String currentPassword,
     required String newPassword,
     String? confirmPassword,
   }) async {
     return _apiService.post<AuthResponseData>(
       ApiEndpoints.changePassword,
       data: {
-        if (currentPassword != null && currentPassword.isNotEmpty)
-          'currentPassword': currentPassword,
+        'currentPassword': currentPassword,
         'newPassword': newPassword,
         if (confirmPassword != null && confirmPassword.isNotEmpty)
           'confirmPassword': confirmPassword,

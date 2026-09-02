@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/errors/api_exception.dart';
 import '../models/inventory.dart';
@@ -70,10 +71,17 @@ class InventoryListState {
 class InventoryNotifier extends StateNotifier<InventoryListState> {
   final InventoryRepository _inventoryRepository;
   final String? _currentBranchId;
+  Timer? _messageTimer;
 
   InventoryNotifier(this._inventoryRepository, this._currentBranchId)
       : super(const InventoryListState()) {
     loadInventory();
+  }
+
+  @override
+  void dispose() {
+    _messageTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> loadInventory() async {
@@ -139,6 +147,14 @@ class InventoryNotifier extends StateNotifier<InventoryListState> {
         successMessage: 'Stock updated to ${updatedItem.currentStock} units.',
       );
 
+      // Auto-dismiss the success feedback message after 3 seconds
+      _messageTimer?.cancel();
+      _messageTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted) {
+          state = state.copyWith(successMessage: null);
+        }
+      });
+
       // Refresh movement history
       loadMovements();
 
@@ -171,6 +187,7 @@ class InventoryNotifier extends StateNotifier<InventoryListState> {
   }
 
   void clearMessages() {
+    _messageTimer?.cancel();
     state = state.copyWith(errorMessage: null, successMessage: null);
   }
 }

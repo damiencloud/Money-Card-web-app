@@ -12,7 +12,7 @@ import type {
 } from '@/types';
 
 export const mockStaffHandlers = {
-  async changePassword(id: string, _data: { newPassword: string; confirmPassword?: string; temporary?: boolean }): Promise<ApiResult<any>> {
+  async changePassword(id: string, _data: { newPassword: string; confirmPassword?: string }): Promise<ApiResult<any>> {
     await mockDelay();
     const staff = mockStore.staffEntities.find((s) => s.id === id);
     if (!staff) return createMockError('NOT_FOUND', 'Staff member not found');

@@ -4,13 +4,18 @@
 // - ORG_ADMIN -> OrgAdminAnalyticsView (Organization Scope)
 
 import { useAuth, usePermissions } from '@/hooks';
+import { LoadingState } from '@/components/ui';
 import { UnauthorizedPage } from '@/features/auth';
 import { SuperAdminAnalyticsView } from './SuperAdminAnalyticsView';
 import { OrgAdminAnalyticsView } from './OrgAdminAnalyticsView';
 
 export function AnalyticsPage() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const { hasPermission } = usePermissions();
+
+  if (isLoading && !user) {
+    return <LoadingState message="Loading analytics..." />;
+  }
 
   const canViewAnalytics = hasPermission('VIEW_ANALYTICS');
 
@@ -22,5 +27,9 @@ export function AnalyticsPage() {
     return <SuperAdminAnalyticsView />;
   }
 
-  return <OrgAdminAnalyticsView />;
+  if (user?.role === 'ORG_ADMIN') {
+    return <OrgAdminAnalyticsView />;
+  }
+
+  return <UnauthorizedPage />;
 }
