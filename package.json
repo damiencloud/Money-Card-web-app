@@ -1,0 +1,9 @@
+{
+  "name": "money-card-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Money Card Monorepo (Backend, Frontend, Flutter Mobile)",
+  "scripts": {
+    "sonar": "powershell -ExecutionPolicy Bypass -File ./run-sonar-scan.ps1"
+  }
+}

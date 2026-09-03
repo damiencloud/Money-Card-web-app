@@ -36,6 +36,8 @@ import {
   AlertTriangle,
   Layers,
   Trash2,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 
 export interface InventoryItemWithDetails extends InventoryItem {
@@ -80,6 +82,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
   const [productSearch, setProductSearch] = useState('');
   const [productStatusFilter, setProductStatusFilter] = useState('ALL');
   const [productCategoryFilter, setProductCategoryFilter] = useState('ALL');
+  const [productViewMode, setProductViewMode] = useState<'grid' | 'table'>('grid');
 
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -185,10 +188,10 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
 
         return {
           ...item,
-          productName: prod?.itemName || (item as any).productName || (item as any).product?.name || 'Product' || `Product ${item.productId}`,
-          category: prod?.category || (item as any).category || (item as any).product?.category || 'General' || ['General'],
-          price: prod?.price || (item as any).price || (item as any).product?.price || 0 || 0,
-          branchName: br?.name || (item as any).branchName || (item as any).branch?.name || 'Branch' || 'Main Branch',
+          productName: prod?.itemName || (item as any).productName || (item as any).product?.name || `Product ${item.productId}`,
+          category: prod?.category || (item as any).category || (item as any).product?.category || 'General',
+          price: prod?.price ?? (item as any).price ?? (item as any).product?.price ?? 0,
+          branchName: br?.name || (item as any).branchName || (item as any).branch?.name || 'Main Branch',
         };
       });
 
@@ -309,6 +312,29 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     setQtyError(null);
     setInventoryModalApiError(null);
     setShowAdjustModal(true);
+  };
+
+  const handleOpenProductAdjust = (product: ProductWithInventory) => {
+    const invItem = inventoryList.find((i) => i.productId === product.id);
+    if (invItem) {
+      handleOpenAdjust(invItem);
+    } else {
+      setSelectedInventory({
+        id: product.id,
+        productId: product.id,
+        branchId: product.branchId || currentBranch?.id || '',
+        quantity: product.quantity || 0,
+        productName: product.itemName,
+        category: product.category,
+        price: product.price,
+        branchName: currentBranch?.name || 'Current Branch',
+        updatedAt: new Date().toISOString(),
+      });
+      setAdjustQtyInput((product.quantity || 0).toString());
+      setQtyError(null);
+      setInventoryModalApiError(null);
+      setShowAdjustModal(true);
+    }
   };
 
   const handleStepAdjustment = (delta: number) => {
@@ -498,7 +524,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
       header: 'Status Action',
       className: 'text-right',
       render: (product: ProductWithInventory) => (
-        <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end">
           {canManageProducts && (
             <Button
               variant={product.status === 'ACTIVE' ? 'ghost' : 'outline'}
@@ -548,11 +574,15 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
       header: 'Category',
       render: (item: InventoryItemWithDetails) => (
         <div className="flex flex-wrap gap-1">
-          {(Array.isArray((item as any).category || (item as any).product?.category || 'General') ? (item as any).category || (item as any).product?.category || 'General' : [(item as any).category || (item as any).product?.category || 'General' || 'General']).map((c: any, idx: number) => (
-            <Badge key={idx} variant="outline" className="capitalize text-slate-300">
-              {c}
-            </Badge>
-          ))}
+          {(() => {
+            const rawCat = (item as any).category || (item as any).product?.category || 'General';
+            const catArr = Array.isArray(rawCat) ? rawCat : [rawCat];
+            return catArr.map((c: any, idx: number) => (
+              <Badge key={idx} variant="outline" className="capitalize text-slate-300">
+                {c}
+              </Badge>
+            ));
+          })()}
         </div>
       ),
     },
@@ -606,7 +636,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
       header: 'Stock Action',
       className: 'text-right',
       render: (item: InventoryItemWithDetails) => (
-        <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end">
           {canManageInventory && (
             <Button
               variant="ghost"
@@ -641,11 +671,6 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Products & Inventory</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            {activeTab === 'products'
-              ? 'View organization master product catalog, categories, pricing, and sale availability.'
-              : 'Monitor multi-branch physical stock levels, asset valuation, and stock adjustments.'}
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -742,9 +767,45 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
             </Card>
           </div>
 
-          {/* Filters Bar */}
-          <Card className="p-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {/* Controls Bar: View Mode Switcher & Filters */}
+          <Card className="p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-400">View Layout:</span>
+                <div className="flex rounded-lg bg-slate-900 p-1 border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setProductViewMode('grid')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                      productViewMode === 'grid'
+                        ? 'bg-violet-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                    <span>Visual Menu Grid</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProductViewMode('table')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                      productViewMode === 'table'
+                        ? 'bg-violet-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <List className="h-3.5 w-3.5" />
+                    <span>Table View</span>
+                  </button>
+                </div>
+              </div>
+
+              <span className="text-xs text-slate-400">
+                Total <strong className="text-slate-200">{products.length}</strong> items in menu
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 pt-3 border-t border-slate-800/60">
               <Input
                 placeholder="Search food or product item..."
                 value={productSearch}
@@ -778,7 +839,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
             </div>
           </Card>
 
-          {/* Catalog Data Table */}
+          {/* Catalog Display: Grid vs Table */}
           <Card className="p-0">
             {isProductsLoading ? (
               <div className="py-12">
@@ -791,16 +852,135 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
             ) : products.length === 0 ? (
               <div className="py-12">
                 <EmptyState
-                  title="No Products Found"
-                  description="No menu or catalog items match your filter criteria."
+                  title={productSearch || productStatusFilter !== 'ALL' || productCategoryFilter !== 'ALL' ? "No matching products found" : "No products in menu yet"}
+                  description={productSearch || productStatusFilter !== 'ALL' || productCategoryFilter !== 'ALL' ? "Try clearing your search or category filters." : "Add your food items and prices to start selling at counters."}
                   action={
-                    canManageProducts ? (
+                    productSearch || productStatusFilter !== 'ALL' || productCategoryFilter !== 'ALL' ? (
+                      <Button variant="outline" onClick={() => { setProductSearch(''); setProductStatusFilter('ALL'); setProductCategoryFilter('ALL'); }}>
+                        Clear Filters
+                      </Button>
+                    ) : canManageProducts ? (
                       <Button variant="primary" onClick={handleOpenCreate}>
                         Add First Product
                       </Button>
                     ) : undefined
                   }
                 />
+              </div>
+            ) : productViewMode === 'grid' ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 p-4">
+                {products.map((p) => {
+                  const isVeg = Array.isArray(p.category) && p.category.some((c) => c.toLowerCase() === 'veg');
+                  const isNonVeg = Array.isArray(p.category) && p.category.some((c) => c.toLowerCase() === 'non-veg');
+                  const isBeverage = Array.isArray(p.category) && p.category.some((c) => c.toLowerCase() === 'beverage');
+
+                  return (
+                    <div
+                      key={p.id}
+                      className={`flex flex-col justify-between rounded-2xl border p-4.5 transition-all shadow-md ${
+                        p.status === 'ACTIVE'
+                          ? 'border-slate-800 bg-slate-900/70 hover:border-slate-700 hover:bg-slate-900'
+                          : 'border-slate-800/60 bg-slate-950/40 opacity-75'
+                      }`}
+                    >
+                      <div>
+                        {/* Header: Dietary/Category pills & Status */}
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {isVeg && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                🟢 Veg
+                              </span>
+                            )}
+                            {isNonVeg && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30">
+                                🔴 Non-Veg
+                              </span>
+                            )}
+                            {isBeverage && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/30">
+                                ☕ Drink
+                              </span>
+                            )}
+                            {!isVeg && !isNonVeg && !isBeverage && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                                {Array.isArray(p.category) ? p.category[0] || 'Food' : 'Food'}
+                              </span>
+                            )}
+                          </div>
+
+                          <Badge variant={p.status === 'ACTIVE' ? 'success' : 'danger'} className="text-[10px]">
+                            {p.status}
+                          </Badge>
+                        </div>
+
+                        {/* Food Name & Price */}
+                        <h4 className="font-bold text-base text-slate-100 line-clamp-1">
+                          {p.itemName}
+                        </h4>
+                        <p className="mt-1 font-mono text-xl font-extrabold text-violet-300">
+                          {formatCurrency(p.price)}
+                        </p>
+                      </div>
+
+                      {/* Stock Info & Quick Actions Footer */}
+                      <div className="mt-4 pt-3 border-t border-slate-800/80 space-y-3">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400 font-medium">Branch Stock:</span>
+                          {p.quantity === 0 ? (
+                            <span className="font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/30">
+                              Out of stock
+                            </span>
+                          ) : p.quantity < 10 ? (
+                            <span className="font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                              Low: {p.quantity} units
+                            </span>
+                          ) : (
+                            <span className="font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+                              {p.quantity} in stock
+                            </span>
+                          )}
+                        </div>
+
+                        {canManageProducts && (
+                          <div className="flex items-center gap-2 pt-1">
+                            <Button
+                              variant={p.status === 'ACTIVE' ? 'outline' : 'primary'}
+                              size="sm"
+                              className="flex-1 text-xs py-1"
+                              onClick={() => handleToggleStatus(p)}
+                              leftIcon={<Power className="h-3.5 w-3.5" />}
+                            >
+                              {p.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                            </Button>
+
+                            {canManageInventory && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs py-1 border border-slate-800 hover:border-slate-700 text-slate-300"
+                                onClick={() => handleOpenProductAdjust(p)}
+                                title="Adjust branch stock"
+                              >
+                                Stock
+                              </Button>
+                            )}
+
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOpenDeleteProduct(p)}
+                              className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 px-2"
+                              title="Delete product"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <DataTable columns={productColumns} data={products} keyExtractor={(p) => p.id} />
@@ -893,8 +1073,15 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
             ) : inventoryList.length === 0 ? (
               <div className="py-12">
                 <EmptyState
-                  title="No Stock Records Found"
-                  description="No branch stock items match the current filters."
+                  title={inventorySearch || inventoryStatusFilter !== 'ALL' ? "No matching stock records" : "No stock items yet"}
+                  description={inventorySearch || inventoryStatusFilter !== 'ALL' ? "Try clearing search or stock filters." : "Stock records will appear here as products are added to branches."}
+                  action={
+                    inventorySearch || inventoryStatusFilter !== 'ALL' ? (
+                      <Button variant="outline" onClick={() => { setInventorySearch(''); setInventoryStatusFilter('ALL'); }}>
+                        Clear Filters
+                      </Button>
+                    ) : undefined
+                  }
                 />
               </div>
             ) : (

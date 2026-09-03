@@ -77,15 +77,14 @@ class PosCatalogNotifier extends StateNotifier<PosCatalogState> {
   final String? _currentBranchId;
 
   PosCatalogNotifier(this._productRepository, this._currentBranchId)
-      : super(const PosCatalogState()) {
-    loadProducts();
-  }
+      : super(const PosCatalogState());
 
   Future<void> loadCatalog() => loadProducts();
 
-  Future<void> loadProducts() async {
+  Future<void> loadProducts({bool force = false}) async {
     final branchId = _currentBranchId;
     if (branchId == null) return;
+    if (!force && state.isLoading) return;
 
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {

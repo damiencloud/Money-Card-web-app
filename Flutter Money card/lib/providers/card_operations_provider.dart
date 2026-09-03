@@ -49,11 +49,10 @@ class CardListNotifier extends StateNotifier<CardListState> {
   final String? _currentBranchId;
 
   CardListNotifier(this._cardRepository, this._currentBranchId)
-      : super(const CardListState()) {
-    loadCards();
-  }
+      : super(const CardListState());
 
-  Future<void> loadCards() async {
+  Future<void> loadCards({bool force = false}) async {
+    if (!force && state.isLoading) return;
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       final statusParam =

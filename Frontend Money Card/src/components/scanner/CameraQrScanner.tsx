@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { CameraOff, AlertCircle, RefreshCw, SwitchCamera } from 'lucide-react';
 import { Button } from '@/components/ui';
+import { generateSecureToken } from '../../utils/cryptoRandom';
 
 interface CameraQrScannerProps {
   onScan: (decodedText: string) => void;
@@ -16,7 +17,7 @@ export function CameraQrScanner({
   onToggleActive,
   className = '',
 }: CameraQrScannerProps) {
-  const containerIdRef = useRef<string>('qr-reader-' + Math.random().toString(36).slice(2, 9));
+  const containerIdRef = useRef<string>(generateSecureToken('qr-reader'));
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -81,13 +82,7 @@ export function CameraQrScanner({
           : { facingMode: 'environment' };
 
         const config = {
-          fps: 12,
-          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-            const boxSize = Math.max(180, Math.floor(minEdge * 0.75));
-            return { width: boxSize, height: boxSize };
-          },
-          aspectRatio: 1.0,
+          fps: 15,
         };
 
         await scanner.start(
@@ -146,18 +141,18 @@ export function CameraQrScanner({
 
   return (
     <div className={`space-y-3 ${className}`}>
-      {/* Scanner Viewport Container */}
-      <div className="relative rounded-2xl overflow-hidden border-2 border-emerald-500/50 bg-slate-950 min-h-[260px] max-h-[340px] flex items-center justify-center shadow-2xl">
+      {/* Scanner Viewport Container - Full Frame 16:9 / Responsive Aspect */}
+      <div className="relative w-full aspect-video max-h-[380px] rounded-2xl overflow-hidden border-2 border-emerald-500/60 bg-black flex items-center justify-center shadow-2xl">
         {/* DOM node for Html5Qrcode */}
         <div
           id={containerIdRef.current}
-          className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover [&_video]:max-h-[340px]"
+          className="w-full h-full [&_video]:!w-full [&_video]:!h-full [&_video]:!object-cover [&_video]:!block [&_#qr-shaded-region]:!hidden [&_#qr-shaded-region]:!border-0"
         />
 
         {isInitializing && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 text-emerald-400 gap-2 z-10">
             <RefreshCw className="h-7 w-7 animate-spin" />
-            <p className="text-xs font-semibold text-slate-300">Initializing camera...</p>
+            <p className="text-xs font-semibold text-slate-300">Initializing full-frame camera...</p>
           </div>
         )}
 
@@ -181,14 +176,20 @@ export function CameraQrScanner({
           </div>
         )}
 
-        {/* Scan Reticle Overlay (when scanning successfully) */}
+        {/* Full-Frame Scanner Reticle Overlay */}
         {!isInitializing && !errorMessage && isActive && (
-          <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
-            <div className="w-48 h-48 border-2 border-dashed border-emerald-400/80 rounded-2xl relative">
-              <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-pulse" />
+          <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-6">
+            <div className="relative w-full h-full max-w-sm max-h-56 border border-emerald-400/40 rounded-2xl">
+              {/* Corner accents */}
+              <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-emerald-400 rounded-tl-xl shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+              <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-emerald-400 rounded-tr-xl shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+              <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-emerald-400 rounded-bl-xl shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-emerald-400 rounded-br-xl shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+              {/* Laser line animation */}
+              <div className="absolute top-0 left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_8px_rgba(52,211,153,1)] animate-pulse" />
             </div>
-            <p className="mt-3 text-[11px] font-semibold text-emerald-300 bg-slate-900/85 px-3 py-1 rounded-full border border-emerald-500/30 backdrop-blur-sm">
-              Point camera at physical card QR
+            <p className="mt-3 text-[11px] font-semibold text-emerald-300 bg-slate-950/85 px-3.5 py-1 rounded-full border border-emerald-500/30 backdrop-blur-md shadow-md">
+              Full-frame active scanner — hold card QR anywhere in view
             </p>
           </div>
         )}

@@ -339,9 +339,6 @@ export function OrgAdminAnalyticsView() {
               Organization Scope
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-slate-400">
-            Real-time transaction volumes, session health, and comprehensive branch performance comparison.
-          </p>
         </div>
 
         {/* Action Buttons: [ View PDF ] and [ Download PDF ] */}
@@ -527,9 +524,6 @@ export function OrgAdminAnalyticsView() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-100">Branch Performance Comparison</h2>
-                <p className="text-xs text-slate-400">
-                  Compare sales volume, transaction frequency, and session health across branches.
-                </p>
               </div>
 
               {/* Sorting Metric Selector */}

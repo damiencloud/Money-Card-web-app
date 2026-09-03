@@ -28,15 +28,26 @@ import '../widgets/states/app_unauthorized_state.dart';
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 final shellNavigatorKey = GlobalKey<NavigatorState>();
 
-/// Router Provider configured with reactive auth state listening
+class _AuthListenable extends ChangeNotifier {
+  _AuthListenable(Ref ref) {
+    ref.listen<AuthState>(authNotifierProvider, (_, _) {
+      notifyListeners();
+    });
+  }
+}
+
+/// Router Provider configured with stable singleton GoRouter and reactive refreshListenable
 final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authNotifierProvider);
+  final refreshListenable = _AuthListenable(ref);
+  ref.onDispose(refreshListenable.dispose);
 
   return GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: '/app/home',
+    refreshListenable: refreshListenable,
     debugLogDiagnostics: false,
     redirect: (context, state) {
+      final authState = ref.read(authNotifierProvider);
       final isLoggingIn = state.matchedLocation == '/login';
 
       // 1. Initial startup session check in progress
@@ -118,7 +129,7 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((ref) {
         path: '/app/pos/:sessionId',
         parentNavigatorKey: rootNavigatorKey,
         redirect: (context, state) {
-          final user = authState.user;
+          final user = ref.read(currentUserProvider);
           final permissions = user?.permissions ?? [];
           if (!permissions.contains(AppPermission.purchase)) {
             return '/unauthorized';

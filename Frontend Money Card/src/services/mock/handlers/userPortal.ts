@@ -54,7 +54,7 @@ export const mockUserPortalHandlers = {
 
     return createMockSuccess({
       sessionToken,
-      cardDisplayNumber: (card.physicalCardNumber || 'UNASSIGNED') || 'UNASSIGNED',
+      cardDisplayNumber: card.physicalCardNumber || 'UNASSIGNED',
       sessionStatus: activeSession.status,
       currentBalance: activeSession.balance,
     });

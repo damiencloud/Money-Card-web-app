@@ -426,9 +426,6 @@ function OrgAdminSubscriptionsView() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Subscription & Plan Details</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            View your organization active subscription plan, resource utilization, and billing payment receipts.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -500,7 +497,6 @@ function OrgAdminSubscriptionsView() {
           <Card>
             <CardHeader
               title={`Current Plan: ${currentPlan?.name || 'Active Subscription'}`}
-              description="Real-time resource utilization against your active subscription plan limits."
               action={
                 <Badge
                   variant={
@@ -616,9 +612,6 @@ function OrgAdminSubscriptionsView() {
                       Active
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400">
-                    Continuous real-time settlement tracking.
-                  </p>
                 </div>
               </div>
             </CardContent>
@@ -628,9 +621,6 @@ function OrgAdminSubscriptionsView() {
           <div className="space-y-4">
             <div>
               <h2 className="text-lg font-bold text-slate-100">Available Subscription Plans</h2>
-              <p className="text-xs text-slate-400">
-                Compare technical limits and feature entitlements for your organization. Contact Super Admin to request plan adjustments.
-              </p>
             </div>
 
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -729,9 +719,6 @@ function OrgAdminSubscriptionsView() {
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-bold text-slate-100">Plan Change Requests History</h2>
-                <p className="text-xs text-slate-400">
-                  Track the approval and review status of your organization's plan change submissions.
-                </p>
               </div>
 
               <Card padding="none">
@@ -748,9 +735,6 @@ function OrgAdminSubscriptionsView() {
           <div className="space-y-4">
             <div>
               <h2 className="text-lg font-bold text-slate-100">Billing & Direct Payment History</h2>
-              <p className="text-xs text-slate-400">
-                Audited invoices and offline direct payment receipts verified by Super Admin.
-              </p>
             </div>
 
             {payments.length === 0 ? (

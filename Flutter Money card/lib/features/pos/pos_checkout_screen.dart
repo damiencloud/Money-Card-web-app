@@ -51,7 +51,10 @@ class _PosCheckoutScreenState extends ConsumerState<PosCheckoutScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(sessionDetailsNotifierProvider.notifier).loadSessionById(widget.sessionId);
-      ref.read(posCatalogNotifierProvider.notifier).loadProducts();
+      final catalogState = ref.read(posCatalogNotifierProvider);
+      if (catalogState.products.isEmpty && !catalogState.isLoading) {
+        ref.read(posCatalogNotifierProvider.notifier).loadProducts();
+      }
       ref.read(posCartNotifierProvider.notifier).clearCart();
     });
   }

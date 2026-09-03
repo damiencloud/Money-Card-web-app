@@ -41,6 +41,8 @@ import {
   CalendarDays,
   Clock,
   X,
+  CheckCircle2,
+  Sparkles,
 } from 'lucide-react';
 
 export type DatePreset = 'all' | 'today' | 'yesterday' | 'last7' | 'last30' | 'thisMonth' | 'custom';
@@ -269,15 +271,57 @@ export function OrgAdminDashboard() {
     return 'All Time';
   }, [startDate, endDate]);
 
+  // Getting Started Checklist Calculations
+  const hasBranches = branches.length > 0;
+  const hasStaff = staffList.length > 0;
+  const hasCards = cardsList.length > 0;
+  const hasProducts = inventory.length > 0;
+
+  const setupSteps = useMemo(() => [
+    {
+      id: 'branches',
+      title: '1. Create branch location',
+      description: 'Define your cafeteria counter or store location.',
+      completed: hasBranches,
+      path: '/branches',
+      actionLabel: 'Add Branch',
+    },
+    {
+      id: 'staff',
+      title: '2. Add team members & cashiers',
+      description: 'Grant counter staff access to scan cards and take orders.',
+      completed: hasStaff,
+      path: '/staff',
+      actionLabel: 'Add Staff',
+    },
+    {
+      id: 'cards',
+      title: '3. Register smart cards',
+      description: 'Scan or import physical cards for your customers.',
+      completed: hasCards,
+      path: '/cards',
+      actionLabel: 'Register Cards',
+    },
+    {
+      id: 'products',
+      title: '4. Add menu items & prices',
+      description: 'Create food items and prices for POS checkout.',
+      completed: hasProducts,
+      path: '/products',
+      actionLabel: 'Add Products',
+    },
+  ], [hasBranches, hasStaff, hasCards, hasProducts]);
+
+  const completedStepsCount = setupSteps.filter((s) => s.completed).length;
+  const setupPercent = Math.round((completedStepsCount / setupSteps.length) * 100);
+  const isSetupComplete = completedStepsCount === setupSteps.length;
+
   return (
     <div className="space-y-6">
       {/* Header Bar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Organization Dashboard</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Real-time overview of your branches, cards, inventory, and subscription entitlements.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -316,76 +360,223 @@ export function OrgAdminDashboard() {
         </div>
       </div>
 
-      {/* Permission-Guarded Quick Actions Bar */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-        {hasPermission('BRANCH_MANAGE') && (
+      {/* ─── 4 Primary Quick Action Cards (Non-Technical Friendly) ─── */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {hasPermission('CARD_ISSUE') && (
           <button
-            onClick={() => navigate('/branches')}
-            className="flex flex-col items-center justify-center rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-center transition-all hover:border-violet-500/50 hover:bg-slate-900"
+            type="button"
+            onClick={() => navigate('/cards')}
+            className="group flex flex-col justify-between p-5 rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900/90 to-slate-950 hover:from-slate-900 hover:to-emerald-950/20 hover:border-emerald-500/50 transition-all text-left shadow-lg cursor-pointer"
           >
-            <Building2 className="h-5 w-5 text-violet-400 mb-1.5" />
-            <span className="text-xs font-semibold text-slate-200">Branches</span>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform">
+                <CreditCard className="h-6 w-6" />
+              </div>
+              <span className="text-xs font-semibold text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                Open <ArrowRight className="h-3.5 w-3.5" />
+              </span>
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-100 group-hover:text-emerald-300 transition-colors">
+                Issue & Register Cards
+              </h3>
+              <p className="mt-1 text-xs text-slate-400">
+                Scan or assign new smart cards to customers
+              </p>
+            </div>
           </button>
         )}
 
         {hasPermission('STAFF_MANAGE') && (
           <button
+            type="button"
             onClick={() => navigate('/staff')}
-            className="flex flex-col items-center justify-center rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-center transition-all hover:border-violet-500/50 hover:bg-slate-900"
+            className="group flex flex-col justify-between p-5 rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900/90 to-slate-950 hover:from-slate-900 hover:to-violet-950/20 hover:border-violet-500/50 transition-all text-left shadow-lg cursor-pointer"
           >
-            <Users className="h-5 w-5 text-indigo-400 mb-1.5" />
-            <span className="text-xs font-semibold text-slate-200">Add Staff</span>
-          </button>
-        )}
-
-        {hasPermission('CARD_ISSUE') && (
-          <button
-            onClick={() => navigate('/cards')}
-            className="flex flex-col items-center justify-center rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-center transition-all hover:border-violet-500/50 hover:bg-slate-900"
-          >
-            <CreditCard className="h-5 w-5 text-sky-400 mb-1.5" />
-            <span className="text-xs font-semibold text-slate-200">Issue Card</span>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-500/10 text-violet-400 group-hover:scale-110 transition-transform">
+                <Users className="h-6 w-6" />
+              </div>
+              <span className="text-xs font-semibold text-violet-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                Open <ArrowRight className="h-3.5 w-3.5" />
+              </span>
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-100 group-hover:text-violet-300 transition-colors">
+                Add Team Member
+              </h3>
+              <p className="mt-1 text-xs text-slate-400">
+                Invite cashiers and branch supervisors
+              </p>
+            </div>
           </button>
         )}
 
         {hasPermission('PRODUCT_MANAGE') && (
           <button
+            type="button"
             onClick={() => navigate('/products')}
-            className="flex flex-col items-center justify-center rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-center transition-all hover:border-violet-500/50 hover:bg-slate-900"
+            className="group flex flex-col justify-between p-5 rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900/90 to-slate-950 hover:from-slate-900 hover:to-teal-950/20 hover:border-teal-500/50 transition-all text-left shadow-lg cursor-pointer"
           >
-            <ShoppingBag className="h-5 w-5 text-emerald-400 mb-1.5" />
-            <span className="text-xs font-semibold text-slate-200">Add Product</span>
-          </button>
-        )}
-
-        {hasPermission('INVENTORY_IMPORT') && (
-          <button
-            onClick={() => navigate('/inventory')}
-            className="flex flex-col items-center justify-center rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-center transition-all hover:border-violet-500/50 hover:bg-slate-900"
-          >
-            <Upload className="h-5 w-5 text-amber-400 mb-1.5" />
-            <span className="text-xs font-semibold text-slate-200">Import CSV</span>
-          </button>
-        )}
-
-        {hasPermission('VIEW_ANALYTICS') && (
-          <button
-            onClick={() => navigate('/analytics')}
-            className="flex flex-col items-center justify-center rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-center transition-all hover:border-violet-500/50 hover:bg-slate-900"
-          >
-            <BarChart3 className="h-5 w-5 text-violet-400 mb-1.5" />
-            <span className="text-xs font-semibold text-slate-200">Analytics</span>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-500/10 text-teal-400 group-hover:scale-110 transition-transform">
+                <ShoppingBag className="h-6 w-6" />
+              </div>
+              <span className="text-xs font-semibold text-teal-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                Open <ArrowRight className="h-3.5 w-3.5" />
+              </span>
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-100 group-hover:text-teal-300 transition-colors">
+                Add Menu Item
+              </h3>
+              <p className="mt-1 text-xs text-slate-400">
+                Create food items and prices for POS checkout
+              </p>
+            </div>
           </button>
         )}
 
         <button
-          onClick={() => navigate('/subscriptions')}
-          className="flex flex-col items-center justify-center rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-center transition-all hover:border-violet-500/50 hover:bg-slate-900"
+          type="button"
+          onClick={() => navigate('/sessions')}
+          className="group flex flex-col justify-between p-5 rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900/90 to-slate-950 hover:from-slate-900 hover:to-amber-950/20 hover:border-amber-500/50 transition-all text-left shadow-lg cursor-pointer"
         >
-          <Zap className="h-5 w-5 text-indigo-400 mb-1.5" />
-          <span className="text-xs font-semibold text-slate-200">Plan Limits</span>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400 group-hover:scale-110 transition-transform">
+              <BarChart3 className="h-6 w-6" />
+            </div>
+            <span className="text-xs font-semibold text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+              Open <ArrowRight className="h-3.5 w-3.5" />
+            </span>
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-100 group-hover:text-amber-300 transition-colors">
+              Today's Activity & Sales
+            </h3>
+            <p className="mt-1 text-xs text-slate-400">
+              Inspect active cards, orders, and settlements
+            </p>
+          </div>
         </button>
       </div>
+
+      {/* Secondary Tools Strip */}
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-800/80 pt-3">
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 mr-1">More Tools:</span>
+        {hasPermission('BRANCH_MANAGE') && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/branches')}
+            leftIcon={<Building2 className="h-3.5 w-3.5" />}
+          >
+            Branches
+          </Button>
+        )}
+        {hasPermission('INVENTORY_IMPORT') && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/inventory')}
+            leftIcon={<Upload className="h-3.5 w-3.5" />}
+          >
+            Import CSV
+          </Button>
+        )}
+        {hasPermission('VIEW_ANALYTICS') && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/analytics')}
+            leftIcon={<BarChart3 className="h-3.5 w-3.5" />}
+          >
+            Analytics
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate('/subscriptions')}
+          leftIcon={<Zap className="h-3.5 w-3.5" />}
+        >
+          Plan Limits
+        </Button>
+      </div>
+
+      {/* ─── Getting Started Checklist (Interactive Setup Guide) ─── */}
+      {!isSetupComplete && (
+        <Card className="border-violet-500/30 bg-gradient-to-br from-slate-900 via-slate-900/90 to-violet-950/20 p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+            <div>
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-violet-400" />
+                <h3 className="font-bold text-slate-100 text-base">
+                  Getting Started Checklist
+                </h3>
+                <Badge variant="warning" className="text-xs font-semibold">
+                  {completedStepsCount} of {setupSteps.length} Steps
+                </Badge>
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Complete these initial steps to get your cafeteria operations fully running.
+              </p>
+            </div>
+            <div className="w-full sm:w-48 space-y-1">
+              <div className="flex justify-between text-xs font-medium text-slate-300">
+                <span>Setup Progress</span>
+                <span className="font-bold text-violet-400">{setupPercent}%</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-violet-500 to-emerald-400 transition-all duration-500"
+                  style={{ width: `${setupPercent}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 pt-4 sm:grid-cols-2">
+            {setupSteps.map((step) => (
+              <div
+                key={step.id}
+                className={`flex items-start justify-between p-3.5 rounded-xl border transition-all ${
+                  step.completed
+                    ? 'border-emerald-500/20 bg-emerald-500/5 text-slate-300'
+                    : 'border-slate-800 bg-slate-950/60 hover:border-slate-700 text-slate-200'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5">
+                    {step.completed ? (
+                      <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                    ) : (
+                      <div className="h-5 w-5 rounded-full border-2 border-slate-600 flex items-center justify-center text-[10px] text-slate-400 font-bold" />
+                    )}
+                  </div>
+                  <div>
+                    <p className={`text-xs font-bold ${step.completed ? 'text-emerald-300 line-through' : 'text-slate-100'}`}>
+                      {step.title}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{step.description}</p>
+                  </div>
+                </div>
+
+                {!step.completed && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 text-xs py-1 px-2.5 ml-2 border-violet-500/40 text-violet-300 hover:bg-violet-500/10"
+                    onClick={() => navigate(step.path)}
+                  >
+                    {step.actionLabel}
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {isLoading ? (
         <LoadingState message="Loading organization dashboard..." />
@@ -397,7 +588,6 @@ export function OrgAdminDashboard() {
           <Card>
             <CardHeader
               title={`Active Plan: ${currentPlan?.name || 'Standard Plan'}`}
-              description="Real-time resource utilization vs active subscription plan quotas."
               action={
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={subscription?.status === 'ACTIVE' ? 'success' : 'warning'}>
@@ -495,7 +685,6 @@ export function OrgAdminDashboard() {
           <Card className="border-slate-800/80 bg-slate-900/50 backdrop-blur-sm">
             <CardHeader
               title="Operational & Financial Metrics"
-              description={`Key metrics filtered for ${activeDateLabel.toLowerCase()}.`}
               action={
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-950 px-2.5 py-1 text-xs font-medium text-slate-300 border border-slate-800">

@@ -242,9 +242,6 @@ export function PeakPage() {
               Live Demand
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-slate-400">
-            Hour-by-hour operational traffic, lunch/dinner peak comparison, and item demand distribution.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -441,9 +438,6 @@ export function PeakPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
                 <h2 className="text-lg font-bold text-slate-100">Top Food & Item Demand</h2>
-                <p className="text-xs text-slate-400">
-                  Item sales volume, gross revenue, and current stock status.
-                </p>
               </div>
 
               {selectedCategory !== 'ALL' && (
@@ -476,7 +470,6 @@ export function PeakPage() {
             <Card>
               <CardHeader
                 title="Peak Hour Traffic Breakdown"
-                description="Breakdown of transactions, recharges, and purchases during top operational rush hours."
               />
               <CardContent className="space-y-3">
                 {peakHourBuckets.slice(0, 4).map((h) => (
@@ -510,7 +503,6 @@ export function PeakPage() {
             <Card>
               <CardHeader
                 title="Peak Stock Alerts & Low Inventory"
-                description="Items with accelerated consumption rates during peak periods that require replenishment."
               />
               <CardContent className="space-y-3">
                 {filteredProducts

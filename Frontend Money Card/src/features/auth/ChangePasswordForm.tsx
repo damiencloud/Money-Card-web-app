@@ -81,7 +81,6 @@ export function ChangePasswordForm() {
       <form onSubmit={handleSubmit} noValidate className="space-y-5">
         <div>
           <h3 className="text-lg font-semibold text-slate-100">Change Password</h3>
-          <p className="mt-1 text-sm text-slate-400">Update your account password.</p>
         </div>
 
         {isSuccess && (

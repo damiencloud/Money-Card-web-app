@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import '../config/app_config.dart';
 import '../storage/token_storage.dart';
@@ -39,7 +40,31 @@ class DioClient {
 
     final dio = Dio(baseOptions);
 
-    // Endpoint sync and failover interceptor
+    // 1. Safe Performance Network Logger (Method, Endpoint, Duration, Status only)
+    if (kDebugMode) {
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            options.extra['request_start_time'] = DateTime.now().millisecondsSinceEpoch;
+            return handler.next(options);
+          },
+          onResponse: (response, handler) {
+            final startTime = response.requestOptions.extra['request_start_time'] as int?;
+            final durationMs = startTime != null ? DateTime.now().millisecondsSinceEpoch - startTime : -1;
+            debugPrint('[HTTP] ${response.requestOptions.method} ${response.requestOptions.path} | ${durationMs}ms | ${response.statusCode}');
+            return handler.next(response);
+          },
+          onError: (DioException err, handler) {
+            final startTime = err.requestOptions.extra['request_start_time'] as int?;
+            final durationMs = startTime != null ? DateTime.now().millisecondsSinceEpoch - startTime : -1;
+            debugPrint('[HTTP] ${err.requestOptions.method} ${err.requestOptions.path} | ${durationMs}ms | ERR ${err.response?.statusCode ?? err.type}');
+            return handler.next(err);
+          },
+        ),
+      );
+    }
+
+    // 2. Endpoint sync and dynamic failover interceptor
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
@@ -73,7 +98,7 @@ class DioClient {
                 final retryDio = Dio(
                   BaseOptions(
                     baseUrl: alternateUrl,
-                    connectTimeout: const Duration(seconds: 5),
+                    connectTimeout: const Duration(seconds: 3),
                     receiveTimeout: const Duration(seconds: 5),
                   ),
                 );
@@ -84,6 +109,11 @@ class DioClient {
                   queryParameters: err.requestOptions.queryParameters,
                   options: options,
                 );
+
+                // Alternate endpoint succeeded! Persist it so future calls don't pay failover penalty
+                AppConfig.setBaseUrl(alternateUrl);
+                dio.options.baseUrl = alternateUrl;
+                debugPrint('[HTTP FAILOVER] Successfully switched active baseUrl to: $alternateUrl');
 
                 return handler.resolve(response);
               } catch (_) {

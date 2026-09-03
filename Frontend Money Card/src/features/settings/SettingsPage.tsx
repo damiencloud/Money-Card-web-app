@@ -213,16 +213,12 @@ function OrgAdminSettingsView() {
           <SettingsIcon className="h-7 w-7 text-violet-400" />
           <h1 className="text-2xl font-bold text-slate-100">Organization Settings</h1>
         </div>
-        <p className="mt-1 text-sm text-slate-400">
-          Manage organization identity, profile details, and account security.
-        </p>
       </div>
 
       {/* Organization Identity */}
       <Card>
         <CardHeader
           title="Organization Identity"
-          description="Basic profile information about your organization."
         />
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
@@ -254,7 +250,6 @@ function OrgAdminSettingsView() {
       <Card>
         <CardHeader
           title="Edit Organization Settings"
-          description="Update your organization profile name and details."
         />
         <CardContent>
           <form onSubmit={handleSaveSettings} noValidate className="space-y-4 max-w-lg">

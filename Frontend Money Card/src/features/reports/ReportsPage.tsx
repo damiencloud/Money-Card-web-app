@@ -264,7 +264,7 @@ export function ReportsPage() {
       header: 'Actions',
       className: 'text-right',
       render: (report: ReportItem) => (
-        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-2">
           <Button
             variant="ghost"
             size="sm"
@@ -300,9 +300,6 @@ export function ReportsPage() {
               12+ Formal Reports
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-slate-400">
-            Generate and download official financial settlements, inventory movement, and session audit records as PDF documents.
-          </p>
         </div>
 
         <Button variant="outline" size="md" onClick={fetchReportsData} leftIcon={<RefreshCw className="h-4 w-4" />}>

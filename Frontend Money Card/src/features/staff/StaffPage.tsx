@@ -45,6 +45,7 @@ import {
   Trash2,
   Lock,
   Key,
+  X,
 } from 'lucide-react';
 
 export function StaffPage() {
@@ -108,6 +109,7 @@ export function StaffPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [formBranchIds, setFormBranchIds] = useState<string[]>([]);
   const [formPermissions, setFormPermissions] = useState<Permission[]>([]);
+  const [showAdvancedPerms, setShowAdvancedPerms] = useState(false);
 
   // ── Validation & Error state ──────────────────────────────
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -608,12 +610,15 @@ export function StaffPage() {
     },
     {
       key: 'permissions',
-      header: 'Permissions',
-      render: (staff: Staff) => (
-        <Badge variant="outline" className="text-violet-300 border-violet-500/30 font-mono text-xs">
-          {staff.permissions.length} / 20 M0 perms
-        </Badge>
-      ),
+      header: 'Role & Access',
+      render: (staff: Staff) => {
+        const isManager = staff.permissions.includes('STAFF_MANAGE');
+        const isSupervisor = staff.permissions.includes('INVENTORY_MANAGE') || staff.permissions.includes('PRODUCT_MANAGE');
+        const roleLabel = isManager ? 'Manager / Admin' : isSupervisor ? 'Branch Supervisor' : 'Cashier / POS';
+        return (
+          <span className="font-semibold text-xs text-slate-200">{roleLabel}</span>
+        );
+      },
     },
     {
       key: 'createdAt',
@@ -627,7 +632,7 @@ export function StaffPage() {
       header: 'Actions',
       className: 'text-right',
       render: (staff: Staff) => (
-        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-1.5">
           {/* Resend Activation Invite if Pending */}
           {canManage && staff.status === 'PENDING_ACTIVATION' && (
             <Button
@@ -701,9 +706,6 @@ export function StaffPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Staff Management</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Manage organization staff accounts, branch assignments, and M0 permission matrices.
-          </p>
         </div>
 
         {canManage && (
@@ -769,16 +771,20 @@ export function StaffPage() {
       ) : staffList.length === 0 ? (
         <EmptyState
           icon={<Users className="h-8 w-8 text-slate-500" />}
-          title="No staff members found"
+          title={searchQuery ? "No staff members found" : "No staff accounts yet"}
           description={
             searchQuery
-              ? `No staff matching "${searchQuery}"`
-              : 'Add staff members to grant operational POS and inventory permissions.'
+              ? `No staff match "${searchQuery}". Try a different name or clear search.`
+              : 'Add your team members to grant POS cashier and branch access.'
           }
           action={
-            canManage && !searchQuery ? (
+            searchQuery ? (
+              <Button variant="outline" onClick={() => setSearchQuery('')} leftIcon={<X className="h-4 w-4" />}>
+                Clear Search
+              </Button>
+            ) : canManage ? (
               <Button variant="primary" onClick={handleOpenAdd} leftIcon={<UserPlus className="h-4 w-4" />}>
-                Add Staff Member
+                Add First Staff Member
               </Button>
             ) : undefined
           }
@@ -892,7 +898,7 @@ export function StaffPage() {
                   <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 space-y-1">
                     <span className="text-xs text-slate-400">Granted Permissions</span>
                     <p className="font-mono text-sm font-bold text-violet-300 pt-1">
-                      {formPermissions.length} / 20 M0 rules
+                      {formPermissions.length} / 20 permissions
                     </p>
                   </div>
                 </div>
@@ -957,9 +963,6 @@ export function StaffPage() {
                       </button>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400">
-                    Account password is secure and hashed. You can reset or update this staff member&apos;s password at any time.
-                  </p>
                 </div>
 
                 {/* Quick Branch Access Summary */}
@@ -1001,10 +1004,7 @@ export function StaffPage() {
             {/* ── TAB 2: PERMISSIONS ── */}
             {staffTab === 'permissions' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between pb-2">
-                  <p className="text-xs text-slate-400">
-                    Configure operational POS, inventory, and session permissions defined in M0.
-                  </p>
+                <div className="flex items-center justify-end pb-2">
                   {canManage && (
                     <div className="flex gap-2">
                       <button
@@ -1062,10 +1062,7 @@ export function StaffPage() {
             {/* ── TAB 3: BRANCHES ── */}
             {staffTab === 'branches' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between pb-2">
-                  <p className="text-xs text-slate-400">
-                    Select organization branches where this staff account is allowed to log in and transact.
-                  </p>
+                <div className="flex items-center justify-end pb-2">
                   {canManage && (
                     <div className="flex gap-2">
                       <button
@@ -1141,16 +1138,6 @@ export function StaffPage() {
             {/* ── TAB 4: SECURITY & CHANGE PASSWORD ── */}
             {staffTab === 'security' && (
               <div className="space-y-5">
-                <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 text-xs text-slate-300 space-y-1.5">
-                  <div className="flex items-center gap-2 font-semibold text-violet-300 text-sm">
-                    <ShieldCheck className="h-4 w-4 text-violet-400" />
-                    <span>Security & Password Management</span>
-                  </div>
-                  <p className="text-slate-400 text-xs leading-relaxed">
-                    Set a new password for <strong className="text-slate-200">{selectedStaff?.name}</strong>.
-                    For security, updating the password immediately invalidates all active sessions on the mobile Staff App and Web POS.
-                  </p>
-                </div>
 
                 {passwordChangeError && (
                   <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
@@ -1268,7 +1255,7 @@ export function StaffPage() {
 
           <ModalFooter>
             <Button variant="outline" onClick={() => setShowStaffModal(false)} disabled={isSubmitting}>
-              {canManage ? 'Close' : 'Close'}
+              Close
             </Button>
             {canManage && staffTab === 'overview' && (
               <Button type="button" variant="primary" onClick={handleSaveProfile} isLoading={isSubmitting} disabled={isSubmitting}>
@@ -1502,67 +1489,181 @@ export function StaffPage() {
             {/* ── STEP 3: PERMISSIONS ── */}
             {addTab === 'permissions' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between pb-2">
-                  <p className="text-xs text-slate-400">
-                    Assign exact M0 operational permissions for this staff member.
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                    Choose a Staff Role Preset
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Select a pre-configured role to automatically assign the right permissions.
                   </p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setFormPermissions([
-                          'CARD_VIEW',
-                          'CARD_ISSUE',
-                          'CARD_RETURN',
-                          'RECHARGE',
-                          'PURCHASE',
-                          'SESSION_VIEW',
-                          'PRODUCT_VIEW',
-                          'INVENTORY_VIEW',
-                        ])
-                      }
-                      className="text-xs text-violet-400 hover:text-violet-300 font-medium"
-                    >
-                      Default POS Preset
-                    </button>
-                    <span className="text-slate-700">|</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setFormPermissions([
-                          'CARD_VIEW',
-                          'CARD_ISSUE',
-                          'CARD_RETURN',
-                          'CARD_BLOCK',
-                          'CARD_UNBLOCK',
-                          'RECHARGE',
-                          'PURCHASE',
-                          'REFUND',
-                          'SESSION_VIEW',
-                          'PRODUCT_VIEW',
-                          'PRODUCT_MANAGE',
-                          'INVENTORY_VIEW',
-                          'INVENTORY_MANAGE',
-                          'INVENTORY_IMPORT',
-                          'VIEW_ANALYTICS',
-                          'VIEW_REPORTS',
-                          'STAFF_VIEW',
-                          'STAFF_MANAGE',
-                          'BRANCH_VIEW',
-                          'BRANCH_MANAGE',
-                        ])
-                      }
-                      className="text-xs text-violet-400 hover:text-violet-300 font-medium"
-                    >
-                      Select All (20)
-                    </button>
-                  </div>
                 </div>
 
-                <PermissionMatrix
-                  selectedPermissions={formPermissions}
-                  onChange={setFormPermissions}
-                />
+                {/* 3 Large Role Preset Cards */}
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {/* Preset 1: Cashier */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormPermissions([
+                        'CARD_VIEW',
+                        'CARD_ISSUE',
+                        'CARD_RETURN',
+                        'RECHARGE',
+                        'PURCHASE',
+                        'SESSION_VIEW',
+                        'PRODUCT_VIEW',
+                        'INVENTORY_VIEW',
+                      ]);
+                    }}
+                    className={`flex flex-col justify-between p-4 rounded-xl border text-left transition-all cursor-pointer select-none ${
+                      formPermissions.length === 8 && formPermissions.includes('PURCHASE') && !formPermissions.includes('PRODUCT_MANAGE')
+                        ? 'border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500'
+                        : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          Recommended
+                        </span>
+                        {formPermissions.length === 8 && formPermissions.includes('PURCHASE') && !formPermissions.includes('PRODUCT_MANAGE') && (
+                          <Check className="h-4 w-4 text-emerald-400" />
+                        )}
+                      </div>
+                      <h5 className="font-bold text-sm text-slate-100">Cashier / POS</h5>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Card issuing, recharge, customer checkout, and sales at counter.
+                      </p>
+                    </div>
+                    <span className="text-[11px] font-mono text-emerald-400 mt-3">
+                      8 permissions
+                    </span>
+                  </button>
+
+                  {/* Preset 2: Supervisor */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormPermissions([
+                        'CARD_VIEW',
+                        'CARD_ISSUE',
+                        'CARD_RETURN',
+                        'CARD_BLOCK',
+                        'CARD_UNBLOCK',
+                        'RECHARGE',
+                        'PURCHASE',
+                        'REFUND',
+                        'SESSION_VIEW',
+                        'PRODUCT_VIEW',
+                        'PRODUCT_MANAGE',
+                        'INVENTORY_VIEW',
+                        'INVENTORY_MANAGE',
+                        'INVENTORY_IMPORT',
+                        'VIEW_REPORTS',
+                        'STAFF_VIEW',
+                        'BRANCH_VIEW',
+                      ]);
+                    }}
+                    className={`flex flex-col justify-between p-4 rounded-xl border text-left transition-all cursor-pointer select-none ${
+                      formPermissions.length === 17 && formPermissions.includes('INVENTORY_MANAGE') && !formPermissions.includes('STAFF_MANAGE')
+                        ? 'border-amber-500 bg-amber-500/10 ring-1 ring-amber-500'
+                        : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          Branch Lead
+                        </span>
+                        {formPermissions.length === 17 && formPermissions.includes('INVENTORY_MANAGE') && !formPermissions.includes('STAFF_MANAGE') && (
+                          <Check className="h-4 w-4 text-amber-400" />
+                        )}
+                      </div>
+                      <h5 className="font-bold text-sm text-slate-100">Supervisor</h5>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Cashier duties + stock counting, menu pricing, and daily reports.
+                      </p>
+                    </div>
+                    <span className="text-[11px] font-mono text-amber-400 mt-3">
+                      17 permissions
+                    </span>
+                  </button>
+
+                  {/* Preset 3: Manager / Admin */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormPermissions([
+                        'CARD_VIEW',
+                        'CARD_ISSUE',
+                        'CARD_RETURN',
+                        'CARD_BLOCK',
+                        'CARD_UNBLOCK',
+                        'RECHARGE',
+                        'PURCHASE',
+                        'REFUND',
+                        'SESSION_VIEW',
+                        'PRODUCT_VIEW',
+                        'PRODUCT_MANAGE',
+                        'INVENTORY_VIEW',
+                        'INVENTORY_MANAGE',
+                        'INVENTORY_IMPORT',
+                        'VIEW_ANALYTICS',
+                        'VIEW_REPORTS',
+                        'STAFF_VIEW',
+                        'STAFF_MANAGE',
+                        'BRANCH_VIEW',
+                        'BRANCH_MANAGE',
+                      ]);
+                    }}
+                    className={`flex flex-col justify-between p-4 rounded-xl border text-left transition-all cursor-pointer select-none ${
+                      formPermissions.length === 20
+                        ? 'border-violet-500 bg-violet-500/10 ring-1 ring-violet-500'
+                        : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                          Full Access
+                        </span>
+                        {formPermissions.length === 20 && (
+                          <Check className="h-4 w-4 text-violet-400" />
+                        )}
+                      </div>
+                      <h5 className="font-bold text-sm text-slate-100">Manager / Admin</h5>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Full access to manage team members, branch settings, and all operations.
+                      </p>
+                    </div>
+                    <span className="text-[11px] font-mono text-violet-400 mt-3">
+                      All 20 permissions
+                    </span>
+                  </button>
+                </div>
+
+                {/* Collapsible Advanced Permissions Toggle */}
+                <div className="pt-2 border-t border-slate-800/80">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedPerms(!showAdvancedPerms)}
+                    className="flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors"
+                  >
+                    <span>{showAdvancedPerms ? '▼ Hide individual permissions' : '▶ Customize individual permissions (optional)'}</span>
+                    <Badge variant="outline" className="text-[10px]">
+                      {formPermissions.length} selected
+                    </Badge>
+                  </button>
+
+                  {showAdvancedPerms && (
+                    <div className="mt-3 pt-3 border-t border-slate-800/60">
+                      <PermissionMatrix
+                        selectedPermissions={formPermissions}
+                        onChange={setFormPermissions}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1652,12 +1753,6 @@ export function StaffPage() {
             </strong>{' '}
             the staff member <span className="text-violet-400 font-semibold">{selectedStaff?.name}</span>?
           </p>
-
-          {selectedStaff?.status === 'ACTIVE' && (
-            <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 p-3 rounded-lg">
-              Deactivating a staff account will immediately revoke POS access in the Flutter Staff application.
-            </p>
-          )}
 
           <ModalFooter>
             <Button variant="outline" onClick={() => setShowStatusModal(false)} disabled={isSubmitting}>

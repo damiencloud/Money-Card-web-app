@@ -317,7 +317,6 @@ export function BranchesPage() {
           </div>
           <div>
             <p className="font-semibold text-slate-100">{branch.name}</p>
-            <p className="text-xs text-slate-500">ID: {branch.id}</p>
           </div>
         </div>
       ),
@@ -344,7 +343,7 @@ export function BranchesPage() {
       className: 'text-right',
       render: (branch: Branch) => {
         return (
-          <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-end gap-2">
             {/* Edit */}
             {canManage && (
               <Button
@@ -395,9 +394,6 @@ export function BranchesPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Branches</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Manage organization branch locations and active context.
-          </p>
         </div>
 
         {canManage && (
@@ -582,18 +578,14 @@ export function BranchesPage() {
             the branch <span className="text-violet-400 font-semibold">{selectedBranch?.name}</span>?
           </p>
 
-          {selectedBranch?.status === 'ACTIVE' && activeBranchesCount <= 1 ? (
+          {selectedBranch?.status === 'ACTIVE' && activeBranchesCount <= 1 && (
             <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3.5 text-sm text-rose-300">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
               <span>
                 Cannot deactivate this branch. Your organization must have at least one active branch at all times.
               </span>
             </div>
-          ) : selectedBranch?.status === 'ACTIVE' ? (
-            <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 p-3 rounded-lg">
-              Deactivating a branch will prevent staff from operating in this branch until it is reactivated.
-            </p>
-          ) : null}
+          )}
 
           <ModalFooter>
             <Button variant="outline" onClick={() => setShowStatusModal(false)} disabled={isSubmitting}>
@@ -633,9 +625,6 @@ export function BranchesPage() {
             <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 space-y-2">
               <p className="text-sm text-slate-200 font-medium">
                 Are you sure you want to delete <span className="text-violet-300 font-bold font-mono">{selectedBranch?.name}</span>?
-              </p>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                If this branch has no dependent transactions or sessions, it will be permanently deleted. If historical records exist, the backend will safely preserve accounting data.
               </p>
             </div>
           ) : (
