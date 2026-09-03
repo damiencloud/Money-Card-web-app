@@ -43,7 +43,7 @@ export async function getStaffList(req: Request, res: Response) {
   const staffMembers = await prisma.user.findMany({
     where: {
       organizationId: orgId,
-      role: { in: [Role.STAFF, Role.ORG_ADMIN] },
+      role: Role.STAFF,
     },
     include: {
       permissions: true,

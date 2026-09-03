@@ -52,6 +52,8 @@ import {
   CameraOff,
   Scan,
   X,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { CameraQrScanner } from '@/components/scanner/CameraQrScanner';
@@ -92,6 +94,7 @@ export function CardsPage() {
   const [showUnblockModal, setShowUnblockModal] = useState(false);
   const [selectedQrCard, setSelectedQrCard] = useState<CardEntity | null>(null);
   const [isCopiedToken, setIsCopiedToken] = useState(false);
+  const [isCardsInUseOpen, setIsCardsInUseOpen] = useState(false);
 
   // Selected Card for Details, Assign, or Block
   const [selectedCard, setSelectedCard] = useState<CardEntity | null>(null);
@@ -111,16 +114,6 @@ export function CardsPage() {
   const autoRegisterOnScan = true;
   const [scannerInputValue, setScannerInputValue] = useState('');
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [scannedCardsList, setScannedCardsList] = useState<
-    Array<{
-      id: string;
-      qrCode: string;
-      cardNumber: string;
-      status: 'SUCCESS' | 'QUEUED' | 'ERROR';
-      error?: string;
-      timestamp: Date;
-    }>
-  >([]);
   const scannerInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Fetch Cards Data ─────────────────────────────────────────────
@@ -184,7 +177,10 @@ export function CardsPage() {
 
   // Summary Metrics
   const totalCardsCount = allCards.length;
-  const activeCardsCount = allCards.filter((c) => c.status === 'ACTIVE' || !!c.activeSession).length;
+  const activeCardsList = useMemo(() => {
+    return allCards.filter((c) => c.status === 'ACTIVE' || !!c.activeSession);
+  }, [allCards]);
+  const activeCardsCount = activeCardsList.length;
   const availableCardsCount = allCards.filter((c) => c.status === 'AVAILABLE' && !c.activeSession).length;
   const blockedCardsCount = allCards.filter((c) => c.status === 'BLOCKED').length;
   const effectiveCardLimit = (orgOverview as any)?.effectiveLimits?.cardLimit ?? 100;
@@ -312,19 +308,11 @@ export function CardsPage() {
       cleanQr = parts[parts.length - 1].split('?')[0].trim();
     }
 
-    // Check duplicate in current scanned session
-    if (scannedCardsList.some((s) => s.qrCode.toLowerCase() === cleanQr.toLowerCase())) {
-      toast.warning(`QR code '${cleanQr}' has already been scanned in this session.`);
-      playBeep(false);
-      setScannerInputValue('');
-      return;
-    }
-
     // Check if already registered in organization
     const existingCard = allCards.find((c) => c.qrToken.toLowerCase() === cleanQr.toLowerCase());
     if (existingCard) {
       toast.error(
-        `QR '${cleanQr}' is already registered (Card Number: ${existingCard.physicalCardNumber || 'Unassigned'}).`,
+        `QR '${cleanQr}' is already registered (${existingCard.physicalCardNumber || 'Card'}).`,
       );
       playBeep(false);
       setScannerInputValue('');
@@ -332,7 +320,7 @@ export function CardsPage() {
     }
 
     // Quota check
-    const plannedCount = allCards.length + (autoRegisterOnScan ? 1 : scannedCardsList.length + 1);
+    const plannedCount = allCards.length + 1;
     if (plannedCount > effectiveCardLimit) {
       toast.error(`Subscription limit reached (${effectiveCardLimit} cards max). Cannot register more.`);
       playBeep(false);
@@ -341,8 +329,7 @@ export function CardsPage() {
     }
 
     // Compute next card number
-    const queuedNumbers = scannedCardsList.map((s) => s.cardNumber);
-    const nextSeq = getNextAvailableNumber(cardPrefix, startSequence, queuedNumbers);
+    const nextSeq = getNextAvailableNumber(cardPrefix, startSequence, []);
     const assignedCardNumber = padZeros
       ? `${cardPrefix.trim().toUpperCase()}${String(nextSeq).padStart(3, '0')}`
       : `${cardPrefix.trim().toUpperCase()}${nextSeq}`;
@@ -358,34 +345,25 @@ export function CardsPage() {
         if (!res.success) {
           toast.error(res.error.message || 'Failed to auto-register card');
           playBeep(false);
-          setScannedCardsList((prev) => [
-            {
-              id: generateSecureToken('scan'),
-              qrCode: cleanQr,
-              cardNumber: assignedCardNumber,
-              status: 'ERROR',
-              error: res.error.message,
-              timestamp: new Date(),
-            },
-            ...prev,
-          ]);
           return;
         }
 
         playBeep(true);
         toast.success(`✓ Auto-Registered: ${assignedCardNumber}`);
-        setScannedCardsList((prev) => [
-          {
-            id: generateSecureToken('scan'),
-            qrCode: cleanQr,
-            cardNumber: assignedCardNumber,
-            status: 'SUCCESS',
-            timestamp: new Date(),
-          },
-          ...prev,
-        ]);
         setStartSequence(nextSeq + 1);
-        fetchCardsData();
+
+        // Instant optimistic state update: 0ms UI lag
+        const createdCard: CardEntity = (res.data as any)?.cards?.[0] || {
+          id: generateSecureToken('card'),
+          organizationId: user?.organizationId || '',
+          qrToken: cleanQr,
+          physicalCardNumber: assignedCardNumber,
+          assignmentStatus: 'ASSIGNED',
+          status: 'AVAILABLE',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setAllCards((prev) => [createdCard, ...prev]);
       } catch {
         toast.error('Network error while auto-registering card');
         playBeep(false);
@@ -394,22 +372,10 @@ export function CardsPage() {
       // Queued mode
       playBeep(true);
       toast.info(`Scanned ${assignedCardNumber} (Queued)`);
-      setScannedCardsList((prev) => [
-        {
-          id: generateSecureToken('scan'),
-          qrCode: cleanQr,
-          cardNumber: assignedCardNumber,
-          status: 'QUEUED',
-          timestamp: new Date(),
-        },
-        ...prev,
-      ]);
       setStartSequence(nextSeq + 1);
     }
 
-    setTimeout(() => {
-      scannerInputRef.current?.focus();
-    }, 50);
+    scannerInputRef.current?.focus();
   };
 
   const handleOpenQrImportModal = () => {
@@ -424,6 +390,7 @@ export function CardsPage() {
     setShowQrImportModal(false);
     setIsCameraActive(false);
     setScannerInputValue('');
+    fetchCardsData();
   };
 
   // ─── Inspect Card Details ─────────────────────────────────────────
@@ -777,6 +744,74 @@ export function CardsPage() {
           </div>
         </Card>
       </div>
+
+      {/* ─── Cards In Use Right Now (Collapsible Dropdown) ─────────── */}
+      {!isLoading && activeCardsList.length > 0 && (
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/15 overflow-hidden transition-all duration-200 shadow-sm">
+          {/* Collapsible Header Bar Button */}
+          <button
+            type="button"
+            onClick={() => setIsCardsInUseOpen(!isCardsInUseOpen)}
+            className="w-full flex items-center justify-between p-3.5 hover:bg-emerald-900/20 transition-colors text-left select-none cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              <h3 className="font-bold text-sm text-slate-100">
+                Cards In Use Right Now ({activeCardsList.length})
+              </h3>
+              <span className="text-xs text-slate-400 font-normal hidden sm:inline">
+                • {formatCurrency(activeCardsList.reduce((sum, c) => sum + (c.activeSession?.balance || 0), 0))} active balance
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400">
+              <span>{isCardsInUseOpen ? 'Hide Cards' : 'View Cards'}</span>
+              {isCardsInUseOpen ? (
+                <ChevronUp className="h-4 w-4 transition-transform text-emerald-400" />
+              ) : (
+                <ChevronDown className="h-4 w-4 transition-transform text-emerald-400" />
+              )}
+            </div>
+          </button>
+
+          {/* Collapsible Content Grid */}
+          {isCardsInUseOpen && (
+            <div className="p-4 pt-1 border-t border-emerald-500/20 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
+                {activeCardsList.slice(0, 8).map((c) => (
+                  <button
+                    type="button"
+                    key={c.id}
+                    onClick={() => handleOpenDetails(c)}
+                    className="p-3.5 rounded-xl border border-slate-800 bg-slate-900/90 hover:border-emerald-500/50 hover:bg-slate-900 transition-all text-left cursor-pointer select-none space-y-2.5 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-xs font-extrabold text-emerald-300">
+                        {c.physicalCardNumber || c.activeSession?.sessionCardNumber || 'MC-Card'}
+                      </span>
+                      <Badge variant="success" className="text-[10px] py-0">Active</Badge>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-200 truncate">
+                        {c.activeSession?.customerName || 'Customer'}
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        {c.activeSession?.customerPhone || 'Cafeteria Diner'}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
+                      <span className="text-slate-400">Balance:</span>
+                      <span className="font-mono font-bold text-violet-300">
+                        {formatCurrency(c.activeSession?.balance || 0)}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ─── Search & Filter Bar ─────────────────────────────────────── */}
       <Card padding="md">
@@ -1239,22 +1274,6 @@ export function CardsPage() {
               </p>
             </div>
 
-            {/* Blocked By (Default: who is blocking) */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">
-                Blocked By (Default)
-              </label>
-              <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-sm text-slate-200">
-                <ShieldAlert className="h-4 w-4 text-emerald-400 shrink-0" />
-                <span className="font-medium">
-                  {user ? `${user.name} (${user.role === 'ORG_ADMIN' ? 'Org Admin' : user.role})` : 'Org Admin'}
-                </span>
-                <span className="ml-auto text-[11px] text-slate-400 bg-slate-700 px-2 py-0.5 rounded">
-                  Current Operator
-                </span>
-              </div>
-            </div>
-
             {/* Default Reason Category */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-300">
@@ -1287,14 +1306,6 @@ export function CardsPage() {
                 rows={2}
                 className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-rose-500 focus:outline-none resize-none"
               />
-            </div>
-
-            {/* Summary preview */}
-            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-2.5 text-[11px] text-slate-400">
-              <span className="font-semibold text-slate-300">Audit Record Preview: </span>
-              <span className="text-rose-300">
-                {`[Blocked by ${user ? `${user.name} (${user.role === 'ORG_ADMIN' ? 'Org Admin' : user.role})` : 'Org Admin'}] ${blockReasonCategory}${additionalBlockReason.trim() ? `: ${additionalBlockReason.trim()}` : ''}`}
-              </span>
             </div>
           </div>
 

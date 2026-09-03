@@ -250,11 +250,6 @@ export function SessionsPage() {
     });
   }, [customerHistoryItems, searchQuery, sessionStatusFilter, branchFilter, dateRangeFilter]);
 
-  // ─── Realtime Live Active Sessions ───────────────────────────────
-  const liveActiveSessions = useMemo(() => {
-    return customerHistoryItems.filter((item) => item.sessionStatus === 'ACTIVE');
-  }, [customerHistoryItems]);
-
   // ─── Realtime Active Blocked Cards ──────────────────────────────
   const activeBlockedCardEvents = useMemo<CustomerHistoryEvent[]>(() => {
     // Only include cards whose CURRENT live status in the database is BLOCKED
@@ -712,53 +707,6 @@ export function SessionsPage() {
           />
         </div>
       </UiCard>
-
-      {/* ─── Active Customer Cards Right Now (Cafeteria In-Use Highlight) ─── */}
-      {!isLoading && activeTab === 'sessions' && liveActiveSessions.length > 0 && (
-        <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-950/15 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
-              <h3 className="font-bold text-sm text-slate-100">
-                Cards In Use Right Now ({liveActiveSessions.length})
-              </h3>
-            </div>
-            <span className="text-xs text-emerald-400 font-medium">Click card to view orders & activity</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {liveActiveSessions.slice(0, 4).map((item) => (
-              <button
-                type="button"
-                key={item.id}
-                onClick={() => handleOpenDetails(item)}
-                className="p-3.5 rounded-xl border border-slate-800 bg-slate-900/90 hover:border-emerald-500/50 hover:bg-slate-900 transition-all text-left cursor-pointer select-none space-y-2.5 shadow-sm"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-extrabold text-emerald-300">
-                    {item.sessionCardNumber || item.physicalCardNumber}
-                  </span>
-                  <Badge variant="success" className="text-[10px] py-0">Active</Badge>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-slate-200 truncate">
-                    {item.customerName || 'Anonymous Customer'}
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    {item.customerPhone || 'Walk-in'}
-                  </p>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
-                  <span className="text-slate-400">Balance:</span>
-                  <span className="font-mono font-bold text-violet-300">
-                    {formatCurrency(item.balance)}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ─── Content Views ────────────────────────────────────────── */}
       {isLoading ? (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { apiService } from '@/services/api';
 import type { OrganizationOverview, Plan } from '@/types';
 import {
@@ -29,7 +29,130 @@ import {
   ShieldAlert,
   Plus,
   KeyRound,
+  Trash2,
+  MoreVertical,
+  ChevronDown,
 } from 'lucide-react';
+
+interface OrgActionMenuProps {
+  org: OrganizationOverview;
+  onViewDetails: () => void;
+  onEdit: () => void;
+  onResetPassword: () => void;
+  onToggleStatus: () => void;
+  onDelete: () => void;
+}
+
+function OrgActionMenu({
+  org,
+  onViewDetails,
+  onEdit,
+  onResetPassword,
+  onToggleStatus,
+  onDelete,
+}: OrgActionMenuProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  return (
+    <div className="relative inline-block text-left" ref={menuRef}>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-1.5 text-xs py-1 px-2.5 bg-slate-900 border-slate-700 hover:border-violet-500 text-slate-200"
+      >
+        <MoreVertical className="h-3.5 w-3.5 text-slate-400" />
+        <span>Actions</span>
+        <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+      </Button>
+
+      {isOpen && (
+        <div className="absolute right-0 z-50 mt-1.5 w-52 rounded-xl border border-slate-700/80 bg-slate-900 p-1.5 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100">
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(false);
+              onViewDetails();
+            }}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer text-left"
+          >
+            <Eye className="h-4 w-4 text-slate-400" />
+            <span>View Details</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(false);
+              onEdit();
+            }}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer text-left"
+          >
+            <Edit2 className="h-4 w-4 text-violet-400" />
+            <span>Edit Organization</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(false);
+              onResetPassword();
+            }}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-amber-300 transition-colors cursor-pointer text-left"
+          >
+            <KeyRound className="h-4 w-4 text-amber-400" />
+            <span>Reset Admin Password</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(false);
+              onToggleStatus();
+            }}
+            className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer text-left ${
+              org.status === 'ACTIVE'
+                ? 'text-rose-400 hover:bg-rose-500/10 hover:text-rose-300'
+                : 'text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300'
+            }`}
+          >
+            <Power className="h-4 w-4" />
+            <span>{org.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}</span>
+          </button>
+
+          <div className="my-1 border-t border-slate-800" />
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(false);
+              onDelete();
+            }}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer text-left"
+          >
+            <Trash2 className="h-4 w-4" />
+            <span>Delete Organization</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function OrganizationsPage() {
   const [organizations, setOrganizations] = useState<OrganizationOverview[]>([]);
@@ -38,12 +161,28 @@ export function OrganizationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // ── Client Filtered Organizations for Instant Search ────────
+  const filteredOrganizations = useMemo(() => {
+    if (!searchQuery.trim()) return organizations;
+    const q = searchQuery.toLowerCase().trim();
+    return organizations.filter(
+      (org) =>
+        org.name.toLowerCase().includes(q) ||
+        org.id.toLowerCase().includes(q) ||
+        (org.adminUser?.name && org.adminUser.name.toLowerCase().includes(q)) ||
+        (org.adminUser?.email && org.adminUser.email.toLowerCase().includes(q)) ||
+        (org.plan?.name && org.plan.name.toLowerCase().includes(q)),
+    );
+  }, [organizations, searchQuery]);
+
   // Modals
   const [selectedOrg, setSelectedOrg] = useState<OrganizationOverview | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedOrgToDelete, setSelectedOrgToDelete] = useState<OrganizationOverview | null>(null);
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [tempPassword, setTempPassword] = useState('');
   const [confirmTempPassword, setConfirmTempPassword] = useState('');
@@ -362,6 +501,39 @@ export function OrganizationsPage() {
     }
   };
 
+  // ── Open Delete Modal ─────────────────────────────────────
+  const handleOpenDeleteModal = (org: OrganizationOverview) => {
+    setSelectedOrgToDelete(org);
+    setModalApiError(null);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteOrgSubmit = async () => {
+    if (!selectedOrgToDelete) return;
+    setIsSubmitting(true);
+    setModalApiError(null);
+
+    try {
+      const res = await apiService.organizations.deleteAdminOrganization(selectedOrgToDelete.id);
+      if (!res.success) {
+        setModalApiError(res.error.message || 'Failed to delete organization');
+        return;
+      }
+
+      notify.success(`Organization '${selectedOrgToDelete.name}' deleted successfully`);
+      setShowDeleteModal(false);
+      setSelectedOrgToDelete(null);
+      if (showDetailsModal) {
+        setShowDetailsModal(false);
+      }
+      fetchOrganizations();
+    } catch {
+      setModalApiError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // ── Data Table Columns ────────────────────────────────────
   const columns = [
     {
@@ -375,7 +547,6 @@ export function OrganizationsPage() {
           </div>
           <div>
             <p className="font-semibold text-slate-100">{org.name}</p>
-            
           </div>
         </div>
       ),
@@ -421,44 +592,15 @@ export function OrganizationsPage() {
       header: 'Actions',
       className: 'text-right',
       render: (org: OrganizationOverview) => (
-        <div className="flex items-center justify-end gap-1.5">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleOpenDetails(org)}
-            title="View Details"
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleOpenEditModal(org)}
-            title="Edit Organization"
-          >
-            <Edit2 className="h-4 w-4" />
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleOpenResetPasswordModal(org)}
-            title="Reset Org Admin Password"
-            className="text-amber-400 hover:text-amber-300"
-          >
-            <KeyRound className="h-4 w-4" />
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleOpenStatusModal(org)}
-            className={org.status === 'ACTIVE' ? 'text-rose-400 hover:text-rose-300' : 'text-emerald-400 hover:text-emerald-300'}
-            title={org.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-          >
-            <Power className="h-4 w-4" />
-          </Button>
+        <div className="flex items-center justify-end">
+          <OrgActionMenu
+            org={org}
+            onViewDetails={() => handleOpenDetails(org)}
+            onEdit={() => handleOpenEditModal(org)}
+            onResetPassword={() => handleOpenResetPasswordModal(org)}
+            onToggleStatus={() => handleOpenStatusModal(org)}
+            onDelete={() => handleOpenDeleteModal(org)}
+          />
         </div>
       ),
     },
@@ -515,12 +657,16 @@ export function OrganizationsPage() {
         <LoadingState message="Loading tenant organizations..." />
       ) : error ? (
         <ErrorState message={error} onRetry={fetchOrganizations} />
-      ) : organizations.length === 0 ? (
+      ) : filteredOrganizations.length === 0 ? (
         <EmptyState
           title="No organizations found"
           description={searchQuery ? 'No organizations matched your search query.' : 'Get started by adding your first tenant organization.'}
           action={
-            searchQuery ? undefined : (
+            searchQuery ? (
+              <Button variant="outline" size="sm" onClick={() => setSearchQuery('')}>
+                Clear Search
+              </Button>
+            ) : (
               <Button variant="primary" size="sm" onClick={handleOpenCreateModal} leftIcon={<Plus className="h-4 w-4" />}>
                 Add Organization
               </Button>
@@ -531,7 +677,7 @@ export function OrganizationsPage() {
         <Card className="overflow-hidden">
           <DataTable
             columns={columns}
-            data={organizations}
+            data={filteredOrganizations}
             keyExtractor={(item) => item.id}
           />
         </Card>
@@ -915,6 +1061,58 @@ export function OrganizationsPage() {
               leftIcon={<KeyRound className="h-4 w-4" />}
             >
               Reset Org Admin Password
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
+
+      {/* ── Delete Organization Confirmation Modal ── */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => !isSubmitting && setShowDeleteModal(false)}
+        title="Delete Organization"
+        description="Permanently remove tenant organization and all related data"
+        size="md"
+      >
+        <div className="space-y-4">
+          {modalApiError && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold">Action Failed</p>
+                <p>{modalApiError}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 space-y-2">
+            <p className="text-sm text-slate-200 font-medium">
+              Are you sure you want to permanently delete{' '}
+              <span className="text-violet-300 font-bold font-mono">
+                {selectedOrgToDelete?.name}
+              </span>
+              ?
+            </p>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              This action cannot be undone. All branch locations, staff accounts, products, and registered smart cards belonging to this organization will be permanently deleted.
+            </p>
+          </div>
+
+          <ModalFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setShowDeleteModal(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteOrgSubmit}
+              isLoading={isSubmitting}
+              leftIcon={<Trash2 className="h-4 w-4" />}
+            >
+              Delete Organization
             </Button>
           </ModalFooter>
         </div>

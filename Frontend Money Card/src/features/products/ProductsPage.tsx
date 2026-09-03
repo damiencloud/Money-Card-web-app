@@ -1,10 +1,7 @@
 // ─── Products & Inventory Unified Hub (Org Admin) ──────────────────────────
-// Clean Separation of Responsibilities:
-// 1. PRODUCT CATALOG: View products, Add product, View details, Activate/Deactivate.
-// 2. INVENTORY & STOCK CONTROL: View real-time stock levels, Adjust stock, Valuation.
+// Merged single view: Product catalog, live branch stock, pricing, and adjustments.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { apiService } from '@/services/api';
 import { useBranch, usePermissions } from '@/hooks';
 import type { ProductWithInventory, Branch, InventoryItem } from '@/types';
@@ -26,11 +23,9 @@ import { UnauthorizedPage } from '@/features/auth';
 import { CategorySelector } from './CategorySelector';
 import {
   Package,
-  Warehouse,
   Plus,
   AlertCircle,
   Power,
-  Building2,
   Sliders,
   TrendingUp,
   AlertTriangle,
@@ -38,6 +33,7 @@ import {
   Trash2,
   LayoutGrid,
   List,
+  Search,
 } from 'lucide-react';
 
 export interface InventoryItemWithDetails extends InventoryItem {
@@ -47,12 +43,15 @@ export interface InventoryItemWithDetails extends InventoryItem {
   branchName: string;
 }
 
-interface ProductsPageProps {
-  defaultTab?: 'products' | 'inventory';
+export interface UnifiedProductItem extends ProductWithInventory {
+  inventoryId?: string;
 }
 
-export function ProductsPage({ defaultTab }: ProductsPageProps) {
-  const [searchParams, setSearchParams] = useSearchParams();
+interface ProductsPageProps {
+  defaultTab?: string;
+}
+
+export function ProductsPage({ defaultTab: _defaultTab }: ProductsPageProps = {}) {
   const { currentBranch } = useBranch();
   const { hasPermission } = usePermissions();
 
@@ -61,32 +60,30 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
   const canViewInventory = hasPermission('INVENTORY_VIEW');
   const canManageInventory = hasPermission('INVENTORY_MANAGE');
 
-  // Tab state (syncs with query param ?tab=products | ?tab=inventory)
-  const initialTab = defaultTab || (searchParams.get('tab') === 'inventory' ? 'inventory' : 'products');
-  const [activeTab, setActiveTab] = useState<'products' | 'inventory'>(initialTab);
-
-  const handleTabChange = (tab: 'products' | 'inventory') => {
-    setActiveTab(tab);
-    setSearchParams({ tab });
-  };
-
   // Shared state
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchFilter, setBranchFilter] = useState<string>('ALL');
 
-  // ─── Tab 1: Product Catalog State ─────────────────────────────────────────
+  // Products & Inventory Data
   const [products, setProducts] = useState<ProductWithInventory[]>([]);
-  const [isProductsLoading, setIsProductsLoading] = useState(true);
-  const [productsError, setProductsError] = useState<string | null>(null);
+  const [inventoryList, setInventoryList] = useState<InventoryItemWithDetails[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [productSearch, setProductSearch] = useState('');
-  const [productStatusFilter, setProductStatusFilter] = useState('ALL');
-  const [productCategoryFilter, setProductCategoryFilter] = useState('ALL');
-  const [productViewMode, setProductViewMode] = useState<'grid' | 'table'>('grid');
+  // Filters & Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusStockFilter, setStatusStockFilter] = useState('ALL');
+  const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
+  // Modals state
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showAdjustModal, setShowAdjustModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedProductToDelete, setSelectedProductToDelete] = useState<UnifiedProductItem | null>(null);
+  const [selectedInventory, setSelectedInventory] = useState<InventoryItemWithDetails | null>(null);
 
-  // Form State
+  // Create Product Form State
   const [formItemName, setFormItemName] = useState('');
   const [formCategories, setFormCategories] = useState<string[]>(['Veg']);
   const [formPrice, setFormPrice] = useState('');
@@ -94,137 +91,141 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
   const [formStockQty, setFormStockQty] = useState('0');
   const [formStatus, setFormStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [productModalApiError, setProductModalApiError] = useState<string | null>(null);
-  const [isProductSubmitting, setIsProductSubmitting] = useState(false);
+  const [modalApiError, setModalApiError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ─── Tab 2: Branch Stock & Valuation State ────────────────────────────────
-  const [inventoryList, setInventoryList] = useState<InventoryItemWithDetails[]>([]);
-  const [isInventoryLoading, setIsInventoryLoading] = useState(true);
-  const [inventoryError, setInventoryError] = useState<string | null>(null);
-
-  const [inventorySearch, setInventorySearch] = useState('');
-  const [inventoryStatusFilter, setInventoryStatusFilter] = useState('ALL');
-
-  const [showAdjustModal, setShowAdjustModal] = useState(false);
-  const [showDeleteProductModal, setShowDeleteProductModal] = useState(false);
-  const [showDeleteInventoryModal, setShowDeleteInventoryModal] = useState(false);
-  const [selectedProductToDelete, setSelectedProductToDelete] = useState<ProductWithInventory | null>(null);
-  const [selectedInventoryToDelete, setSelectedInventoryToDelete] = useState<InventoryItemWithDetails | null>(null);
-  const [selectedInventory, setSelectedInventory] = useState<InventoryItemWithDetails | null>(null);
-
+  // Stock Adjustment Form State
   const [adjustQtyInput, setAdjustQtyInput] = useState('');
   const [qtyError, setQtyError] = useState<string | null>(null);
-  const [inventoryModalApiError, setInventoryModalApiError] = useState<string | null>(null);
-  const [isInventorySubmitting, setIsInventorySubmitting] = useState(false);
 
-  // ─── Fetch Product Catalog ────────────────────────────────────────────────
-  const fetchProductsData = useCallback(async () => {
-    setProductsError(null);
+  // ─── Unified Data Fetching ────────────────────────────────────────────────
+  const fetchUnifiedData = useCallback(async () => {
+    setLoadError(null);
     try {
       const targetBranch = branchFilter !== 'ALL' ? branchFilter : currentBranch?.id;
-      const [prodRes, branchRes] = await Promise.all([
+      const [prodRes, invRes, branchRes] = await Promise.all([
         apiService.products.getProducts({
-          search: productSearch,
           branchId: targetBranch,
-          status: productStatusFilter,
         }),
+        apiService.inventory.getInventory({ branchId: targetBranch }),
         apiService.branches.getBranches(),
       ]);
 
       if (!prodRes.success) {
-        setProductsError(prodRes.error.message || 'Failed to load product catalog');
+        setLoadError(prodRes.error.message || 'Failed to load products');
         return;
       }
 
-      let filtered = prodRes.data.items;
-      if (productCategoryFilter !== 'ALL') {
-        const catLower = productCategoryFilter.toLowerCase();
-        filtered = filtered.filter(
-          (p) =>
-            Array.isArray(p.category) &&
-            p.category.some((c) => c.toLowerCase() === catLower),
-        );
-      }
-
-      setProducts(filtered);
-      if (branchRes.success) setBranches(branchRes.data.items);
-    } catch {
-      setProductsError('Unable to connect to the server. Please try again.');
-    } finally {
-      setIsProductsLoading(false);
-    }
-  }, [productSearch, productStatusFilter, productCategoryFilter, branchFilter, currentBranch]);
-
-  // ─── Fetch Branch Inventory ───────────────────────────────────────────────
-  const fetchInventoryData = useCallback(async () => {
-    setInventoryError(null);
-    try {
-      const targetBranch = branchFilter !== 'ALL' ? branchFilter : currentBranch?.id;
-      const [invRes, prodRes, branchRes] = await Promise.all([
-        apiService.inventory.getInventory({ branchId: targetBranch }),
-        apiService.products.getProducts({ branchId: targetBranch }),
-        apiService.branches.getBranches(),
-      ]);
-
-      if (!invRes.success) {
-        setInventoryError(invRes.error.message || 'Failed to load inventory stock');
-        return;
-      }
-
-      const productsMap = new Map<string, ProductWithInventory>();
-      if (prodRes.success) {
-        prodRes.data.items.forEach((p) => productsMap.set(p.id, p));
-      }
-
-      const branchMap = new Map<string, Branch>();
       if (branchRes.success) {
-        setBranches(branchRes.data.items);
-        branchRes.data.items.forEach((b) => branchMap.set(b.id, b));
+        const bItems = Array.isArray(branchRes.data) ? branchRes.data : (branchRes.data?.items || []);
+        setBranches(bItems);
       }
 
-      let combined: InventoryItemWithDetails[] = invRes.data.items.map((item) => {
-        const prod = productsMap.get(item.productId);
-        const br = branchMap.get(item.branchId);
+      const rawProducts: ProductWithInventory[] = Array.isArray(prodRes.data)
+        ? prodRes.data
+        : prodRes.data?.items || [];
 
+      const rawInventory: InventoryItem[] = invRes.success
+        ? Array.isArray(invRes.data)
+          ? invRes.data
+          : invRes.data?.items || []
+        : [];
+
+      // Map branches
+      const branchMap = new Map<string, string>();
+      if (branchRes.success) {
+        const bItems = Array.isArray(branchRes.data) ? branchRes.data : (branchRes.data?.items || []);
+        bItems.forEach((b) => branchMap.set(b.id, b.name));
+      }
+
+      // Map inventory
+      const invDetailsList: InventoryItemWithDetails[] = rawInventory.map((item) => {
+        const prod = rawProducts.find((p) => p.id === item.productId);
         return {
           ...item,
-          productName: prod?.itemName || (item as any).productName || (item as any).product?.name || `Product ${item.productId}`,
-          category: prod?.category || (item as any).category || (item as any).product?.category || 'General',
-          price: prod?.price ?? (item as any).price ?? (item as any).product?.price ?? 0,
-          branchName: br?.name || (item as any).branchName || (item as any).branch?.name || 'Main Branch',
+          productName: prod?.itemName || (item as any).productName || `Product ${item.productId}`,
+          category: prod?.category || (item as any).category || ['General'],
+          price: prod?.price ?? (item as any).price ?? 0,
+          branchName: branchMap.get(item.branchId) || 'Main Branch',
         };
       });
 
-      if (inventorySearch) {
-        const q = inventorySearch.toLowerCase();
-        combined = combined.filter((i) => i.productName.toLowerCase().includes(q));
-      }
-
-      if (inventoryStatusFilter === 'LOW_STOCK') {
-        combined = combined.filter((i) => i.quantity > 0 && i.quantity < 10);
-      } else if (inventoryStatusFilter === 'OUT_OF_STOCK') {
-        combined = combined.filter((i) => i.quantity === 0);
-      } else if (inventoryStatusFilter === 'IN_STOCK') {
-        combined = combined.filter((i) => i.quantity >= 10);
-      }
-
-      setInventoryList(combined);
+      setProducts(rawProducts);
+      setInventoryList(invDetailsList);
     } catch {
-      setInventoryError('Unable to connect to the server. Please try again.');
+      setLoadError('Unable to connect to the server. Please try again.');
     } finally {
-      setIsInventoryLoading(false);
+      setIsLoading(false);
     }
-  }, [inventorySearch, inventoryStatusFilter, branchFilter, currentBranch]);
+  }, [branchFilter, currentBranch]);
 
   useEffect(() => {
-    fetchProductsData();
-  }, [fetchProductsData]);
+    fetchUnifiedData();
+  }, [fetchUnifiedData]);
 
-  useEffect(() => {
-    fetchInventoryData();
-  }, [fetchInventoryData]);
+  // ─── Combined Unified Product Items ───────────────────────────────────────
+  const unifiedProducts = useMemo<UnifiedProductItem[]>(() => {
+    return products.map((product) => {
+      // Find matching inventory items
+      const matchingInv = inventoryList.filter((i) => i.productId === product.id);
+      const totalQty = matchingInv.length > 0
+        ? matchingInv.reduce((sum, i) => sum + i.quantity, 0)
+        : (product.quantity || 0);
 
-  // ─── Product Catalog Handlers ─────────────────────────────────────────────
+      const branchName = product.branchName || (matchingInv[0]?.branchName) || undefined;
+      const inventoryId = matchingInv[0]?.id;
+
+      return {
+        ...product,
+        quantity: totalQty,
+        branchName,
+        inventoryId,
+      };
+    });
+  }, [products, inventoryList]);
+
+  // ─── Filtered Products ────────────────────────────────────────────────────
+  const filteredProducts = useMemo(() => {
+    return unifiedProducts.filter((product) => {
+      // 1. Search filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchesName = product.itemName.toLowerCase().includes(q);
+        const matchesCat = Array.isArray(product.category) && product.category.some((c) => c.toLowerCase().includes(q));
+        if (!matchesName && !matchesCat) return false;
+      }
+
+      // 2. Category filter
+      if (categoryFilter !== 'ALL') {
+        const catLower = categoryFilter.toLowerCase();
+        const hasCat = Array.isArray(product.category) && product.category.some((c) => c.toLowerCase() === catLower);
+        if (!hasCat) return false;
+      }
+
+      // 3. Status & Stock filter
+      if (statusStockFilter === 'ACTIVE' && product.status !== 'ACTIVE') return false;
+      if (statusStockFilter === 'INACTIVE' && product.status !== 'INACTIVE') return false;
+      if (statusStockFilter === 'IN_STOCK' && product.quantity < 10) return false;
+      if (statusStockFilter === 'LOW_STOCK' && (product.quantity <= 0 || product.quantity >= 10)) return false;
+      if (statusStockFilter === 'OUT_OF_STOCK' && product.quantity > 0) return false;
+
+      return true;
+    });
+  }, [unifiedProducts, searchQuery, categoryFilter, statusStockFilter]);
+
+  // ─── Summary Metrics ──────────────────────────────────────────────────────
+  const metrics = useMemo(() => {
+    const totalProducts = unifiedProducts.length;
+    const activeProducts = unifiedProducts.filter((p) => p.status === 'ACTIVE').length;
+    const totalUnits = unifiedProducts.reduce((sum, p) => sum + (p.quantity || 0), 0);
+    const totalValuation = unifiedProducts.reduce((sum, p) => sum + ((p.quantity || 0) * p.price), 0);
+    const lowStock = unifiedProducts.filter((p) => p.quantity > 0 && p.quantity < 10).length;
+    const outOfStock = unifiedProducts.filter((p) => p.quantity === 0).length;
+
+    return { totalProducts, activeProducts, totalUnits, totalValuation, lowStock, outOfStock };
+  }, [unifiedProducts]);
+
+  // ─── Handlers: Add Product ────────────────────────────────────────────────
   const handleOpenCreate = () => {
     setFormItemName('');
     setFormCategories(['Veg']);
@@ -233,7 +234,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     setFormStockQty('0');
     setFormStatus('ACTIVE');
     setFormErrors({});
-    setProductModalApiError(null);
+    setModalApiError(null);
     setShowCreateModal(true);
   };
 
@@ -261,8 +262,8 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     e.preventDefault();
     if (!validateProductForm()) return;
 
-    setProductModalApiError(null);
-    setIsProductSubmitting(true);
+    setModalApiError(null);
+    setIsSubmitting(true);
 
     try {
       const res = await apiService.products.createProduct({
@@ -275,22 +276,22 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
       });
 
       if (!res.success) {
-        setProductModalApiError(res.error.message || 'Failed to create product');
+        setModalApiError(res.error.message || 'Failed to create product');
         return;
       }
 
       notify.success(`Product "${res.data.itemName}" created successfully`);
       setShowCreateModal(false);
-      fetchProductsData();
-      fetchInventoryData();
+      fetchUnifiedData();
     } catch {
-      setProductModalApiError('An unexpected network error occurred.');
+      setModalApiError('An unexpected network error occurred.');
     } finally {
-      setIsProductSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
-  const handleToggleStatus = async (product: ProductWithInventory) => {
+  // ─── Handlers: Toggle Status ──────────────────────────────────────────────
+  const handleToggleStatus = async (product: UnifiedProductItem) => {
     const newStatus = product.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     try {
       const res = await apiService.products.updateProduct(product.id, { status: newStatus });
@@ -299,42 +300,35 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
         return;
       }
       notify.success(`Product "${product.itemName}" set to ${newStatus}`);
-      fetchProductsData();
+      fetchUnifiedData();
     } catch {
       notify.error('Network error. Unable to change status.');
     }
   };
 
-  // ─── Inventory Adjustment Handlers ────────────────────────────────────────
-  const handleOpenAdjust = (item: InventoryItemWithDetails) => {
-    setSelectedInventory(item);
-    setAdjustQtyInput(item.quantity.toString());
-    setQtyError(null);
-    setInventoryModalApiError(null);
-    setShowAdjustModal(true);
-  };
-
-  const handleOpenProductAdjust = (product: ProductWithInventory) => {
+  // ─── Handlers: Adjust Stock ───────────────────────────────────────────────
+  const handleOpenAdjust = (product: UnifiedProductItem) => {
     const invItem = inventoryList.find((i) => i.productId === product.id);
     if (invItem) {
-      handleOpenAdjust(invItem);
+      setSelectedInventory(invItem);
+      setAdjustQtyInput(invItem.quantity.toString());
     } else {
       setSelectedInventory({
-        id: product.id,
+        id: product.inventoryId || product.id,
         productId: product.id,
-        branchId: product.branchId || currentBranch?.id || '',
+        branchId: product.branchId || currentBranch?.id || (branches[0]?.id || ''),
         quantity: product.quantity || 0,
         productName: product.itemName,
         category: product.category,
         price: product.price,
-        branchName: currentBranch?.name || 'Current Branch',
+        branchName: product.branchName || currentBranch?.name || 'Main Cafeteria',
         updatedAt: new Date().toISOString(),
       });
       setAdjustQtyInput((product.quantity || 0).toString());
-      setQtyError(null);
-      setInventoryModalApiError(null);
-      setShowAdjustModal(true);
     }
+    setQtyError(null);
+    setModalApiError(null);
+    setShowAdjustModal(true);
   };
 
   const handleStepAdjustment = (delta: number) => {
@@ -359,114 +353,67 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     }
 
     setQtyError(null);
-    setInventoryModalApiError(null);
-    setIsInventorySubmitting(true);
+    setModalApiError(null);
+    setIsSubmitting(true);
 
     try {
       const res = await apiService.inventory.updateInventoryQuantity(selectedInventory.id, newQty);
 
       if (!res.success) {
-        setInventoryModalApiError(res.error.message || 'Failed to adjust stock quantity');
+        setModalApiError(res.error.message || 'Failed to adjust stock quantity');
         return;
       }
 
-      notify.success(`Stock for ${selectedInventory.productName} updated to ${newQty}`);
+      notify.success(`Stock for ${selectedInventory.productName} updated to ${newQty} units`);
       setShowAdjustModal(false);
-      fetchInventoryData();
-      fetchProductsData();
+      fetchUnifiedData();
     } catch {
-      setInventoryModalApiError('An unexpected error occurred. Please try again.');
+      setModalApiError('An unexpected error occurred. Please try again.');
     } finally {
-      setIsInventorySubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
-  // ─── Delete Product / Inventory Handlers ─────────────────────────────────
-  const handleOpenDeleteProduct = (product: ProductWithInventory) => {
+  // ─── Handlers: Delete Product ─────────────────────────────────────────────
+  const handleOpenDeleteProduct = (product: UnifiedProductItem) => {
     setSelectedProductToDelete(product);
-    setProductModalApiError(null);
-    setShowDeleteProductModal(true);
+    setModalApiError(null);
+    setShowDeleteModal(true);
   };
 
   const handleDeleteProductSubmit = async () => {
     if (!selectedProductToDelete) return;
-    setIsProductSubmitting(true);
-    setProductModalApiError(null);
+    setIsSubmitting(true);
+    setModalApiError(null);
 
     try {
       const res = await apiService.products.deleteProduct(selectedProductToDelete.id);
       if (!res.success) {
-        setProductModalApiError(res.error.message || 'Failed to archive product');
+        setModalApiError(res.error.message || 'Failed to archive product');
         return;
       }
 
       notify.success(`Product '${selectedProductToDelete.itemName}' archived successfully`);
-      setShowDeleteProductModal(false);
-      fetchProductsData();
-      fetchInventoryData();
+      setShowDeleteModal(false);
+      fetchUnifiedData();
     } catch {
-      setProductModalApiError('An unexpected error occurred. Please try again.');
+      setModalApiError('An unexpected error occurred. Please try again.');
     } finally {
-      setIsProductSubmitting(false);
+      setIsSubmitting(false);
     }
   };
-
-  const handleOpenDeleteInventory = (item: InventoryItemWithDetails) => {
-    setSelectedInventoryToDelete(item);
-    setProductModalApiError(null);
-    setShowDeleteInventoryModal(true);
-  };
-
-  const handleDeleteInventorySubmit = async () => {
-    if (!selectedInventoryToDelete) return;
-    setIsProductSubmitting(true);
-    setProductModalApiError(null);
-
-    try {
-      const res = await apiService.inventory.deleteInventory(selectedInventoryToDelete.id);
-      if (!res.success) {
-        setProductModalApiError(res.error.message || 'Failed to remove inventory stock');
-        return;
-      }
-
-      notify.success(res.data?.message || 'Inventory stock removed for this branch');
-      setShowDeleteInventoryModal(false);
-      fetchInventoryData();
-      fetchProductsData();
-    } catch {
-      setProductModalApiError('An unexpected error occurred. Please try again.');
-    } finally {
-      setIsProductSubmitting(false);
-    }
-  };
-
-  // ─── Metrics Calculations (Clean 3-Card Grid) ─────────────────────────────
-  const productMetrics = useMemo(() => {
-    const total = products.length;
-    const active = products.filter((p) => p.status === 'ACTIVE').length;
-    const inactive = products.filter((p) => p.status === 'INACTIVE').length;
-    return { total, active, inactive };
-  }, [products]);
-
-  const inventoryMetrics = useMemo(() => {
-    const totalUnits = inventoryList.reduce((acc, i) => acc + i.quantity, 0);
-    const totalValuation = inventoryList.reduce((acc, i) => acc + i.quantity * i.price, 0);
-    const lowStock = inventoryList.filter((i) => i.quantity > 0 && i.quantity < 10).length;
-    const outOfStock = inventoryList.filter((i) => i.quantity === 0).length;
-    return { totalUnits, totalValuation, lowStock, outOfStock };
-  }, [inventoryList]);
 
   // ─── Guard Check ──────────────────────────────────────────────────────────
   if (!canViewProducts && !canViewInventory) {
     return <UnauthorizedPage />;
   }
 
-  // ─── Product Catalog Columns (Clean: No Edit & No Stock Buttons) ──────────
-  const productColumns = [
+  // ─── Unified Table Columns ────────────────────────────────────────────────
+  const tableColumns = [
     {
       key: 'itemName',
       header: 'Product Item',
-      render: (product: ProductWithInventory) => (
+      render: (product: UnifiedProductItem) => (
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400 shrink-0">
             <Package className="h-4 w-4" />
@@ -483,16 +430,17 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     {
       key: 'category',
       header: 'Category',
-      render: (product: ProductWithInventory) => (
+      render: (product: UnifiedProductItem) => (
         <div className="flex flex-wrap gap-1">
           {(Array.isArray(product.category) ? product.category : [product.category || 'General']).map((c: any, idx: number) => {
             const isVeg = c.toLowerCase() === 'veg';
             const isNonVeg = c.toLowerCase() === 'non-veg';
+            const isDrink = c.toLowerCase() === 'beverage' || c.toLowerCase() === 'drink';
             return (
               <Badge
                 key={idx}
-                variant={isVeg ? 'success' : isNonVeg ? 'danger' : 'outline'}
-                className="capitalize"
+                variant={isVeg ? 'success' : isNonVeg ? 'danger' : isDrink ? 'info' : 'outline'}
+                className="capitalize text-[11px]"
               >
                 {c}
               </Badge>
@@ -504,16 +452,42 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     {
       key: 'price',
       header: 'Price',
-      render: (product: ProductWithInventory) => (
+      render: (product: UnifiedProductItem) => (
         <span className="font-mono text-sm font-bold text-violet-300">
           {formatCurrency(product.price)}
         </span>
       ),
     },
     {
+      key: 'quantity',
+      header: 'Stock Quantity',
+      render: (product: UnifiedProductItem) => (
+        <span
+          className={`font-mono text-xs font-extrabold px-2.5 py-1 rounded-full border ${
+            product.quantity === 0
+              ? 'text-rose-400 bg-rose-500/10 border-rose-500/30'
+              : product.quantity < 10
+                ? 'text-amber-400 bg-amber-500/10 border-amber-500/30'
+                : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+          }`}
+        >
+          {product.quantity === 0 ? '0 (Out of stock)' : `${product.quantity} units`}
+        </span>
+      ),
+    },
+    {
+      key: 'stockValue',
+      header: 'Stock Valuation',
+      render: (product: UnifiedProductItem) => (
+        <span className="font-mono text-xs font-semibold text-slate-300">
+          {formatCurrency(product.quantity * product.price)}
+        </span>
+      ),
+    },
+    {
       key: 'status',
       header: 'Status',
-      render: (product: ProductWithInventory) => (
+      render: (product: UnifiedProductItem) => (
         <Badge variant={product.status === 'ACTIVE' ? 'success' : 'danger'}>
           {product.status}
         </Badge>
@@ -521,10 +495,22 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
     },
     {
       key: 'actions',
-      header: 'Status Action',
+      header: 'Actions',
       className: 'text-right',
-      render: (product: ProductWithInventory) => (
-        <div className="flex items-center justify-end">
+      render: (product: UnifiedProductItem) => (
+        <div className="flex items-center justify-end gap-1.5">
+          {canManageInventory && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleOpenAdjust(product)}
+              className="text-xs py-1 text-slate-200 border-slate-700 hover:border-violet-500"
+              leftIcon={<Sliders className="h-3.5 w-3.5" />}
+            >
+              Stock
+            </Button>
+          )}
+
           {canManageProducts && (
             <Button
               variant={product.status === 'ACTIVE' ? 'ghost' : 'outline'}
@@ -535,131 +521,18 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
               {product.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
             </Button>
           )}
-            {/* Delete Product */}
-            {canManageProducts && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleOpenDeleteProduct(product)}
-                className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 ml-1.5"
-                leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-                title="Archive Product"
-              >
-                Delete
-              </Button>
-            )}
-        </div>
-      ),
-    },
-  ];
 
-  // ─── Inventory & Stock Control Columns ────────────────────────────────────
-  const inventoryColumns = [
-    {
-      key: 'productName',
-      header: 'Product Item',
-      render: (item: InventoryItemWithDetails) => (
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400 shrink-0">
-            <Package className="h-4 w-4" />
-          </div>
-          <div>
-            <p className="font-semibold text-slate-100">{(item as any).productName || (item as any).product?.name || 'Product'}</p>
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: 'category',
-      header: 'Category',
-      render: (item: InventoryItemWithDetails) => (
-        <div className="flex flex-wrap gap-1">
-          {(() => {
-            const rawCat = (item as any).category || (item as any).product?.category || 'General';
-            const catArr = Array.isArray(rawCat) ? rawCat : [rawCat];
-            return catArr.map((c: any, idx: number) => (
-              <Badge key={idx} variant="outline" className="capitalize text-slate-300">
-                {c}
-              </Badge>
-            ));
-          })()}
-        </div>
-      ),
-    },
-    {
-      key: 'branchName',
-      header: 'Branch Location',
-      render: (item: InventoryItemWithDetails) => (
-        <div className="flex items-center gap-1.5 text-xs text-slate-300">
-          <Building2 className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-          <span>{(item as any).branchName || (item as any).branch?.name || 'Branch'}</span>
-        </div>
-      ),
-    },
-    {
-      key: 'quantity',
-      header: 'Stock Quantity',
-      render: (item: InventoryItemWithDetails) => (
-        <span
-          className={`font-mono text-sm font-bold ${
-            item.quantity === 0
-              ? 'text-rose-400 font-bold'
-              : item.quantity < 10
-                ? 'text-amber-400'
-                : 'text-emerald-400'
-          }`}
-        >
-          {item.quantity} units
-        </span>
-      ),
-    },
-    {
-      key: 'stockValue',
-      header: 'Stock Valuation',
-      render: (item: InventoryItemWithDetails) => (
-        <span className="font-mono text-xs font-semibold text-violet-300">
-          {formatCurrency(item.quantity * (item as any).price || (item as any).product?.price || 0)}
-        </span>
-      ),
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (item: InventoryItemWithDetails) => {
-        if (item.quantity === 0) return <Badge variant="danger">Out of Stock</Badge>;
-        if (item.quantity < 10) return <Badge variant="warning">Low Stock</Badge>;
-        return <Badge variant="success">In Stock</Badge>;
-      },
-    },
-    {
-      key: 'actions',
-      header: 'Stock Action',
-      className: 'text-right',
-      render: (item: InventoryItemWithDetails) => (
-        <div className="flex items-center justify-end">
-          {canManageInventory && (
+          {canManageProducts && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => handleOpenAdjust(item)}
-              leftIcon={<Sliders className="h-3.5 w-3.5" />}
+              onClick={() => handleOpenDeleteProduct(product)}
+              className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 px-2"
+              title="Archive Product"
             >
-              Adjust Stock
+              <Trash2 className="h-3.5 w-3.5" />
             </Button>
           )}
-            {/* Delete Inventory Link */}
-            {canManageInventory && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleOpenDeleteInventory(item)}
-                className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 ml-1.5"
-                leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-                title="Remove Stock from Branch"
-              >
-                Delete
-              </Button>
-            )}
         </div>
       ),
     },
@@ -686,7 +559,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
             />
           </div>
 
-          {activeTab === 'products' && canManageProducts && (
+          {canManageProducts && (
             <Button
               variant="primary"
               onClick={handleOpenCreate}
@@ -698,398 +571,304 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
         </div>
       </div>
 
-      {/* ─── Modern Tab Switcher ─── */}
-      <div className="flex border-b border-slate-800">
-        <button
-          onClick={() => handleTabChange('products')}
-          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition-colors ${
-            activeTab === 'products'
-              ? 'border-violet-500 text-violet-400 bg-violet-500/10 rounded-t-lg'
-              : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-          }`}
-        >
-          <Package className="h-4 w-4" />
-          <span>Product Catalog</span>
-          <span className="ml-1.5 rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
-            {products.length}
-          </span>
-        </button>
+      {/* ─── Unified Summary Metric Cards (5-Card Grid) ─── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <Card className="flex items-center gap-3 p-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400 shrink-0">
+            <Package className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs text-slate-400">Total Products</p>
+            <p className="text-lg font-bold text-slate-100">{metrics.totalProducts}</p>
+          </div>
+        </Card>
 
-        <button
-          onClick={() => handleTabChange('inventory')}
-          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition-colors ${
-            activeTab === 'inventory'
-              ? 'border-violet-500 text-violet-400 bg-violet-500/10 rounded-t-lg'
-              : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-          }`}
-        >
-          <Warehouse className="h-4 w-4" />
-          <span>Inventory & Stock Control</span>
-          <span className="ml-1.5 rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
-            {inventoryList.length}
-          </span>
-        </button>
+        <Card className="flex items-center gap-3 p-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0">
+            <TrendingUp className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs text-slate-400">Active for Sale</p>
+            <p className="text-lg font-bold text-emerald-400">{metrics.activeProducts}</p>
+          </div>
+        </Card>
+
+        <Card className="flex items-center gap-3 p-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400 shrink-0">
+            <Layers className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs text-slate-400">Units in Stock</p>
+            <p className="text-lg font-bold text-blue-400">{metrics.totalUnits}</p>
+          </div>
+        </Card>
+
+        <Card className="flex items-center gap-3 p-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0">
+            <Package className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs text-slate-400">Stock Valuation</p>
+            <p className="text-lg font-bold text-indigo-300">
+              {formatCurrency(metrics.totalValuation)}
+            </p>
+          </div>
+        </Card>
+
+        <Card className="flex items-center gap-3 p-4 col-span-2 sm:col-span-1">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 shrink-0">
+            <AlertTriangle className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs text-slate-400">Stock Alerts</p>
+            <p className="text-lg font-bold text-amber-400">
+              {metrics.lowStock + metrics.outOfStock}{' '}
+              <span className="text-[11px] font-normal text-slate-400">
+                ({metrics.outOfStock} out)
+              </span>
+            </p>
+          </div>
+        </Card>
       </div>
 
-      {/* ─── TAB 1: PRODUCT CATALOG ─── */}
-      {activeTab === 'products' && (
-        <div className="space-y-6">
-          {/* Summary Metric Cards (Clean 3-Card Grid) */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Card className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
-                <Package className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Total Products</p>
-                <p className="text-lg font-bold text-slate-100">{productMetrics.total}</p>
-              </div>
-            </Card>
-
-            <Card className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
-                <TrendingUp className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Active for Sale</p>
-                <p className="text-lg font-bold text-emerald-400">{productMetrics.active}</p>
-              </div>
-            </Card>
-
-            <Card className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-800 text-slate-400">
-                <Power className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Archived / Inactive</p>
-                <p className="text-lg font-bold text-slate-300">{productMetrics.inactive}</p>
-              </div>
-            </Card>
+      {/* ─── Search & Filters Control Bar ─── */}
+      <Card className="p-4 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-400">View Layout:</span>
+            <div className="flex rounded-lg bg-slate-900 p-1 border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  viewMode === 'grid'
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                }`}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                <span>Visual Menu Grid</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  viewMode === 'table'
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                }`}
+              >
+                <List className="h-3.5 w-3.5" />
+                <span>Table View</span>
+              </button>
+            </div>
           </div>
 
-          {/* Controls Bar: View Mode Switcher & Filters */}
-          <Card className="p-4 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-400">View Layout:</span>
-                <div className="flex rounded-lg bg-slate-900 p-1 border border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setProductViewMode('grid')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                      productViewMode === 'grid'
-                        ? 'bg-violet-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-                    }`}
+          <span className="text-xs text-slate-400">
+            Showing <strong className="text-slate-200">{filteredProducts.length}</strong> of {unifiedProducts.length} products
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 pt-3 border-t border-slate-800/60">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Search food or product item..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value.slice(0, 30))}
+              maxLength={30}
+              className="pl-9"
+            />
+          </div>
+
+          <Select
+            value={statusStockFilter}
+            onChange={(e) => setStatusStockFilter(e.target.value)}
+            options={[
+              { value: 'ALL', label: 'All Statuses & Stock Levels' },
+              { value: 'ACTIVE', label: 'Active for Sale' },
+              { value: 'INACTIVE', label: 'Inactive / Hidden' },
+              { value: 'IN_STOCK', label: 'In Stock (>= 10 units)' },
+              { value: 'LOW_STOCK', label: 'Low Stock (< 10 units)' },
+              { value: 'OUT_OF_STOCK', label: 'Out of Stock (0 units)' },
+            ]}
+          />
+
+          <Select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            options={[
+              { value: 'ALL', label: 'All Categories' },
+              { value: 'Veg', label: 'Veg' },
+              { value: 'Non-Veg', label: 'Non-Veg' },
+              { value: 'Beverage', label: 'Beverage' },
+              { value: 'Snack', label: 'Snack' },
+              { value: 'Breakfast', label: 'Breakfast' },
+              { value: 'Lunch', label: 'Lunch' },
+            ]}
+          />
+        </div>
+      </Card>
+
+      {/* ─── Unified Products & Inventory Display ─── */}
+      <Card className="p-0">
+        {isLoading ? (
+          <div className="py-12">
+            <LoadingState message="Loading products & inventory stock..." />
+          </div>
+        ) : loadError ? (
+          <div className="p-6">
+            <ErrorState message={loadError} onRetry={fetchUnifiedData} />
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="py-12">
+            <EmptyState
+              title={searchQuery || statusStockFilter !== 'ALL' || categoryFilter !== 'ALL' ? "No matching products found" : "No products in menu yet"}
+              description={searchQuery || statusStockFilter !== 'ALL' || categoryFilter !== 'ALL' ? "Try clearing your search or category filters." : "Add food items and stock quantities to start selling at cafeteria counters."}
+              action={
+                searchQuery || statusStockFilter !== 'ALL' || categoryFilter !== 'ALL' ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setStatusStockFilter('ALL');
+                      setCategoryFilter('ALL');
+                    }}
                   >
-                    <LayoutGrid className="h-3.5 w-3.5" />
-                    <span>Visual Menu Grid</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProductViewMode('table')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                      productViewMode === 'table'
-                        ? 'bg-violet-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-                    }`}
-                  >
-                    <List className="h-3.5 w-3.5" />
-                    <span>Table View</span>
-                  </button>
-                </div>
-              </div>
+                    Clear Filters
+                  </Button>
+                ) : canManageProducts ? (
+                  <Button variant="primary" onClick={handleOpenCreate}>
+                    Add First Product
+                  </Button>
+                ) : undefined
+              }
+            />
+          </div>
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 p-4">
+            {filteredProducts.map((p) => {
+              const isVeg = Array.isArray(p.category) && p.category.some((c) => c.toLowerCase() === 'veg');
+              const isNonVeg = Array.isArray(p.category) && p.category.some((c) => c.toLowerCase() === 'non-veg');
+              const isBeverage = Array.isArray(p.category) && p.category.some((c) => c.toLowerCase() === 'beverage' || c.toLowerCase() === 'drink');
 
-              <span className="text-xs text-slate-400">
-                Total <strong className="text-slate-200">{products.length}</strong> items in menu
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 pt-3 border-t border-slate-800/60">
-              <Input
-                placeholder="Search food or product item..."
-                value={productSearch}
-                onChange={(e) => setProductSearch(e.target.value.slice(0, 30))}
-                maxLength={30}
-              />
-
-              <Select
-                value={productStatusFilter}
-                onChange={(e) => setProductStatusFilter(e.target.value)}
-                options={[
-                  { value: 'ALL', label: 'All Statuses' },
-                  { value: 'ACTIVE', label: 'Active Only' },
-                  { value: 'INACTIVE', label: 'Inactive Only' },
-                ]}
-              />
-
-              <Select
-                value={productCategoryFilter}
-                onChange={(e) => setProductCategoryFilter(e.target.value)}
-                options={[
-                  { value: 'ALL', label: 'All Categories' },
-                  { value: 'Veg', label: 'Veg' },
-                  { value: 'Non-Veg', label: 'Non-Veg' },
-                  { value: 'Beverage', label: 'Beverage' },
-                  { value: 'Snack', label: 'Snack' },
-                  { value: 'Breakfast', label: 'Breakfast' },
-                  { value: 'Lunch', label: 'Lunch' },
-                ]}
-              />
-            </div>
-          </Card>
-
-          {/* Catalog Display: Grid vs Table */}
-          <Card className="p-0">
-            {isProductsLoading ? (
-              <div className="py-12">
-                <LoadingState message="Loading master product catalog..." />
-              </div>
-            ) : productsError ? (
-              <div className="p-6">
-                <ErrorState message={productsError} onRetry={fetchProductsData} />
-              </div>
-            ) : products.length === 0 ? (
-              <div className="py-12">
-                <EmptyState
-                  title={productSearch || productStatusFilter !== 'ALL' || productCategoryFilter !== 'ALL' ? "No matching products found" : "No products in menu yet"}
-                  description={productSearch || productStatusFilter !== 'ALL' || productCategoryFilter !== 'ALL' ? "Try clearing your search or category filters." : "Add your food items and prices to start selling at counters."}
-                  action={
-                    productSearch || productStatusFilter !== 'ALL' || productCategoryFilter !== 'ALL' ? (
-                      <Button variant="outline" onClick={() => { setProductSearch(''); setProductStatusFilter('ALL'); setProductCategoryFilter('ALL'); }}>
-                        Clear Filters
-                      </Button>
-                    ) : canManageProducts ? (
-                      <Button variant="primary" onClick={handleOpenCreate}>
-                        Add First Product
-                      </Button>
-                    ) : undefined
-                  }
-                />
-              </div>
-            ) : productViewMode === 'grid' ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 p-4">
-                {products.map((p) => {
-                  const isVeg = Array.isArray(p.category) && p.category.some((c) => c.toLowerCase() === 'veg');
-                  const isNonVeg = Array.isArray(p.category) && p.category.some((c) => c.toLowerCase() === 'non-veg');
-                  const isBeverage = Array.isArray(p.category) && p.category.some((c) => c.toLowerCase() === 'beverage');
-
-                  return (
-                    <div
-                      key={p.id}
-                      className={`flex flex-col justify-between rounded-2xl border p-4.5 transition-all shadow-md ${
-                        p.status === 'ACTIVE'
-                          ? 'border-slate-800 bg-slate-900/70 hover:border-slate-700 hover:bg-slate-900'
-                          : 'border-slate-800/60 bg-slate-950/40 opacity-75'
-                      }`}
-                    >
-                      <div>
-                        {/* Header: Dietary/Category pills & Status */}
-                        <div className="flex items-center justify-between gap-2 mb-3">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {isVeg && (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                                🟢 Veg
-                              </span>
-                            )}
-                            {isNonVeg && (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30">
-                                🔴 Non-Veg
-                              </span>
-                            )}
-                            {isBeverage && (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/30">
-                                ☕ Drink
-                              </span>
-                            )}
-                            {!isVeg && !isNonVeg && !isBeverage && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
-                                {Array.isArray(p.category) ? p.category[0] || 'Food' : 'Food'}
-                              </span>
-                            )}
-                          </div>
-
-                          <Badge variant={p.status === 'ACTIVE' ? 'success' : 'danger'} className="text-[10px]">
-                            {p.status}
-                          </Badge>
-                        </div>
-
-                        {/* Food Name & Price */}
-                        <h4 className="font-bold text-base text-slate-100 line-clamp-1">
-                          {p.itemName}
-                        </h4>
-                        <p className="mt-1 font-mono text-xl font-extrabold text-violet-300">
-                          {formatCurrency(p.price)}
-                        </p>
-                      </div>
-
-                      {/* Stock Info & Quick Actions Footer */}
-                      <div className="mt-4 pt-3 border-t border-slate-800/80 space-y-3">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-400 font-medium">Branch Stock:</span>
-                          {p.quantity === 0 ? (
-                            <span className="font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/30">
-                              Out of stock
-                            </span>
-                          ) : p.quantity < 10 ? (
-                            <span className="font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
-                              Low: {p.quantity} units
-                            </span>
-                          ) : (
-                            <span className="font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
-                              {p.quantity} in stock
-                            </span>
-                          )}
-                        </div>
-
-                        {canManageProducts && (
-                          <div className="flex items-center gap-2 pt-1">
-                            <Button
-                              variant={p.status === 'ACTIVE' ? 'outline' : 'primary'}
-                              size="sm"
-                              className="flex-1 text-xs py-1"
-                              onClick={() => handleToggleStatus(p)}
-                              leftIcon={<Power className="h-3.5 w-3.5" />}
-                            >
-                              {p.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-                            </Button>
-
-                            {canManageInventory && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs py-1 border border-slate-800 hover:border-slate-700 text-slate-300"
-                                onClick={() => handleOpenProductAdjust(p)}
-                                title="Adjust branch stock"
-                              >
-                                Stock
-                              </Button>
-                            )}
-
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleOpenDeleteProduct(p)}
-                              className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 px-2"
-                              title="Delete product"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
+              return (
+                <div
+                  key={p.id}
+                  className={`flex flex-col justify-between rounded-2xl border p-4.5 transition-all shadow-md ${
+                    p.status === 'ACTIVE'
+                      ? 'border-slate-800 bg-slate-900/70 hover:border-slate-700 hover:bg-slate-900'
+                      : 'border-slate-800/60 bg-slate-950/40 opacity-75'
+                  }`}
+                >
+                  <div>
+                    {/* Header: Category pills & Status */}
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {isVeg && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                            🟢 Veg
+                          </span>
+                        )}
+                        {isNonVeg && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30">
+                            🔴 Non-Veg
+                          </span>
+                        )}
+                        {isBeverage && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/30">
+                            ☕ Drink
+                          </span>
+                        )}
+                        {!isVeg && !isNonVeg && !isBeverage && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                            {Array.isArray(p.category) ? p.category[0] || 'Food' : 'Food'}
+                          </span>
                         )}
                       </div>
+
+                      <Badge variant={p.status === 'ACTIVE' ? 'success' : 'danger'} className="text-[10px]">
+                        {p.status}
+                      </Badge>
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <DataTable columns={productColumns} data={products} keyExtractor={(p) => p.id} />
-            )}
-          </Card>
-        </div>
-      )}
 
-      {/* ─── TAB 2: INVENTORY & STOCK CONTROL ─── */}
-      {activeTab === 'inventory' && (
-        <div className="space-y-6">
-          {/* Summary Metric Cards */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <Card className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
-                <Layers className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Total Units in Stock</p>
-                <p className="text-lg font-bold text-slate-100">{inventoryMetrics.totalUnits}</p>
-              </div>
-            </Card>
+                    {/* Food Name & Price */}
+                    <h4 className="font-bold text-base text-slate-100 line-clamp-1">
+                      {p.itemName}
+                    </h4>
+                    {p.branchName && (
+                      <p className="text-xs text-slate-400 mt-0.5">🏪 {p.branchName}</p>
+                    )}
+                    <p className="mt-1 font-mono text-xl font-extrabold text-violet-300">
+                      {formatCurrency(p.price)}
+                    </p>
+                  </div>
 
-            <Card className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
-                <Package className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Total Stock Valuation</p>
-                <p className="text-lg font-bold text-violet-400">
-                  {formatCurrency(inventoryMetrics.totalValuation)}
-                </p>
-              </div>
-            </Card>
+                  {/* Stock Level & Actions Footer */}
+                  <div className="mt-4 pt-3 border-t border-slate-800/80 space-y-3">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400 font-medium">Stock Level:</span>
+                      {p.quantity === 0 ? (
+                        <span className="font-bold text-rose-400 bg-rose-500/10 px-2.5 py-0.5 rounded-full border border-rose-500/30">
+                          Out of stock (0)
+                        </span>
+                      ) : p.quantity < 10 ? (
+                        <span className="font-bold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                          Low: {p.quantity} units
+                        </span>
+                      ) : (
+                        <span className="font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                          {p.quantity} in stock
+                        </span>
+                      )}
+                    </div>
 
-            <Card className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400">
-                <AlertTriangle className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Low Stock Alerts</p>
-                <p className="text-lg font-bold text-amber-400">{inventoryMetrics.lowStock}</p>
-              </div>
-            </Card>
+                    <div className="flex items-center gap-2 pt-1">
+                      {canManageInventory && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs py-1 border-slate-700 text-slate-200 hover:border-violet-500"
+                          onClick={() => handleOpenAdjust(p)}
+                          leftIcon={<Sliders className="h-3.5 w-3.5" />}
+                        >
+                          Stock
+                        </Button>
+                      )}
 
-            <Card className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400">
-                <AlertCircle className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Out of Stock</p>
-                <p className="text-lg font-bold text-rose-400">{inventoryMetrics.outOfStock}</p>
-              </div>
-            </Card>
+                      {canManageProducts && (
+                        <Button
+                          variant={p.status === 'ACTIVE' ? 'ghost' : 'outline'}
+                          size="sm"
+                          className="flex-1 text-xs py-1"
+                          onClick={() => handleToggleStatus(p)}
+                          leftIcon={<Power className="h-3.5 w-3.5" />}
+                        >
+                          {p.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                        </Button>
+                      )}
+
+                      {canManageProducts && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpenDeleteProduct(p)}
+                          className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 px-2"
+                          title="Delete product"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-
-          {/* Filters Bar */}
-          <Card className="p-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Input
-                placeholder="Search stock records by product name..."
-                value={inventorySearch}
-                onChange={(e) => setInventorySearch(e.target.value)}
-                
-              />
-
-              <Select
-                value={inventoryStatusFilter}
-                onChange={(e) => setInventoryStatusFilter(e.target.value)}
-                options={[
-                  { value: 'ALL', label: 'All Stock Levels' },
-                  { value: 'IN_STOCK', label: 'In Stock (>= 10 units)' },
-                  { value: 'LOW_STOCK', label: 'Low Stock (< 10 units)' },
-                  { value: 'OUT_OF_STOCK', label: 'Out of Stock (0 units)' },
-                ]}
-              />
-            </div>
-          </Card>
-
-          {/* Inventory Data Table */}
-          <Card className="p-0">
-            {isInventoryLoading ? (
-              <div className="py-12">
-                <LoadingState message="Loading multi-branch stock levels..." />
-              </div>
-            ) : inventoryError ? (
-              <div className="p-6">
-                <ErrorState message={inventoryError} onRetry={fetchInventoryData} />
-              </div>
-            ) : inventoryList.length === 0 ? (
-              <div className="py-12">
-                <EmptyState
-                  title={inventorySearch || inventoryStatusFilter !== 'ALL' ? "No matching stock records" : "No stock items yet"}
-                  description={inventorySearch || inventoryStatusFilter !== 'ALL' ? "Try clearing search or stock filters." : "Stock records will appear here as products are added to branches."}
-                  action={
-                    inventorySearch || inventoryStatusFilter !== 'ALL' ? (
-                      <Button variant="outline" onClick={() => { setInventorySearch(''); setInventoryStatusFilter('ALL'); }}>
-                        Clear Filters
-                      </Button>
-                    ) : undefined
-                  }
-                />
-              </div>
-            ) : (
-              <DataTable columns={inventoryColumns} data={inventoryList} keyExtractor={(i) => i.id} />
-            )}
-          </Card>
-        </div>
-      )}
+        ) : (
+          <DataTable columns={tableColumns} data={filteredProducts} keyExtractor={(p) => p.id} />
+        )}
+      </Card>
 
       {/* ─── CREATE PRODUCT MODAL ─── */}
       <Modal
@@ -1099,10 +878,10 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
         size="lg"
       >
         <form onSubmit={handleCreateProductSubmit} className="space-y-4">
-          {productModalApiError && (
+          {modalApiError && (
             <div className="flex items-center gap-2 rounded-lg bg-rose-500/10 p-3 text-sm text-rose-400 border border-rose-500/20">
               <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{productModalApiError}</span>
+              <span>{modalApiError}</span>
             </div>
           )}
 
@@ -1114,7 +893,7 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
               placeholder="e.g. Chicken Roll, Veg Burger"
               value={formItemName}
               maxLength={40}
-              onChange={(e) => setFormItemName(e.target.value.slice(0,40))}
+              onChange={(e) => setFormItemName(e.target.value.slice(0, 40))}
               error={formErrors.itemName}
             />
           </div>
@@ -1195,14 +974,14 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
             <Button variant="ghost" onClick={() => setShowCreateModal(false)}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit" isLoading={isProductSubmitting}>
+            <Button variant="primary" type="submit" isLoading={isSubmitting}>
               Create Product
             </Button>
           </ModalFooter>
         </form>
       </Modal>
 
-      {/* ─── ADJUST STOCK MODAL (INVENTORY & STOCK CONTROL TAB ONLY) ─── */}
+      {/* ─── ADJUST STOCK MODAL ─── */}
       <Modal
         isOpen={showAdjustModal}
         onClose={() => setShowAdjustModal(false)}
@@ -1210,10 +989,10 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
         size="md"
       >
         <form onSubmit={handleAdjustSubmit} className="space-y-4">
-          {inventoryModalApiError && (
+          {modalApiError && (
             <div className="flex items-center gap-2 rounded-lg bg-rose-500/10 p-3 text-sm text-rose-400 border border-rose-500/20">
               <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{inventoryModalApiError}</span>
+              <span>{modalApiError}</span>
             </div>
           )}
 
@@ -1268,27 +1047,28 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
             <Button variant="ghost" onClick={() => setShowAdjustModal(false)}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit" isLoading={isInventorySubmitting}>
+            <Button variant="primary" type="submit" isLoading={isSubmitting}>
               Confirm Stock Update
             </Button>
           </ModalFooter>
         </form>
       </Modal>
-      {/* ── Delete Product Confirmation Modal ───────────────────── */}
+
+      {/* ─── DELETE PRODUCT CONFIRMATION MODAL ─── */}
       <Modal
-        isOpen={showDeleteProductModal}
-        onClose={() => !isProductSubmitting && setShowDeleteProductModal(false)}
+        isOpen={showDeleteModal}
+        onClose={() => !isSubmitting && setShowDeleteModal(false)}
         title="Delete Product"
         description="Archive product from master catalog"
         size="md"
       >
         <div className="space-y-4">
-          {productModalApiError && (
+          {modalApiError && (
             <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
               <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
               <div className="space-y-1">
                 <p className="font-semibold">Action Failed</p>
-                <p>{productModalApiError}</p>
+                <p>{modalApiError}</p>
               </div>
             </div>
           )}
@@ -1298,71 +1078,24 @@ export function ProductsPage({ defaultTab }: ProductsPageProps) {
               Are you sure you want to delete <span className="text-violet-300 font-bold font-mono">{selectedProductToDelete?.itemName}</span>?
             </p>
             <p className="text-xs text-slate-400 leading-relaxed">
-              This product will be archived and hidden from POS sale menus. All historical receipts, purchase items, and past financial reports will continue to show this product's name and details.
+              This product will be archived and hidden from POS sale menus. All historical receipts, purchase items, and past financial reports will continue to safely preserve this product's name and accounting history.
             </p>
           </div>
 
           <ModalFooter>
             <Button
               variant="ghost"
-              onClick={() => setShowDeleteProductModal(false)}
-              disabled={isProductSubmitting}
+              onClick={() => setShowDeleteModal(false)}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>
             <Button
               variant="danger"
               onClick={handleDeleteProductSubmit}
-              isLoading={isProductSubmitting}
+              isLoading={isSubmitting}
             >
               Archive & Delete Product
-            </Button>
-          </ModalFooter>
-        </div>
-      </Modal>
-
-      {/* ── Delete Branch Inventory Confirmation Modal ────────────── */}
-      <Modal
-        isOpen={showDeleteInventoryModal}
-        onClose={() => !isProductSubmitting && setShowDeleteInventoryModal(false)}
-        title="Remove Branch Stock"
-        description="Remove product stock allocation from branch"
-        size="md"
-      >
-        <div className="space-y-4">
-          {productModalApiError && (
-            <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
-              <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
-              <div className="space-y-1">
-                <p className="font-semibold">Action Failed</p>
-                <p>{productModalApiError}</p>
-              </div>
-            </div>
-          )}
-
-          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 space-y-2">
-            <p className="text-sm text-slate-200 font-medium">
-              Remove stock for <span className="text-violet-300 font-bold font-mono">{selectedInventoryToDelete?.productName}</span> at <span className="text-amber-300 font-semibold">{selectedInventoryToDelete?.branchName}</span>?
-            </p>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              This only removes this branch's stock record. The product itself will remain intact in the organization's master product catalog and in other branch inventories.
-            </p>
-          </div>
-
-          <ModalFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setShowDeleteInventoryModal(false)}
-              disabled={isProductSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={handleDeleteInventorySubmit}
-              isLoading={isProductSubmitting}
-            >
-              Remove Branch Stock
             </Button>
           </ModalFooter>
         </div>

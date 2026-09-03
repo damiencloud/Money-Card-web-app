@@ -82,7 +82,7 @@ export function CameraQrScanner({
           : { facingMode: 'environment' };
 
         const config = {
-          fps: 15,
+          fps: 25,
         };
 
         await scanner.start(
@@ -93,8 +93,14 @@ export function CameraQrScanner({
             if (!trimmed) return;
 
             const now = Date.now();
-            // Prevent same QR code within 2 seconds
-            if (trimmed === lastScanRef.current.text && now - lastScanRef.current.time < 2000) {
+            const isSameCode = trimmed === lastScanRef.current.text;
+            const timeSinceLast = now - lastScanRef.current.time;
+
+            // Debounce: 1200ms for exact duplicate, 250ms for different card
+            if (isSameCode && timeSinceLast < 1200) {
+              return;
+            }
+            if (!isSameCode && timeSinceLast < 250) {
               return;
             }
 
