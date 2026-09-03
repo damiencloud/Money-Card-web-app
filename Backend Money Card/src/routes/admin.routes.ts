@@ -4,6 +4,7 @@ import {
   createOrganization,
   getOrganizationById,
   updateOrganization,
+  deleteOrganization,
   getOrganizationSubscription,
   updateOrganizationSubscription,
   getPlans,
@@ -34,6 +35,7 @@ router.get('/organizations', getOrganizations);
 router.post('/organizations', validateRequest({ body: createOrganizationSchema }), createOrganization);
 router.get('/organizations/:id', getOrganizationById);
 router.patch('/organizations/:id', updateOrganization);
+router.delete('/organizations/:id', deleteOrganization);
 router.post('/organizations/:id/reset-admin-password', validateRequest({ body: resetOrgAdminPasswordSchema }), resetOrgAdminPassword);
 router.get('/organizations/:id/subscription', getOrganizationSubscription);
 router.patch('/organizations/:id/subscription', updateOrganizationSubscription);

@@ -12,8 +12,24 @@ import '../../widgets/guards/permission_guard.dart';
 import '../../widgets/states/app_empty_state.dart';
 import '../../widgets/states/app_loading_view.dart';
 
-class CardsScreen extends ConsumerWidget {
+class CardsScreen extends ConsumerStatefulWidget {
   const CardsScreen({super.key});
+
+  @override
+  ConsumerState<CardsScreen> createState() => _CardsScreenState();
+}
+
+class _CardsScreenState extends ConsumerState<CardsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final state = ref.read(cardListNotifierProvider);
+      if (state.cards.isEmpty && !state.isLoading) {
+        ref.read(cardListNotifierProvider.notifier).loadCards();
+      }
+    });
+  }
 
   AppBadgeVariant _getStatusVariant(CardStatus status) {
     switch (status) {
@@ -27,7 +43,7 @@ class CardsScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final cardListState = ref.watch(cardListNotifierProvider);
     final notifier = ref.read(cardListNotifierProvider.notifier);
 

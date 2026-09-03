@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Request, Response } from 'express';
 import { prisma } from '../config/database.js';
 import { sendError, sendSuccess } from '../utils/response.js';
@@ -21,7 +22,7 @@ export const inventoryMovementsStore: InventoryMovementRecord[] = [];
 
 export function recordInventoryMovement(movement: Omit<InventoryMovementRecord, 'id' | 'createdAt'> & { id?: string; createdAt?: string }) {
   const entry: InventoryMovementRecord = {
-    id: movement.id || `mov-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    id: movement.id || `mov-${Date.now()}-${randomUUID().slice(0, 8)}`,
     inventoryId: movement.inventoryId,
     productId: movement.productId,
     productName: movement.productName,

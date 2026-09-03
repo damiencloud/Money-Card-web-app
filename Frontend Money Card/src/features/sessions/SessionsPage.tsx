@@ -186,7 +186,7 @@ export function SessionsPage() {
         sessionStatus: s.status,
         balance: Number(s.balance) || 0,
         branchId: s.branchId,
-        branchName: branch ? branch.name : (((s as any).branchName || (s as any).branch?.name || 'Branch') || 'Main Cafeteria'),
+        branchName: branch ? branch.name : ((s as any).branchName || (s as any).branch?.name || 'Main Cafeteria'),
         startedAt: s.startedAt || s.createdAt,
         settledAt: s.settledAt || null,
         issuedByName: (s as any).issuedBy?.name,
@@ -583,9 +583,6 @@ export function SessionsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
             Customer History & Audit Trail
           </h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Authoritative registry of customer cafeteria sessions, purchases, and permanent card block/unblock audit events.
-          </p>
         </div>
         <div className="flex items-center gap-3">
           <Button
@@ -607,25 +604,21 @@ export function SessionsPage() {
           title="Active Customer Sessions"
           value={activeCount}
           icon={<Wallet className="h-5 w-5 text-emerald-600" />}
-          description="Currently active in cafeteria"
         />
         <StatCard
           title="Active Floating Balance"
           value={formatCurrency(totalActiveBalance)}
           icon={<CreditCard className="h-5 w-5 text-blue-600" />}
-          description="Unsettled customer funds"
         />
         <StatCard
           title="Blocked Cards"
           value={blockedCardsCount}
           icon={<ShieldAlert className="h-5 w-5 text-rose-600" />}
-          description="Disabled for fraud/loss prevention"
         />
         <StatCard
           title="Audit Trail Records"
           value={totalAuditEventsCount}
           icon={<History className="h-5 w-5 text-violet-600" />}
-          description="Card status & lifecycle changes"
         />
       </div>
 
@@ -664,7 +657,7 @@ export function SessionsPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Search customer, card (MC 105)..."
+              placeholder="Search by customer, phone, or card number..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value.slice(0, 30))}
               maxLength={30}
@@ -678,9 +671,9 @@ export function SessionsPage() {
               value={sessionStatusFilter}
               onChange={(e) => setSessionStatusFilter(e.target.value as any)}
               options={[
-                { value: 'ALL', label: 'All Session Statuses' },
-                { value: 'ACTIVE', label: 'Active Sessions Only' },
-                { value: 'SETTLED', label: 'Settled Sessions Only' },
+                { value: 'ALL', label: 'All Sessions' },
+                { value: 'ACTIVE', label: 'In Use (Active Now)' },
+                { value: 'SETTLED', label: 'Completed (Settled)' },
               ]}
             />
           ) : (
@@ -715,7 +708,6 @@ export function SessionsPage() {
         </div>
       </UiCard>
 
-
       {/* ─── Content Views ────────────────────────────────────────── */}
       {isLoading ? (
         <LoadingState message="Loading customer history..." />
@@ -725,8 +717,25 @@ export function SessionsPage() {
         filteredSessions.length === 0 ? (
           <EmptyState
             icon={<Wallet className="h-8 w-8 text-slate-400" />}
-            title="No Customer Sessions Found"
-            description="No customer sessions match your current search and filter criteria."
+            title={searchQuery || sessionStatusFilter !== 'ALL' || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? "No matching sessions found" : "No customer sessions yet"}
+            description={searchQuery || sessionStatusFilter !== 'ALL' || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? "Try adjusting your search or filters." : "Active and past cafeteria card sessions will appear here in real time."}
+            action={
+              searchQuery || sessionStatusFilter !== 'ALL' || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSessionStatusFilter('ALL');
+                    setBranchFilter('ALL');
+                    setDateRangeFilter('ALL');
+                  }}
+                  className="gap-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span>Clear Filters</span>
+                </Button>
+              ) : undefined
+            }
           />
         ) : (
           <DataTable data={filteredSessions} columns={sessionColumns} />
@@ -734,8 +743,24 @@ export function SessionsPage() {
       ) : filteredEvents.length === 0 ? (
         <EmptyState
           icon={<ShieldCheck className="h-8 w-8 text-emerald-500" />}
-          title="No Card Status Events"
-          description="No card block or unblock audit records match your query. Card status events are permanently preserved here when staff members perform actions."
+          title={searchQuery || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? "No matching audit events" : "No blocked cards"}
+          description={searchQuery || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? "Try clearing search or filters to see all audit records." : "No cards are currently blocked. Audit events will be logged here when staff lock or unlock cards."}
+          action={
+            searchQuery || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearchQuery('');
+                  setBranchFilter('ALL');
+                  setDateRangeFilter('ALL');
+                }}
+                className="gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                <span>Clear Filters</span>
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <DataTable data={filteredEvents} columns={eventColumns} />

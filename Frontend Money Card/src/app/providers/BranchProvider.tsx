@@ -21,15 +21,11 @@ export function BranchProvider({ children }: BranchProviderProps) {
     return storage.get<string>(STORAGE_KEYS.SELECTED_BRANCH_ID);
   });
 
-  // Derive currentBranch from branches + selectedBranchId (no effect needed)
+  // Derive currentBranch from branches + selectedBranchId (null means All Branches)
   const currentBranch = useMemo(() => {
-    if (branches.length === 0) return null;
-    if (selectedBranchId) {
-      const found = branches.find((b) => b.id === selectedBranchId);
-      if (found) return found;
-    }
-    // Fallback to first branch
-    return branches[0];
+    if (branches.length === 0 || !selectedBranchId) return null;
+    const found = branches.find((b) => b.id === selectedBranchId);
+    return found || null;
   }, [branches, selectedBranchId]);
 
   // ── Select Branch ─────────────────────────────────────────

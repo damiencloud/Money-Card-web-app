@@ -61,11 +61,10 @@ class SessionListNotifier extends StateNotifier<SessionListState> {
   final String? _currentBranchId;
 
   SessionListNotifier(this._sessionRepository, this._currentBranchId)
-      : super(const SessionListState()) {
-    loadSessions();
-  }
+      : super(const SessionListState());
 
-  Future<void> loadSessions() async {
+  Future<void> loadSessions({bool force = false}) async {
+    if (!force && state.isLoading) return;
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       final statusParam = state.statusFilter == 'ALL' ? null : state.statusFilter;

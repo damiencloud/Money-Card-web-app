@@ -128,8 +128,9 @@ export function PortalTransactionsPage() {
 
             return (
               <Card key={txn.id} padding="sm" className="space-y-3">
-                <div
-                  className="flex items-center justify-between cursor-pointer"
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between text-left cursor-pointer"
                   onClick={() =>
                     txn.items && txn.items.length > 0
                       ? setExpandedTxnId(isExpanded ? null : txn.id)
@@ -198,7 +199,7 @@ export function PortalTransactionsPage() {
                       </div>
                     )}
                   </div>
-                </div>
+                </button>
 
                 {/* Expanded Itemized Purchase Breakdown */}
                 {isExpanded && txn.items && (

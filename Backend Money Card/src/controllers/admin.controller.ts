@@ -37,8 +37,36 @@ export function formatSubscription(sub: any) {
   };
 }
 
-export async function getOrganizations(_req: Request, res: Response) {
+export async function getOrganizations(req: Request, res: Response) {
+  const { search, status } = req.query;
+
+  const whereClause: any = {};
+
+  if (search && typeof search === 'string' && search.trim()) {
+    const q = search.trim();
+    whereClause.OR = [
+      { name: { contains: q, mode: 'insensitive' } },
+      { id: { contains: q, mode: 'insensitive' } },
+      { email: { contains: q, mode: 'insensitive' } },
+      {
+        users: {
+          some: {
+            OR: [
+              { name: { contains: q, mode: 'insensitive' } },
+              { email: { contains: q, mode: 'insensitive' } },
+            ],
+          },
+        },
+      },
+    ];
+  }
+
+  if (status && typeof status === 'string' && status !== 'ALL') {
+    whereClause.status = status as OrgStatus;
+  }
+
   const orgs = await prisma.organization.findMany({
+    where: whereClause,
     include: {
       plan: true,
       subscription: true,
@@ -50,7 +78,7 @@ export async function getOrganizations(_req: Request, res: Response) {
       _count: {
         select: {
           branches: true,
-          users: true,
+          users: { where: { role: Role.STAFF } },
           cards: true,
         },
       },
@@ -185,7 +213,7 @@ export async function createOrganization(req: Request, res: Response) {
     usage: {
       branchCount: 0,
       branchLimit: result.sub?.branchLimitOverride || plan.branchLimit,
-      staffCount: 1,
+      staffCount: 0,
       staffLimit: result.sub?.staffLimitOverride || plan.staffLimit,
       cardCount: 0,
       cardLimit: result.sub?.cardLimitOverride || plan.cardLimit,
@@ -283,6 +311,60 @@ export async function updateOrganization(req: Request, res: Response) {
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt,
   });
+}
+
+export async function deleteOrganization(req: Request, res: Response) {
+  const { id } = req.params;
+
+  const org = await prisma.organization.findUnique({
+    where: { id },
+  });
+
+  if (!org) {
+    return sendError(res, 404, 'NOT_FOUND', 'Organization not found');
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // 1. Delete customer history events
+    await tx.customerHistoryEvent.deleteMany({ where: { organizationId: id } });
+
+    // 2. Delete transactions, card sessions & cards
+    await tx.transaction.deleteMany({
+      where: {
+        branch: { organizationId: id },
+      },
+    });
+    await tx.cardSession.deleteMany({ where: { organizationId: id } });
+    await tx.card.deleteMany({ where: { organizationId: id } });
+
+    // 3. Delete inventory & products
+    await tx.branchInventory.deleteMany({
+      where: { branch: { organizationId: id } },
+    });
+    await tx.product.deleteMany({ where: { organizationId: id } });
+
+    // 4. Delete user permissions, user branches & users
+    await tx.userPermission.deleteMany({
+      where: { user: { organizationId: id } },
+    });
+    await tx.userBranch.deleteMany({
+      where: { user: { organizationId: id } },
+    });
+    await tx.user.deleteMany({ where: { organizationId: id } });
+
+    // 5. Delete branches
+    await tx.branch.deleteMany({ where: { organizationId: id } });
+
+    // 6. Delete subscriptions, payments & plan change requests
+    await tx.subscriptionPayment.deleteMany({ where: { organizationId: id } });
+    await tx.planChangeRequest.deleteMany({ where: { organizationId: id } });
+    await tx.subscription.deleteMany({ where: { organizationId: id } });
+
+    // 7. Delete organization
+    await tx.organization.delete({ where: { id } });
+  });
+
+  return sendSuccess(res, { message: `Organization '${org.name}' deleted successfully` });
 }
 
 export async function getOrganizationById(req: Request, res: Response) {

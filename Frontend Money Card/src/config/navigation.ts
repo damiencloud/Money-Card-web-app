@@ -93,14 +93,6 @@ export const NAVIGATION_ITEMS: NavItemConfig[] = [
     permission: 'VIEW_ANALYTICS',
   },
   {
-    id: 'reports',
-    label: 'Reports',
-    path: '/reports',
-    iconName: 'FileText',
-    roles: ['ORG_ADMIN'],
-    permission: 'VIEW_REPORTS',
-  },
-  {
     id: 'subscriptions',
     label: 'Subscription',
     path: '/subscriptions',

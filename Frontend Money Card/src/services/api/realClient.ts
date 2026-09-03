@@ -214,6 +214,10 @@ export const realClient: typeof mockClient = {
       return handleApiCall(() => apiClient.patch<OrganizationOverview>(`/v1/admin/organizations/${id}`, data));
     },
 
+    async deleteAdminOrganization(id: string): Promise<ApiResult<{ message: string }>> {
+      return handleApiCall(() => apiClient.delete<{ message: string }>(`/v1/admin/organizations/${id}`));
+    },
+
     async resetOrgAdminPassword(
       id: string,
       data: { temporaryPassword: string },

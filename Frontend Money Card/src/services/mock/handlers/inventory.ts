@@ -5,6 +5,7 @@
 import { mockStore } from '../store';
 import { mockDelay, createMockSuccess, createMockError, paginateArray } from '../utils';
 import { mockAuthHandlers } from './auth';
+import { generateSecureToken } from '@/utils/cryptoRandom';
 import type {
   ApiResult,
   InventoryItem,
@@ -351,7 +352,7 @@ Sample Veg Burger,Veg|Fast Food,120`;
       }
     }
 
-    const previewToken = `preview_token_${Math.random().toString(36).substring(2, 9)}`;
+    const previewToken = generateSecureToken('preview_token');
     const previewData: CsvImportPreview = {
       branchId: resolvedBranchId,
       totalRows: lines.length - 1,

@@ -26,7 +26,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(sessionListNotifierProvider.notifier).loadSessions();
+      final sessionState = ref.read(sessionListNotifierProvider);
+      if (sessionState.sessions.isEmpty && !sessionState.isLoading) {
+        ref.read(sessionListNotifierProvider.notifier).loadSessions();
+      }
     });
   }
 
@@ -53,8 +56,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(currentBranchProvider, (_, _) {
-      ref.read(sessionListNotifierProvider.notifier).loadSessions();
+    ref.listen(currentBranchProvider, (previous, next) {
+      if (previous?.id != next?.id) {
+        ref.read(sessionListNotifierProvider.notifier).loadSessions(force: true);
+      }
     });
 
     final user = ref.watch(currentUserProvider);
