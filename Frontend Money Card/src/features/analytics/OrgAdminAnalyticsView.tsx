@@ -216,7 +216,7 @@ export function OrgAdminAnalyticsView() {
     if (!analytics) return null;
 
     const selectedBranchObj = branches.find((b) => b.id === branchFilter);
-    const selectedBranchName = branchFilter === 'ALL' ? 'All Permitted Branches' : selectedBranchObj?.name || branchFilter;
+    const selectedBranchName = branchFilter === 'ALL' ? 'All Branches' : selectedBranchObj?.name || branchFilter;
 
     const dateLabel =
       datePreset === 'today'
@@ -377,7 +377,7 @@ export function OrgAdminAnalyticsView() {
               value={branchFilter}
               onChange={(e) => handleBranchChange(e.target.value)}
               options={[
-                { value: 'ALL', label: 'All Permitted Branches' },
+                { value: 'ALL', label: 'All Branches' },
                 ...branches.map((b) => ({ value: b.id, label: b.name })),
               ]}
             />

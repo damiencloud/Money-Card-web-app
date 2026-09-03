@@ -126,7 +126,7 @@ export function PeakPage() {
     try {
       const selectedBranchObj = allBranches.find((b) => b.id === selectedBranchId);
       const selectedBranchName = selectedBranchId === 'ALL'
-        ? 'All Permitted Branches'
+        ? 'All Branches'
         : (selectedBranchObj?.name || 'Selected Branch');
 
       const dateRangeLabel = selectedDateRange === 'today'
@@ -276,7 +276,7 @@ export function PeakPage() {
             value={selectedBranchId}
             onChange={(e) => setSelectedBranchId(e.target.value)}
             options={[
-              { value: 'ALL', label: 'All Permitted Branches' },
+              { value: 'ALL', label: 'All Branches' },
               ...allBranches.map((b) => ({ value: b.id, label: b.name })),
             ]}
           />

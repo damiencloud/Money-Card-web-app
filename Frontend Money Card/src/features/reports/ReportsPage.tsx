@@ -132,7 +132,7 @@ export function ReportsPage() {
     try {
       const targetBranch = branchFilter !== 'ALL' ? branchFilter : undefined;
       const selectedBranchObj = branches.find((b) => b.id === branchFilter);
-      const selectedBranchName = branchFilter === 'ALL' ? 'All Permitted Branches' : selectedBranchObj?.name || branchFilter;
+      const selectedBranchName = branchFilter === 'ALL' ? 'All Branches' : selectedBranchObj?.name || branchFilter;
 
       // Fetch relevant scoped datasets for official PDF generation
       const [prodRes, sessRes] = await Promise.all([
@@ -329,7 +329,7 @@ export function ReportsPage() {
             value={branchFilter}
             onChange={(e) => setBranchFilter(e.target.value)}
             options={[
-              { value: 'ALL', label: 'All Permitted Branches' },
+              { value: 'ALL', label: 'All Branches' },
               ...branches.map((b) => ({ value: b.id, label: b.name })),
             ]}
           />
@@ -374,7 +374,7 @@ export function ReportsPage() {
               <div>
                 <span className="text-xs text-slate-400">Category & Target Branch</span>
                 <p className="text-sm font-semibold text-slate-200">
-                  {previewReport.type} — {branchFilter === 'ALL' ? 'All Permitted Branches' : branches.find((b) => b.id === branchFilter)?.name || branchFilter}
+                  {previewReport.type} — {branchFilter === 'ALL' ? 'All Branches' : branches.find((b) => b.id === branchFilter)?.name || branchFilter}
                 </p>
               </div>
               <Badge variant="outline" className="text-rose-300 border-rose-500/30">

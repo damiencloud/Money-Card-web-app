@@ -38,8 +38,6 @@ import {
   ArrowRight,
   AlertTriangle,
   BarChart3,
-  Clock,
-  X,
   CheckCircle2,
   Sparkles,
 } from 'lucide-react';
@@ -108,13 +106,6 @@ export function OrgAdminDashboard() {
     }
   };
 
-  const handleClearDateFilter = () => {
-    setDatePreset('thisMonth');
-    const { startDate: s, endDate: e } = getPresetDates('thisMonth');
-    setStartDate(s);
-    setEndDate(e);
-  };
-
   const fetchOrgDashboardData = useCallback(async (isSilent = false) => {
     if (!isSilent) setIsLoading(true);
     setIsRefreshing(true);
@@ -127,7 +118,7 @@ export function OrgAdminDashboard() {
           apiService.branches.getBranches(),
           apiService.staff.getStaff(),
           apiService.cards.getCards(),
-          apiService.inventory.getInventory(),
+          apiService.inventory.getInventory(currentBranch ? { branchId: currentBranch.id } : undefined),
           apiService.analytics.getAnalyticsOverview({
             branchId: currentBranch ? currentBranch.id : undefined,
             startDate: startDate || undefined,
@@ -172,7 +163,7 @@ export function OrgAdminDashboard() {
             apiService.branches.getBranches(),
             apiService.staff.getStaff(),
             apiService.cards.getCards(),
-            apiService.inventory.getInventory(),
+            apiService.inventory.getInventory(currentBranch ? { branchId: currentBranch.id } : undefined),
             apiService.analytics.getAnalyticsOverview({
               branchId: currentBranch ? currentBranch.id : undefined,
               startDate: startDate || undefined,
@@ -251,20 +242,6 @@ export function OrgAdminDashboard() {
   const lowStockCount = useMemo(() => {
     return inventory.filter((i) => i.quantity <= 10).length;
   }, [inventory]);
-
-  // Formatted date period description
-  const activeDateLabel = useMemo(() => {
-    if (!startDate && !endDate) return 'All Time';
-    if (startDate && endDate && startDate === endDate) {
-      return `Date: ${startDate}`;
-    }
-    if (startDate && endDate) {
-      return `${startDate} to ${endDate}`;
-    }
-    if (startDate) return `From ${startDate}`;
-    if (endDate) return `Until ${endDate}`;
-    return 'All Time';
-  }, [startDate, endDate]);
 
   // Getting Started Checklist Calculations
   const hasBranches = branches.length > 0;
@@ -634,27 +611,7 @@ export function OrgAdminDashboard() {
           {/* ── UNIFIED FILTERED METRICS BOX (Date Filter Toolbar + 4 Operational Stat Cards) ── */}
           <Card className="border-slate-800/80 bg-slate-900/50 backdrop-blur-sm">
             <CardHeader
-              title="Operational & Financial Metrics"
-              action={
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-950 px-2.5 py-1 text-xs font-medium text-slate-300 border border-slate-800">
-                    <Clock className="h-3.5 w-3.5 text-violet-400" />
-                    <span>Period: <strong className="text-slate-100">{activeDateLabel}</strong></span>
-                  </span>
-
-                  {(startDate || endDate) && (
-                    <button
-                      type="button"
-                      onClick={handleClearDateFilter}
-                      className="inline-flex items-center gap-1 rounded-md bg-slate-800/80 px-2 py-1 text-xs font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                      title="Reset date filter to All Time"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                      <span>Reset</span>
-                    </button>
-                  )}
-                </div>
-              }
+              title="Sales & Operations Overview"
             />
 
             <CardContent className="space-y-5">
@@ -677,7 +634,7 @@ export function OrgAdminDashboard() {
                         }
                       }}
                       options={[
-                        { value: '', label: 'All Permitted Branches' },
+                        { value: '', label: 'All Branches' },
                         ...branches.map((b) => ({ value: b.id, label: b.name })),
                       ]}
                     />
