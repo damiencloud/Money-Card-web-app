@@ -559,10 +559,6 @@ export function OrgAdminAnalyticsView() {
                         Top Performing Branch
                       </Badge>
                     </div>
-                    <p className="text-xs text-slate-400">
-                      Generated {formatCurrency(topBranch.totalRevenue)} across{' '}
-                      {topBranch.transactionCount} transactions.
-                    </p>
                   </div>
                 </div>
                 <div className="hidden sm:block text-right font-mono">

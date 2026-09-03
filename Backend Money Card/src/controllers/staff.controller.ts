@@ -40,11 +40,22 @@ export async function getStaffList(req: Request, res: Response) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
   }
 
+  const where: any = {
+    organizationId: orgId,
+    role: Role.STAFF,
+  };
+
+  const { search } = req.query;
+  if (typeof search === 'string' && search.trim()) {
+    const q = search.trim();
+    where.OR = [
+      { name: { contains: q, mode: 'insensitive' } },
+      { email: { contains: q, mode: 'insensitive' } },
+    ];
+  }
+
   const staffMembers = await prisma.user.findMany({
-    where: {
-      organizationId: orgId,
-      role: Role.STAFF,
-    },
+    where,
     include: {
       permissions: true,
       assignedBranches: {

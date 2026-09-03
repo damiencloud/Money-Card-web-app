@@ -2,7 +2,7 @@
 // Complete Branch Management for ORG_ADMIN & SUPER_ADMIN.
 // Uses apiService abstraction strictly — does NOT import mock handlers directly.
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { apiService } from '@/services/api';
 import { useBranch, usePermissions } from '@/hooks';
@@ -31,6 +31,7 @@ import {
   Trash2,
   MoreVertical,
   ChevronDown,
+  X,
 } from 'lucide-react';
 
 interface BranchActionMenuProps {
@@ -225,7 +226,7 @@ export function BranchesPage() {
     setError(null);
     try {
       const [branchRes, orgRes] = await Promise.all([
-        apiService.branches.getBranches({ search: searchQuery }),
+        apiService.branches.getBranches(),
         apiService.organizations.getOrganization(),
       ]);
 
@@ -245,7 +246,7 @@ export function BranchesPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery, updateBranchContext]);
+  }, [updateBranchContext]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -253,7 +254,7 @@ export function BranchesPage() {
       setError(null);
       try {
         const [branchRes, orgRes] = await Promise.all([
-          apiService.branches.getBranches({ search: searchQuery }),
+          apiService.branches.getBranches(),
           apiService.organizations.getOrganization(),
         ]);
         if (isCancelled) return;
@@ -284,7 +285,14 @@ export function BranchesPage() {
     return () => {
       isCancelled = true;
     };
-  }, [searchQuery, updateBranchContext]);
+  }, [updateBranchContext]);
+
+  // ── Instant Client-Side Filtered Branches ──────────────────
+  const filteredBranches = useMemo(() => {
+    if (!searchQuery.trim()) return branches;
+    const q = searchQuery.toLowerCase().trim();
+    return branches.filter((b) => b.name.toLowerCase().includes(q));
+  }, [branches, searchQuery]);
 
   // ── Create Branch ─────────────────────────────────────────
   const handleOpenCreate = () => {
@@ -572,8 +580,18 @@ export function BranchesPage() {
             value={searchQuery}
             maxLength={30}
             onChange={(e) => setSearchQuery(e.target.value.slice(0, 30))}
-            className="w-full rounded-lg border border-slate-800 bg-slate-900/60 pl-10 pr-4 py-2 text-sm text-slate-100 placeholder-slate-500 transition-colors focus:border-violet-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-800 bg-slate-900/60 pl-10 pr-10 py-2 text-sm text-slate-100 placeholder-slate-500 transition-colors focus:border-violet-500 focus:outline-none"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
         <Button variant="outline" size="md" onClick={fetchBranches} leftIcon={<RefreshCw className="h-4 w-4" />}>
           Refresh
@@ -589,22 +607,29 @@ export function BranchesPage() {
         <EmptyState
           icon={<Building2 className="h-8 w-8 text-slate-500" />}
           title="No branches found"
-          description={
-            searchQuery
-              ? `No branches matching "${searchQuery}"`
-              : 'Get started by creating your first organization branch.'
-          }
+          description="Get started by creating your first organization branch."
           action={
-            canManage && !searchQuery ? (
+            canManage ? (
               <Button variant="primary" onClick={handleOpenCreate} leftIcon={<Plus className="h-4 w-4" />}>
                 Create Branch
               </Button>
             ) : undefined
           }
         />
+      ) : filteredBranches.length === 0 ? (
+        <EmptyState
+          icon={<Building2 className="h-8 w-8 text-slate-500" />}
+          title="No matching branches"
+          description={`No branches matching "${searchQuery}". Try a different name or clear the search.`}
+          action={
+            <Button variant="outline" onClick={() => setSearchQuery('')} leftIcon={<X className="h-4 w-4" />}>
+              Clear Search
+            </Button>
+          }
+        />
       ) : (
         <Card padding="none" className="min-h-[220px]">
-          <DataTable<Branch> data={branches} columns={columns} keyExtractor={(item: Branch) => item.id} />
+          <DataTable<Branch> data={filteredBranches} columns={columns} keyExtractor={(item: Branch) => item.id} />
         </Card>
       )}
 

@@ -2,7 +2,8 @@
 // Unified Staff Details, Permissions, Branches, and Add Staff UX for ORG_ADMIN.
 // Uses apiService abstraction strictly — does NOT call mock handlers directly.
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { apiService } from '@/services/api';
 import { usePermissions } from '@/hooks';
 import type {
@@ -46,7 +47,240 @@ import {
   Lock,
   Key,
   X,
+  MoreVertical,
+  ChevronDown,
 } from 'lucide-react';
+
+interface StaffActionMenuProps {
+  staff: Staff;
+  canManage: boolean;
+  resendingId: string | null;
+  onResendInvite: () => void;
+  onEditOrView: () => void;
+  onPermissions: () => void;
+  onBranches: () => void;
+  onSecurity: () => void;
+  onToggleStatus: () => void;
+  onDelete: () => void;
+}
+
+function StaffActionMenu({
+  staff,
+  canManage,
+  resendingId,
+  onResendInvite,
+  onEditOrView,
+  onPermissions,
+  onBranches,
+  onSecurity,
+  onToggleStatus,
+  onDelete,
+}: StaffActionMenuProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({
+    top: 0,
+    left: 0,
+  });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const updatePosition = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const menuWidth = 210;
+    const menuHeight = 250;
+
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUpwards = spaceBelow < menuHeight && rect.top > menuHeight;
+
+    const top = openUpwards ? rect.top - menuHeight - 6 : rect.bottom + 6;
+    const left = Math.max(8, rect.right - menuWidth);
+
+    setMenuPosition({ top, left });
+  }, []);
+
+  const handleToggle = () => {
+    if (!isOpen) {
+      updatePosition();
+      setIsOpen(true);
+    } else {
+      setIsOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(event.target as Node) &&
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleScrollOrResize = () => {
+      setIsOpen(false);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
+  return (
+    <div ref={containerRef} className="inline-block text-left">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleToggle}
+        className="flex items-center gap-1.5 text-xs py-1 px-2.5 bg-slate-900 border-slate-700 hover:border-violet-500 text-slate-200"
+      >
+        <MoreVertical className="h-3.5 w-3.5 text-slate-400" />
+        <span>Actions</span>
+        <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+      </Button>
+
+      {isOpen &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={{
+              position: 'fixed',
+              top: `${menuPosition.top}px`,
+              left: `${menuPosition.left}px`,
+              zIndex: 9999,
+            }}
+            className="w-52 rounded-xl border border-slate-700/80 bg-slate-900 p-1.5 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
+          >
+            {/* Resend Activation Invite if Pending */}
+            {canManage && staff.status === 'PENDING_ACTIVATION' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  onResendInvite();
+                }}
+                disabled={resendingId === staff.id}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 transition-colors cursor-pointer text-left"
+              >
+                <Send className="h-4 w-4" />
+                <span>{resendingId === staff.id ? 'Sending Invite...' : 'Resend Invite'}</span>
+              </button>
+            )}
+
+            {/* Profile / Details */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onEditOrView();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer text-left"
+            >
+              {canManage ? <Edit2 className="h-4 w-4 text-violet-400" /> : <Eye className="h-4 w-4 text-violet-400" />}
+              <span>{canManage ? 'Edit / Details' : 'View Details'}</span>
+            </button>
+
+            {/* Manage / View Permissions */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onPermissions();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer text-left"
+            >
+              <ShieldCheck className="h-4 w-4 text-indigo-400" />
+              <span>{canManage ? 'Permissions' : 'View Permissions'}</span>
+            </button>
+
+            {/* Branch Assignments */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onBranches();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer text-left"
+            >
+              <Building2 className="h-4 w-4 text-sky-400" />
+              <span>Branch Access</span>
+            </button>
+
+            {/* Change Password */}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  onSecurity();
+                }}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer text-left"
+              >
+                <Key className="h-4 w-4 text-amber-400" />
+                <span>Change Password</span>
+              </button>
+            )}
+
+            {canManage && <div className="my-1 border-t border-slate-800" />}
+
+            {/* Status Toggle */}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  onToggleStatus();
+                }}
+                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer text-left ${
+                  staff.status === 'ACTIVE'
+                    ? 'text-rose-400 hover:bg-rose-500/10 hover:text-rose-300'
+                    : 'text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300'
+                }`}
+              >
+                <Power className="h-4 w-4" />
+                <span>{staff.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}</span>
+              </button>
+            )}
+
+            {/* Delete Staff */}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  onDelete();
+                }}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer text-left"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>Delete Staff</span>
+              </button>
+            )}
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
 
 export function StaffPage() {
   const { hasPermission } = usePermissions();
@@ -178,6 +412,13 @@ export function StaffPage() {
       isCancelled = true;
     };
   }, [searchQuery]);
+
+  // ── Instant Client-Side Filtered Staff ────────────────────
+  const filteredStaff = useMemo(() => {
+    if (!searchQuery.trim()) return staffList;
+    const q = searchQuery.toLowerCase().trim();
+    return staffList.filter((s) => s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q));
+  }, [staffList, searchQuery]);
 
   // If user lacks STAFF_VIEW permission, block access
   if (!canView) {
@@ -632,69 +873,19 @@ export function StaffPage() {
       header: 'Actions',
       className: 'text-right',
       render: (staff: Staff) => (
-        <div className="flex items-center justify-end gap-1.5">
-          {/* Resend Activation Invite if Pending */}
-          {canManage && staff.status === 'PENDING_ACTIVATION' && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleResendInvite(staff.id)}
-              disabled={resendingId === staff.id}
-              className="text-amber-400 border-amber-500/30 hover:bg-amber-500/10 text-xs"
-              title="Resend Activation Invite"
-              leftIcon={<Send className="h-3.5 w-3.5" />}
-            >
-              {resendingId === staff.id ? 'Sending...' : 'Resend Invite'}
-            </Button>
-          )}
-
-          {/* Unified Details / Edit Action */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleOpenStaffModal(staff, 'overview')}
-            title="View Details & Edit"
-            leftIcon={canManage ? <Edit2 className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-          >
-            {canManage ? 'Edit / Details' : 'Details'}
-          </Button>
-
-          {/* Quick Permission Jump */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleOpenStaffModal(staff, 'permissions')}
-            title="Manage Permissions"
-            leftIcon={<ShieldCheck className="h-3.5 w-3.5 text-violet-400" />}
-          >
-            Permissions
-          </Button>
-
-          {/* Status Toggle */}
-          {canManage && (
-            <Button
-              variant={staff.status === 'ACTIVE' ? 'ghost' : 'outline'}
-              size="sm"
-              onClick={() => handleOpenStatus(staff)}
-              title={staff.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-              leftIcon={<Power className="h-3.5 w-3.5" />}
-            >
-              {staff.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-            </Button>
-          )}
-          {/* Delete Staff Member */}
-          {canManage && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleOpenDeleteStaff(staff)}
-              title="Delete Staff Member"
-              className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30"
-              leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-            >
-              Delete
-            </Button>
-          )}
+        <div className="flex items-center justify-end">
+          <StaffActionMenu
+            staff={staff}
+            canManage={canManage}
+            resendingId={resendingId}
+            onResendInvite={() => handleResendInvite(staff.id)}
+            onEditOrView={() => handleOpenStaffModal(staff, 'overview')}
+            onPermissions={() => handleOpenStaffModal(staff, 'permissions')}
+            onBranches={() => handleOpenStaffModal(staff, 'branches')}
+            onSecurity={() => handleOpenStaffModal(staff, 'security')}
+            onToggleStatus={() => handleOpenStatus(staff)}
+            onDelete={() => handleOpenDeleteStaff(staff)}
+          />
         </div>
       ),
     },
@@ -755,8 +946,18 @@ export function StaffPage() {
             value={searchQuery}
             maxLength={30}
             onChange={(e) => setSearchQuery(e.target.value.slice(0, 30))}
-            className="w-full rounded-lg border border-slate-800 bg-slate-900/60 pl-10 pr-4 py-2 text-sm text-slate-100 placeholder-slate-500 transition-colors focus:border-violet-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-800 bg-slate-900/60 pl-10 pr-10 py-2 text-sm text-slate-100 placeholder-slate-500 transition-colors focus:border-violet-500 focus:outline-none"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
         <Button variant="outline" size="md" onClick={fetchStaffData} leftIcon={<RefreshCw className="h-4 w-4" />}>
           Refresh
@@ -771,27 +972,30 @@ export function StaffPage() {
       ) : staffList.length === 0 ? (
         <EmptyState
           icon={<Users className="h-8 w-8 text-slate-500" />}
-          title={searchQuery ? "No staff members found" : "No staff accounts yet"}
-          description={
-            searchQuery
-              ? `No staff match "${searchQuery}". Try a different name or clear search.`
-              : 'Add your team members to grant POS cashier and branch access.'
-          }
+          title="No staff accounts yet"
+          description="Add your team members to grant POS cashier and branch access."
           action={
-            searchQuery ? (
-              <Button variant="outline" onClick={() => setSearchQuery('')} leftIcon={<X className="h-4 w-4" />}>
-                Clear Search
-              </Button>
-            ) : canManage ? (
+            canManage ? (
               <Button variant="primary" onClick={handleOpenAdd} leftIcon={<UserPlus className="h-4 w-4" />}>
                 Add First Staff Member
               </Button>
             ) : undefined
           }
         />
+      ) : filteredStaff.length === 0 ? (
+        <EmptyState
+          icon={<Users className="h-8 w-8 text-slate-500" />}
+          title="No staff members found"
+          description={`No staff match "${searchQuery}". Try a different name or clear search.`}
+          action={
+            <Button variant="outline" onClick={() => setSearchQuery('')} leftIcon={<X className="h-4 w-4" />}>
+              Clear Search
+            </Button>
+          }
+        />
       ) : (
-        <Card padding="none">
-          <DataTable<Staff> data={staffList} columns={columns} keyExtractor={(item: Staff) => item.id} />
+        <Card padding="none" className="min-h-[220px]">
+          <DataTable<Staff> data={filteredStaff} columns={columns} keyExtractor={(item: Staff) => item.id} />
         </Card>
       )}
 
@@ -800,7 +1004,6 @@ export function StaffPage() {
         isOpen={showStaffModal}
         onClose={() => setShowStaffModal(false)}
         title={canManage ? `Staff Settings: ${selectedStaff?.name}` : `Staff Details: ${selectedStaff?.name}`}
-        description="Unified management of staff profile, branch authorizations, and M0 permissions."
         size="xl"
       >
         <form onSubmit={handleSaveStaffChanges} noValidate className="space-y-6">
@@ -964,40 +1167,6 @@ export function StaffPage() {
                     )}
                   </div>
                 </div>
-
-                {/* Quick Branch Access Summary */}
-                <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      Authorized Branches ({formBranchIds.length})
-                    </h4>
-                    <button
-                      type="button"
-                      onClick={() => setStaffTab('branches')}
-                      className="text-xs text-violet-400 hover:text-violet-300 font-medium"
-                    >
-                      Manage Branches →
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {branches
-                      .filter((b) => formBranchIds.includes(b.id))
-                      .map((b) => (
-                        <span
-                          key={b.id}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1 text-xs text-slate-200"
-                        >
-                          <Building2 className="h-3.5 w-3.5 text-violet-400" />
-                          {b.name}
-                        </span>
-                      ))}
-                    {formBranchIds.length === 0 && (
-                      <span className="text-xs text-amber-400">No branches currently assigned</span>
-                    )}
-                  </div>
-                </div>
-
-
               </div>
             )}
 

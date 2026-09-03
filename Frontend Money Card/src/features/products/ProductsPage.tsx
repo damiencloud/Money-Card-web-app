@@ -17,7 +17,6 @@ import {
   EmptyState,
   ErrorState,
 } from '@/components/ui';
-import { DataTable } from '@/components/tables';
 import { notify, formatCurrency } from '@/utils';
 import { UnauthorizedPage } from '@/features/auth';
 import { CategorySelector } from './CategorySelector';
@@ -31,8 +30,6 @@ import {
   AlertTriangle,
   Layers,
   Trash2,
-  LayoutGrid,
-  List,
   Search,
 } from 'lucide-react';
 
@@ -74,7 +71,6 @@ export function ProductsPage({ defaultTab: _defaultTab }: ProductsPageProps = {}
   const [searchQuery, setSearchQuery] = useState('');
   const [statusStockFilter, setStatusStockFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   // Modals state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -408,135 +404,7 @@ export function ProductsPage({ defaultTab: _defaultTab }: ProductsPageProps = {}
     return <UnauthorizedPage />;
   }
 
-  // ─── Unified Table Columns ────────────────────────────────────────────────
-  const tableColumns = [
-    {
-      key: 'itemName',
-      header: 'Product Item',
-      render: (product: UnifiedProductItem) => (
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400 shrink-0">
-            <Package className="h-4 w-4" />
-          </div>
-          <div>
-            <p className="font-semibold text-slate-100">{product.itemName}</p>
-            {product.branchName && (
-              <p className="text-xs text-slate-400">🏪 {product.branchName}</p>
-            )}
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: 'category',
-      header: 'Category',
-      render: (product: UnifiedProductItem) => (
-        <div className="flex flex-wrap gap-1">
-          {(Array.isArray(product.category) ? product.category : [product.category || 'General']).map((c: any, idx: number) => {
-            const isVeg = c.toLowerCase() === 'veg';
-            const isNonVeg = c.toLowerCase() === 'non-veg';
-            const isDrink = c.toLowerCase() === 'beverage' || c.toLowerCase() === 'drink';
-            return (
-              <Badge
-                key={idx}
-                variant={isVeg ? 'success' : isNonVeg ? 'danger' : isDrink ? 'info' : 'outline'}
-                className="capitalize text-[11px]"
-              >
-                {c}
-              </Badge>
-            );
-          })}
-        </div>
-      ),
-    },
-    {
-      key: 'price',
-      header: 'Price',
-      render: (product: UnifiedProductItem) => (
-        <span className="font-mono text-sm font-bold text-violet-300">
-          {formatCurrency(product.price)}
-        </span>
-      ),
-    },
-    {
-      key: 'quantity',
-      header: 'Stock Quantity',
-      render: (product: UnifiedProductItem) => (
-        <span
-          className={`font-mono text-xs font-extrabold px-2.5 py-1 rounded-full border ${
-            product.quantity === 0
-              ? 'text-rose-400 bg-rose-500/10 border-rose-500/30'
-              : product.quantity < 10
-                ? 'text-amber-400 bg-amber-500/10 border-amber-500/30'
-                : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
-          }`}
-        >
-          {product.quantity === 0 ? '0 (Out of stock)' : `${product.quantity} units`}
-        </span>
-      ),
-    },
-    {
-      key: 'stockValue',
-      header: 'Stock Valuation',
-      render: (product: UnifiedProductItem) => (
-        <span className="font-mono text-xs font-semibold text-slate-300">
-          {formatCurrency(product.quantity * product.price)}
-        </span>
-      ),
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (product: UnifiedProductItem) => (
-        <Badge variant={product.status === 'ACTIVE' ? 'success' : 'danger'}>
-          {product.status}
-        </Badge>
-      ),
-    },
-    {
-      key: 'actions',
-      header: 'Actions',
-      className: 'text-right',
-      render: (product: UnifiedProductItem) => (
-        <div className="flex items-center justify-end gap-1.5">
-          {canManageInventory && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleOpenAdjust(product)}
-              className="text-xs py-1 text-slate-200 border-slate-700 hover:border-violet-500"
-              leftIcon={<Sliders className="h-3.5 w-3.5" />}
-            >
-              Stock
-            </Button>
-          )}
 
-          {canManageProducts && (
-            <Button
-              variant={product.status === 'ACTIVE' ? 'ghost' : 'outline'}
-              size="sm"
-              onClick={() => handleToggleStatus(product)}
-              leftIcon={<Power className="h-3.5 w-3.5" />}
-            >
-              {product.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-            </Button>
-          )}
-
-          {canManageProducts && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleOpenDeleteProduct(product)}
-              className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 px-2"
-              title="Archive Product"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
-      ),
-    },
-  ];
 
   return (
     <div className="space-y-6">
@@ -633,37 +501,10 @@ export function ProductsPage({ defaultTab: _defaultTab }: ProductsPageProps = {}
 
       {/* ─── Search & Filters Control Bar ─── */}
       <Card className="p-4 space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-400">View Layout:</span>
-            <div className="flex rounded-lg bg-slate-900 p-1 border border-slate-800">
-              <button
-                type="button"
-                onClick={() => setViewMode('grid')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                  viewMode === 'grid'
-                    ? 'bg-violet-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-                }`}
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-                <span>Visual Menu Grid</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('table')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                  viewMode === 'table'
-                    ? 'bg-violet-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-                }`}
-              >
-                <List className="h-3.5 w-3.5" />
-                <span>Table View</span>
-              </button>
-            </div>
-          </div>
-
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-semibold text-slate-300">
+            Menu Catalog & Live Branch Stock
+          </span>
           <span className="text-xs text-slate-400">
             Showing <strong className="text-slate-200">{filteredProducts.length}</strong> of {unifiedProducts.length} products
           </span>
@@ -745,7 +586,7 @@ export function ProductsPage({ defaultTab: _defaultTab }: ProductsPageProps = {}
               }
             />
           </div>
-        ) : viewMode === 'grid' ? (
+        ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 p-4">
             {filteredProducts.map((p) => {
               const isVeg = Array.isArray(p.category) && p.category.some((c) => c.toLowerCase() === 'veg');
@@ -865,8 +706,6 @@ export function ProductsPage({ defaultTab: _defaultTab }: ProductsPageProps = {}
               );
             })}
           </div>
-        ) : (
-          <DataTable columns={tableColumns} data={filteredProducts} keyExtractor={(p) => p.id} />
         )}
       </Card>
 
