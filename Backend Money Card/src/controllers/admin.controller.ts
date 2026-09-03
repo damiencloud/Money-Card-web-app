@@ -325,75 +325,42 @@ export async function deleteOrganization(req: Request, res: Response) {
   }
 
   await prisma.$transaction(async (tx) => {
-    // 1. Delete audit logs & history
+    // 1. Delete customer history events
     await tx.customerHistoryEvent.deleteMany({ where: { organizationId: id } });
-    await tx.auditLog.deleteMany({ where: { organizationId: id } });
 
-    // 2. Delete transaction items & transactions
-    await tx.transactionItem.deleteMany({
-      where: {
-        transaction: {
-          session: {
-            organizationId: id,
-          },
-        },
-      },
-    });
-
+    // 2. Delete transactions, card sessions & cards
     await tx.transaction.deleteMany({
       where: {
-        session: {
-          organizationId: id,
-        },
+        branch: { organizationId: id },
       },
     });
-
-    // 3. Delete card sessions & cards
     await tx.cardSession.deleteMany({ where: { organizationId: id } });
     await tx.card.deleteMany({ where: { organizationId: id } });
 
-    // 4. Delete inventory & products
-    await tx.inventoryItem.deleteMany({
-      where: {
-        branch: {
-          organizationId: id,
-        },
-      },
+    // 3. Delete inventory & products
+    await tx.branchInventory.deleteMany({
+      where: { branch: { organizationId: id } },
     });
     await tx.product.deleteMany({ where: { organizationId: id } });
 
-    // 5. Delete staff permissions & branch assignments & users
+    // 4. Delete user permissions, user branches & users
     await tx.userPermission.deleteMany({
-      where: {
-        user: {
-          organizationId: id,
-        },
-      },
+      where: { user: { organizationId: id } },
     });
     await tx.userBranch.deleteMany({
-      where: {
-        user: {
-          organizationId: id,
-        },
-      },
+      where: { user: { organizationId: id } },
     });
     await tx.user.deleteMany({ where: { organizationId: id } });
 
-    // 6. Delete branches
+    // 5. Delete branches
     await tx.branch.deleteMany({ where: { organizationId: id } });
 
-    // 7. Delete subscriptions & payments
-    await tx.subscriptionPayment.deleteMany({
-      where: {
-        subscription: {
-          organizationId: id,
-        },
-      },
-    });
+    // 6. Delete subscriptions, payments & plan change requests
+    await tx.subscriptionPayment.deleteMany({ where: { organizationId: id } });
     await tx.planChangeRequest.deleteMany({ where: { organizationId: id } });
     await tx.subscription.deleteMany({ where: { organizationId: id } });
 
-    // 8. Delete organization
+    // 7. Delete organization
     await tx.organization.delete({ where: { id } });
   });
 
