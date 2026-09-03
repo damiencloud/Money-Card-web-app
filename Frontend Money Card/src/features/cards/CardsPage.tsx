@@ -44,6 +44,7 @@ import {
   QrCode,
   Copy,
   Check,
+  Zap,
   Tag,
   ShieldAlert,
   Trash2,
@@ -183,9 +184,8 @@ export function CardsPage() {
 
   // Summary Metrics
   const totalCardsCount = allCards.length;
-  const assignedCardsCount = allCards.filter((c) => !!c.physicalCardNumber && c.assignmentStatus !== 'UNASSIGNED').length;
-  const unassignedQrCount = allCards.filter((c) => !c.physicalCardNumber || c.assignmentStatus === 'UNASSIGNED').length;
-  // const activeSessionsCount = allCards.filter((c) => c.status === 'ACTIVE').length;
+  const activeCardsCount = allCards.filter((c) => c.status === 'ACTIVE' || !!c.activeSession).length;
+  const availableCardsCount = allCards.filter((c) => c.status === 'AVAILABLE' && !c.activeSession).length;
   const blockedCardsCount = allCards.filter((c) => c.status === 'BLOCKED').length;
   const effectiveCardLimit = (orgOverview as any)?.effectiveLimits?.cardLimit ?? 100;
 
@@ -749,21 +749,21 @@ export function CardsPage() {
 
         <Card className="flex items-start gap-4 p-4 sm:p-5">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-800 border border-slate-700/60 text-blue-400">
-            <CheckCircle2 className="h-6 w-6" />
+            <Zap className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-xs sm:text-sm font-medium text-slate-400">Assigned Card Numbers</p>
-            <p className="mt-1 text-2xl sm:text-3xl font-extrabold text-slate-100">{assignedCardsCount}</p>
+            <p className="text-xs sm:text-sm font-medium text-slate-400">Cards In Use</p>
+            <p className="mt-1 text-2xl sm:text-3xl font-extrabold text-slate-100">{activeCardsCount}</p>
           </div>
         </Card>
 
         <Card className="flex items-start gap-4 p-4 sm:p-5">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-800 border border-slate-700/60 text-amber-400">
-            <Tag className="h-6 w-6" />
+            <CheckCircle2 className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-xs sm:text-sm font-medium text-slate-400">Unassigned QR Codes</p>
-            <p className="mt-1 text-2xl sm:text-3xl font-extrabold text-slate-100">{unassignedQrCount}</p>
+            <p className="text-xs sm:text-sm font-medium text-slate-400">Ready to Issue</p>
+            <p className="mt-1 text-2xl sm:text-3xl font-extrabold text-slate-100">{availableCardsCount}</p>
           </div>
         </Card>
 
