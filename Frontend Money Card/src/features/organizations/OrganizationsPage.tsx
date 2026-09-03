@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { apiService } from '@/services/api';
 import type { OrganizationOverview, Plan } from '@/types';
 import {
@@ -52,28 +53,81 @@ function OrgActionMenu({
   onDelete,
 }: OrgActionMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({
+    top: 0,
+    left: 0,
+  });
+  const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  const updatePosition = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const menuWidth = 210;
+    const menuHeight = 220;
+
+    // Check if bottom space is constrained in the viewport
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUpwards = spaceBelow < menuHeight && rect.top > menuHeight;
+
+    const top = openUpwards ? rect.top - menuHeight - 6 : rect.bottom + 6;
+    const left = Math.max(8, rect.right - menuWidth);
+
+    setMenuPosition({ top, left });
+  }, []);
+
+  const handleToggle = () => {
+    if (!isOpen) {
+      updatePosition();
+      setIsOpen(true);
+    } else {
+      setIsOpen(false);
+    }
+  };
+
   useEffect(() => {
+    if (!isOpen) return;
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(event.target as Node) &&
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+
+    const handleScrollOrResize = () => {
+      setIsOpen(false);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    document.addEventListener('keydown', handleKeyDown);
+
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen]);
 
   return (
-    <div className="relative inline-block text-left" ref={menuRef}>
+    <div ref={containerRef} className="inline-block text-left">
       <Button
         variant="outline"
         size="sm"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleToggle}
         className="flex items-center gap-1.5 text-xs py-1 px-2.5 bg-slate-900 border-slate-700 hover:border-violet-500 text-slate-200"
       >
         <MoreVertical className="h-3.5 w-3.5 text-slate-400" />
@@ -81,75 +135,86 @@ function OrgActionMenu({
         <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </Button>
 
-      {isOpen && (
-        <div className="absolute right-0 z-50 mt-1.5 w-52 rounded-xl border border-slate-700/80 bg-slate-900 p-1.5 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100">
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(false);
-              onViewDetails();
+      {isOpen &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={{
+              position: 'fixed',
+              top: `${menuPosition.top}px`,
+              left: `${menuPosition.left}px`,
+              zIndex: 9999,
             }}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer text-left"
+            className="w-52 rounded-xl border border-slate-700/80 bg-slate-900 p-1.5 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
           >
-            <Eye className="h-4 w-4 text-slate-400" />
-            <span>View Details</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onViewDetails();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer text-left"
+            >
+              <Eye className="h-4 w-4 text-slate-400" />
+              <span>View Details</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(false);
-              onEdit();
-            }}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer text-left"
-          >
-            <Edit2 className="h-4 w-4 text-violet-400" />
-            <span>Edit Organization</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onEdit();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer text-left"
+            >
+              <Edit2 className="h-4 w-4 text-violet-400" />
+              <span>Edit Organization</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(false);
-              onResetPassword();
-            }}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-amber-300 transition-colors cursor-pointer text-left"
-          >
-            <KeyRound className="h-4 w-4 text-amber-400" />
-            <span>Reset Admin Password</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onResetPassword();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-amber-300 transition-colors cursor-pointer text-left"
+            >
+              <KeyRound className="h-4 w-4 text-amber-400" />
+              <span>Reset Admin Password</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(false);
-              onToggleStatus();
-            }}
-            className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer text-left ${
-              org.status === 'ACTIVE'
-                ? 'text-rose-400 hover:bg-rose-500/10 hover:text-rose-300'
-                : 'text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300'
-            }`}
-          >
-            <Power className="h-4 w-4" />
-            <span>{org.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onToggleStatus();
+              }}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer text-left ${
+                org.status === 'ACTIVE'
+                  ? 'text-rose-400 hover:bg-rose-500/10 hover:text-rose-300'
+                  : 'text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300'
+              }`}
+            >
+              <Power className="h-4 w-4" />
+              <span>{org.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}</span>
+            </button>
 
-          <div className="my-1 border-t border-slate-800" />
+            <div className="my-1 border-t border-slate-800" />
 
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(false);
-              onDelete();
-            }}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer text-left"
-          >
-            <Trash2 className="h-4 w-4" />
-            <span>Delete Organization</span>
-          </button>
-        </div>
-      )}
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onDelete();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer text-left"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Delete Organization</span>
+            </button>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -674,7 +739,7 @@ export function OrganizationsPage() {
           }
         />
       ) : (
-        <Card className="overflow-hidden">
+        <Card className="min-h-[220px]">
           <DataTable
             columns={columns}
             data={filteredOrganizations}
