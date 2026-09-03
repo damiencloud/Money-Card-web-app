@@ -54,6 +54,7 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  ArrowDown,
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { CameraQrScanner } from '@/components/scanner/CameraQrScanner';
@@ -95,6 +96,8 @@ export function CardsPage() {
   const [selectedQrCard, setSelectedQrCard] = useState<CardEntity | null>(null);
   const [isCopiedToken, setIsCopiedToken] = useState(false);
   const [isCardsInUseOpen, setIsCardsInUseOpen] = useState(false);
+  const [inUseSearchQuery, setInUseSearchQuery] = useState('');
+  const [inUsePage, setInUsePage] = useState(1);
 
   // Selected Card for Details, Assign, or Block
   const [selectedCard, setSelectedCard] = useState<CardEntity | null>(null);
@@ -184,6 +187,41 @@ export function CardsPage() {
   const availableCardsCount = allCards.filter((c) => c.status === 'AVAILABLE' && !c.activeSession).length;
   const blockedCardsCount = allCards.filter((c) => c.status === 'BLOCKED').length;
   const effectiveCardLimit = (orgOverview as any)?.effectiveLimits?.cardLimit ?? 100;
+
+  // ─── Filtered & Paginated In-Use Cards for Dropdown View ─────────
+  const filteredInUseCards = useMemo(() => {
+    if (!inUseSearchQuery.trim()) return activeCardsList;
+    const q = inUseSearchQuery.toLowerCase().trim();
+    return activeCardsList.filter((c) => {
+      const cardNum = (c.physicalCardNumber || c.activeSession?.sessionCardNumber || '').toLowerCase();
+      const name = (c.activeSession?.customerName || '').toLowerCase();
+      const phone = (c.activeSession?.customerPhone || '').toLowerCase();
+      return cardNum.includes(q) || name.includes(q) || phone.includes(q);
+    });
+  }, [activeCardsList, inUseSearchQuery]);
+
+  const IN_USE_PAGE_SIZE = 12;
+  const totalInUsePages = Math.max(1, Math.ceil(filteredInUseCards.length / IN_USE_PAGE_SIZE));
+  const currentInUsePage = Math.min(inUsePage, totalInUsePages);
+
+  const paginatedInUseCards = useMemo(() => {
+    const start = (currentInUsePage - 1) * IN_USE_PAGE_SIZE;
+    return filteredInUseCards.slice(start, start + IN_USE_PAGE_SIZE);
+  }, [filteredInUseCards, currentInUsePage]);
+
+  const handleInUseSearchChange = (val: string) => {
+    setInUseSearchQuery(val.slice(0, 30));
+    setInUsePage(1);
+  };
+
+  const handleViewAllInMainTable = () => {
+    setAssignmentFilter('ASSIGNED');
+    setStatusFilter('ACTIVE');
+    const tableEl = document.getElementById('cards-table-container');
+    if (tableEl) {
+      tableEl.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   // ─── Execute Individual Card Number Assignment ────────────────────
   const handleOpenAssignModal = (card: CardEntity) => {
@@ -774,40 +812,126 @@ export function CardsPage() {
             </div>
           </button>
 
-          {/* Collapsible Content Grid */}
+          {/* Collapsible Content Grid with Capped Height, Search & Pagination */}
           {isCardsInUseOpen && (
-            <div className="p-4 pt-1 border-t border-emerald-500/20 space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
-                {activeCardsList.slice(0, 8).map((c) => (
+            <div className="p-4 pt-2 border-t border-emerald-500/20 space-y-3">
+              {/* Controls Toolbar inside Dropdown */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-slate-950/60 p-2.5 rounded-xl border border-emerald-500/20">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search in-use cards by #, diner, or phone..."
+                    value={inUseSearchQuery}
+                    maxLength={30}
+                    onChange={(e) => handleInUseSearchChange(e.target.value)}
+                    className="w-full rounded-lg border border-slate-800 bg-slate-900 pl-8 pr-7 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+                  />
+                  {inUseSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => handleInUseSearchChange('')}
+                      className="absolute right-2 top-2 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
+                      title="Clear search"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-400 text-[11px] hidden md:inline">
+                    {filteredInUseCards.length} in-use card(s)
+                  </span>
                   <button
                     type="button"
-                    key={c.id}
-                    onClick={() => handleOpenDetails(c)}
-                    className="p-3.5 rounded-xl border border-slate-800 bg-slate-900/90 hover:border-emerald-500/50 hover:bg-slate-900 transition-all text-left cursor-pointer select-none space-y-2.5 shadow-sm"
+                    onClick={handleViewAllInMainTable}
+                    className="flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-semibold px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-colors cursor-pointer"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs font-extrabold text-emerald-300">
-                        {c.physicalCardNumber || c.activeSession?.sessionCardNumber || 'MC-Card'}
-                      </span>
-                      <Badge variant="success" className="text-[10px] py-0">Active</Badge>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-slate-200 truncate">
-                        {c.activeSession?.customerName || 'Customer'}
-                      </p>
-                      <p className="text-[11px] text-slate-400">
-                        {c.activeSession?.customerPhone || 'Cafeteria Diner'}
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
-                      <span className="text-slate-400">Balance:</span>
-                      <span className="font-mono font-bold text-violet-300">
-                        {formatCurrency(c.activeSession?.balance || 0)}
-                      </span>
-                    </div>
+                    <span>View all in table below</span>
+                    <ArrowDown className="h-3.5 w-3.5" />
                   </button>
-                ))}
+                </div>
               </div>
+
+              {/* Cards Grid with Capped Max Height (prevents page going way down) */}
+              <div className="max-h-[360px] overflow-y-auto pr-1">
+                {paginatedInUseCards.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-slate-400">
+                    <p>No in-use cards match "{inUseSearchQuery}".</p>
+                    <button
+                      type="button"
+                      onClick={() => handleInUseSearchChange('')}
+                      className="mt-2 text-emerald-400 hover:underline"
+                    >
+                      Clear search
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {paginatedInUseCards.map((c) => (
+                      <button
+                        type="button"
+                        key={c.id}
+                        onClick={() => handleOpenDetails(c)}
+                        className="p-3.5 rounded-xl border border-slate-800 bg-slate-900/90 hover:border-emerald-500/50 hover:bg-slate-900 transition-all text-left cursor-pointer select-none space-y-2.5 shadow-sm group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-xs font-extrabold text-emerald-300 group-hover:text-emerald-200">
+                            {c.physicalCardNumber || c.activeSession?.sessionCardNumber || 'MC-Card'}
+                          </span>
+                          <Badge variant="success" className="text-[10px] py-0">Active</Badge>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-slate-200 truncate">
+                            {c.activeSession?.customerName || 'Customer'}
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            {c.activeSession?.customerPhone || 'Cafeteria Diner'}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
+                          <span className="text-slate-400">Balance:</span>
+                          <span className="font-mono font-bold text-violet-300">
+                            {formatCurrency(c.activeSession?.balance || 0)}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Pagination Bar for High Card Volumes */}
+              {totalInUsePages > 1 && (
+                <div className="flex items-center justify-between pt-2 border-t border-emerald-500/20 text-xs text-slate-400">
+                  <span>
+                    Showing <strong className="text-slate-200">{((currentInUsePage - 1) * IN_USE_PAGE_SIZE) + 1}</strong>–<strong className="text-slate-200">{Math.min(currentInUsePage * IN_USE_PAGE_SIZE, filteredInUseCards.length)}</strong> of {filteredInUseCards.length} active cards
+                  </span>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setInUsePage((p) => Math.max(1, p - 1))}
+                      disabled={currentInUsePage === 1}
+                      className="px-2.5 py-1 rounded border border-slate-800 bg-slate-900 text-xs font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-2 font-mono text-[11px] text-slate-300">
+                      Page {currentInUsePage} of {totalInUsePages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setInUsePage((p) => Math.min(totalInUsePages, p + 1))}
+                      disabled={currentInUsePage === totalInUsePages}
+                      className="px-2.5 py-1 rounded border border-slate-800 bg-slate-900 text-xs font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -815,7 +939,7 @@ export function CardsPage() {
 
       {/* ─── Search & Filter Bar ─────────────────────────────────────── */}
       <Card padding="md">
-        <div className="flex flex-col gap-3">
+        <div id="cards-table-container" className="flex flex-col gap-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="relative">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
