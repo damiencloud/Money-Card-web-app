@@ -69,7 +69,7 @@ export async function listSessions(req: Request, res: Response) {
     const formattedSessions = sessions.map((s) => ({
       id: s.id,
       cardId: s.cardId,
-      physicalCardNumber: s.card?.physicalCardNumber || null,
+      physicalCardNumber: s.card?.physicalCardNumber || (s.sessionCardNumber ? s.sessionCardNumber.replace(/_\d+$/, '') : null),
       sessionCardNumber: s.sessionCardNumber || (s.card?.physicalCardNumber ? `${s.card.physicalCardNumber}_${s.cycleNumber || 1}` : null),
       cycleNumber: s.cycleNumber || 1,
       branchId: s.branchId,
@@ -321,7 +321,7 @@ export async function rechargeSession(req: Request, res: Response) {
     return sendError(res, 403, 'BRANCH_ACCESS_DENIED', 'You are not authorized to recharge a session belonging to another branch');
   }
 
-  if (session.card.status === CardStatus.BLOCKED) {
+  if (session.card?.status === CardStatus.BLOCKED) {
     return sendError(res, 400, 'CARD_BLOCKED', 'Cannot recharge a blocked card');
   }
 
@@ -386,7 +386,7 @@ export async function purchaseSession(req: Request, res: Response) {
     return sendError(res, 400, 'INVALID_STATE', 'Cannot make purchases on an inactive session');
   }
 
-  if (session.card.status === CardStatus.BLOCKED) {
+  if (session.card?.status === CardStatus.BLOCKED) {
     return sendError(res, 400, 'CARD_BLOCKED', 'Card is blocked');
   }
 
@@ -553,11 +553,13 @@ export async function returnSession(req: Request, res: Response) {
       });
     }
 
-    // Reset card status to AVAILABLE
-    await tx.card.update({
-      where: { id: session.cardId },
-      data: { status: CardStatus.AVAILABLE },
-    });
+    if (session.cardId) {
+      // Reset card status to AVAILABLE
+      await tx.card.update({
+        where: { id: session.cardId },
+        data: { status: CardStatus.AVAILABLE },
+      });
+    }
 
     return { session: settledSession, refundAmount };
   });

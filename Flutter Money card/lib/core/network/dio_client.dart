@@ -5,8 +5,9 @@ import '../storage/token_storage.dart';
 import 'interceptors/mock_api_interceptor.dart';
 import 'interceptors/auth_interceptor.dart';
 import 'interceptors/error_interceptor.dart';
+import 'mdns_discovery_service.dart';
 
-/// Centralized Dio HTTP Client factory with automatic endpoint failover (USB reverse / Wi-Fi LAN).
+/// Centralized Dio HTTP Client factory with mDNS-driven dynamic LAN discovery and safe diagnostics.
 class DioClient {
   final Dio dio;
 
@@ -40,7 +41,7 @@ class DioClient {
 
     final dio = Dio(baseOptions);
 
-    // 1. Safe Performance Network Logger (Method, Endpoint, Duration, Status only)
+    // 1. Safe Diagnostic Logger (Host, Port, Endpoint, Duration, Status only - NEVER credentials/tokens)
     if (kDebugMode) {
       dio.interceptors.add(
         InterceptorsWrapper(
@@ -57,14 +58,18 @@ class DioClient {
           onError: (DioException err, handler) {
             final startTime = err.requestOptions.extra['request_start_time'] as int?;
             final durationMs = startTime != null ? DateTime.now().millisecondsSinceEpoch - startTime : -1;
-            debugPrint('[HTTP] ${err.requestOptions.method} ${err.requestOptions.path} | ${durationMs}ms | ERR ${err.response?.statusCode ?? err.type}');
+            final uri = err.requestOptions.uri;
+            debugPrint(
+              '[Network Diagnostic] Host: ${uri.host} | Port: ${uri.port} | Endpoint: ${uri.path} | '
+              'Duration: ${durationMs}ms | Exception: ${err.type} | Status: ${err.response?.statusCode ?? "N/A"}',
+            );
             return handler.next(err);
           },
         ),
       );
     }
 
-    // 2. Endpoint sync and dynamic failover interceptor
+    // 2. Dynamic mDNS Rediscovery Interceptor on network failure
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
@@ -75,52 +80,68 @@ class DioClient {
           return handler.next(options);
         },
         onError: (DioException err, ErrorInterceptorHandler handler) async {
-          if (err.type == DioExceptionType.connectionError ||
-              err.type == DioExceptionType.connectionTimeout) {
+          // Only attempt mDNS dynamic discovery in development mode
+          if (AppConfig.isDevelopment &&
+              (err.type == DioExceptionType.connectionError ||
+                  err.type == DioExceptionType.connectionTimeout)) {
             final currentUrl = err.requestOptions.baseUrl;
-            final isLoopback = currentUrl.contains('127.0.0.1') || currentUrl.contains('localhost');
-            final alternateUrl = isLoopback ? AppConfig.defaultLanBaseUrl : AppConfig.defaultBaseUrl;
 
-            // Only retry once if current is not already alternate
-            if (err.requestOptions.extra['retried_alternate'] != true && currentUrl != alternateUrl) {
+            // Only attempt automatic rediscovery once per failed request
+            if (err.requestOptions.extra['retried_mdns'] != true) {
+              if (kDebugMode) {
+                debugPrint('[Network] Connection failed to $currentUrl. Triggering automatic mDNS discovery...');
+              }
+
               try {
-                final options = Options(
-                  method: err.requestOptions.method,
-                  headers: err.requestOptions.headers,
-                  responseType: err.requestOptions.responseType,
-                  contentType: err.requestOptions.contentType,
-                  extra: {
-                    ...err.requestOptions.extra,
-                    'retried_alternate': true,
-                  },
+                final discoveredUrl = await MdnsDiscoveryService.instance.discoverAndVerifyBackend(
+                  timeout: const Duration(seconds: 4),
+                  testStoredFirst: false,
                 );
 
-                final retryDio = Dio(
-                  BaseOptions(
-                    baseUrl: alternateUrl,
-                    connectTimeout: const Duration(seconds: 3),
-                    receiveTimeout: const Duration(seconds: 5),
-                  ),
-                );
+                if (discoveredUrl != null && discoveredUrl.isNotEmpty && discoveredUrl != currentUrl) {
+                  if (kDebugMode) {
+                    debugPrint('[HTTP AUTO-DISCOVERY] Reconnecting request to new backend endpoint: $discoveredUrl');
+                  }
 
-                final response = await retryDio.request(
-                  err.requestOptions.path,
-                  data: err.requestOptions.data,
-                  queryParameters: err.requestOptions.queryParameters,
-                  options: options,
-                );
+                  AppConfig.baseUrl = discoveredUrl;
+                  dio.options.baseUrl = discoveredUrl;
 
-                // Alternate endpoint succeeded! Persist it so future calls don't pay failover penalty
-                AppConfig.setBaseUrl(alternateUrl);
-                dio.options.baseUrl = alternateUrl;
-                debugPrint('[HTTP FAILOVER] Successfully switched active baseUrl to: $alternateUrl');
+                  final retryOptions = Options(
+                    method: err.requestOptions.method,
+                    headers: err.requestOptions.headers,
+                    responseType: err.requestOptions.responseType,
+                    contentType: err.requestOptions.contentType,
+                    extra: {
+                      ...err.requestOptions.extra,
+                      'retried_mdns': true,
+                    },
+                  );
 
-                return handler.resolve(response);
-              } catch (_) {
-                // Fall through to standard error handler
+                  final retryDio = Dio(
+                    BaseOptions(
+                      baseUrl: discoveredUrl,
+                      connectTimeout: const Duration(seconds: 4),
+                      receiveTimeout: const Duration(seconds: 6),
+                    ),
+                  );
+
+                  final response = await retryDio.request(
+                    err.requestOptions.path,
+                    data: err.requestOptions.data,
+                    queryParameters: err.requestOptions.queryParameters,
+                    options: retryOptions,
+                  );
+
+                  return handler.resolve(response);
+                }
+              } catch (retryErr) {
+                if (kDebugMode) {
+                  debugPrint('[HTTP AUTO-DISCOVERY] Rediscovery retry failed: $retryErr');
+                }
               }
             }
           }
+
           return handler.next(err);
         },
       ),

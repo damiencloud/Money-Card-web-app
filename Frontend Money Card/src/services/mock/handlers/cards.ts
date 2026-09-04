@@ -25,7 +25,24 @@ export const mockCardsHandlers = {
     const card = mockStore.cards.find((c) => c.id === id);
     if (!card) return createMockError('NOT_FOUND', 'Card not found');
     mockStore.cards = mockStore.cards.filter((c) => c.id !== id);
-    return createMockSuccess({ deleted: true, message: 'Card permanently deleted.' });
+    mockStore.customerHistoryEvents.unshift({
+      id: `evt_del_${Date.now()}`,
+      cardId: null,
+      sessionId: null,
+      customerName: null,
+      customerPhone: null,
+      physicalCardNumber: card.physicalCardNumber || card.qrToken,
+      action: 'CARD_DELETED' as any,
+      previousStatus: card.status,
+      newStatus: card.status,
+      performedByName: 'Administrator',
+      performedByUserId: 'usr_admin_1',
+      branchId: null,
+      branchName: 'Main Cafeteria',
+      reason: 'Card permanently deleted by administrator',
+      createdAt: new Date().toISOString(),
+    });
+    return createMockSuccess({ deleted: true, message: `Card "${card.physicalCardNumber || card.qrToken}" permanently deleted. Record preserved in customer history.` });
   },
 
   // GET /api/v1/cards

@@ -47,6 +47,7 @@ import {
   Lock,
   Unlock,
   FileText,
+  Trash2,
 } from 'lucide-react';
 
 // ─── Customer Session Record Model ──────────────────────────────────
@@ -86,6 +87,7 @@ export function SessionsPage() {
   const [sessionStatusFilter, setSessionStatusFilter] = useState<SessionStatus | 'ALL'>('ALL');
   const [branchFilter, setBranchFilter] = useState<string>('ALL');
   const [dateRangeFilter, setDateRangeFilter] = useState<'ALL' | 'today' | 'yesterday' | '7d' | '30d'>('ALL');
+  const [cardActionFilter, setCardActionFilter] = useState<'ALL' | 'CARD_BLOCKED' | 'CARD_UNBLOCKED' | 'CARD_DELETED'>('ALL');
 
   // ─── Session Details Inspection Modal ─────────────────────────────
   const [selectedItem, setSelectedItem] = useState<CustomerHistoryItem | null>(null);
@@ -250,50 +252,52 @@ export function SessionsPage() {
     });
   }, [customerHistoryItems, searchQuery, sessionStatusFilter, branchFilter, dateRangeFilter]);
 
-  // ─── Realtime Active Blocked Cards ──────────────────────────────
-  const activeBlockedCardEvents = useMemo<CustomerHistoryEvent[]>(() => {
-    // Only include cards whose CURRENT live status in the database is BLOCKED
+  // ─── Realtime Card Audit Events ──────────────────────────────────
+  const allCardAuditEvents = useMemo<CustomerHistoryEvent[]>(() => {
+    // Start with all recorded history events
+    const events = [...historyEvents];
+
+    // Check if any currently BLOCKED card has no event in historyEvents, and add fallback
     const blockedCards = rawCards.filter((c) => c.status === 'BLOCKED');
-
-    return blockedCards.map((card) => {
-      // Find latest CARD_BLOCKED event for this specific card
-      const latestBlockEvent = historyEvents.find(
-        (e) => (e.cardId === card.id || e.physicalCardNumber === card.physicalCardNumber) && e.action === 'CARD_BLOCKED'
+    for (const card of blockedCards) {
+      const exists = events.some(
+        (e) => (e.cardId === card.id || e.physicalCardNumber === card.physicalCardNumber) && e.action === 'CARD_BLOCKED',
       );
-
-      if (latestBlockEvent) {
-        return latestBlockEvent;
+      if (!exists) {
+        const branchObj = branches.find((b) => b.id === card.currentBranchId);
+        events.push({
+          id: `blocked-${card.id}`,
+          cardId: card.id,
+          physicalCardNumber: card.physicalCardNumber || card.qrToken,
+          action: 'CARD_BLOCKED' as any,
+          previousStatus: 'ACTIVE' as any,
+          newStatus: 'BLOCKED' as any,
+          customerName: null,
+          customerPhone: null,
+          performedByName: 'Staff Member',
+          branchName: branchObj?.name || 'Main Cafeteria',
+          branchId: card.currentBranchId,
+          reason: 'Card Blocked',
+          createdAt: card.updatedAt || new Date().toISOString(),
+        });
       }
+    }
 
-      // Fallback object with live card details if event is recent
-      const branchObj = branches.find((b) => b.id === card.currentBranchId);
-      const fallback: CustomerHistoryEvent = {
-        id: `blocked-${card.id}`,
-        cardId: card.id,
-        physicalCardNumber: card.physicalCardNumber || card.qrToken,
-        action: 'CARD_BLOCKED' as any,
-        previousStatus: 'ACTIVE' as any,
-        newStatus: 'BLOCKED' as any,
-        customerName: null,
-        customerPhone: null,
-        performedByName: 'Staff Member',
-        branchName: branchObj?.name || 'Main Cafeteria',
-        branchId: card.currentBranchId,
-        reason: 'Card Blocked',
-        createdAt: card.updatedAt || new Date().toISOString(),
-      };
-      return fallback;
-    });
+    return events.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [rawCards, historyEvents, branches]);
 
-  // ─── Filter Realtime Blocked Cards ────────────────────────────────
+  // ─── Filter Realtime Card Audit Events ───────────────────────────
   const filteredEvents = useMemo(() => {
-    return activeBlockedCardEvents.filter((event) => {
+    return allCardAuditEvents.filter((event) => {
+      if (cardActionFilter !== 'ALL' && event.action !== cardActionFilter) {
+        return false;
+      }
+
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchesCustomer = event.customerName?.toLowerCase().includes(q) ?? false;
         const matchesPhone = event.customerPhone?.toLowerCase().includes(q) ?? false;
-        const matchesCard = event.physicalCardNumber.toLowerCase().includes(q);
+        const matchesCard = event.physicalCardNumber?.toLowerCase().includes(q) ?? false;
         const matchesStaff = event.performedByName?.toLowerCase().includes(q) ?? false;
         const matchesReason = event.reason?.toLowerCase().includes(q) ?? false;
         const matchesBranch = event.branchName?.toLowerCase().includes(q) ?? false;
@@ -330,7 +334,7 @@ export function SessionsPage() {
 
       return true;
     });
-  }, [activeBlockedCardEvents, searchQuery, branchFilter, dateRangeFilter]);
+  }, [allCardAuditEvents, cardActionFilter, searchQuery, branchFilter, dateRangeFilter]);
 
   // ─── KPI Metrics ─────────────────────────────────────────────────
   const activeCount = useMemo(
@@ -515,6 +519,14 @@ export function SessionsPage() {
       key: 'action',
       header: 'Action',
       render: (event: CustomerHistoryEvent) => {
+        if (event.action === 'CARD_DELETED') {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-950/80 text-amber-200 border border-amber-800">
+              <Trash2 className="h-3 w-3 text-amber-400" />
+              Card Deleted
+            </span>
+          );
+        }
         const isBlock = event.action === 'CARD_BLOCKED';
         return (
           <span
@@ -533,11 +545,20 @@ export function SessionsPage() {
     {
       key: 'transition',
       header: 'Status Transition',
-      render: (e: CustomerHistoryEvent) => (
-        <span className="text-xs text-slate-200 dark:text-slate-200 font-mono font-semibold">
-          {e.previousStatus} → <strong className="text-white">{e.newStatus}</strong>
-        </span>
-      ),
+      render: (e: CustomerHistoryEvent) => {
+        if (e.action === 'CARD_DELETED') {
+          return (
+            <span className="text-xs text-rose-300 font-mono font-semibold">
+              {e.previousStatus} → <strong className="text-rose-400">DELETED</strong>
+            </span>
+          );
+        }
+        return (
+          <span className="text-xs text-slate-200 dark:text-slate-200 font-mono font-semibold">
+            {e.previousStatus} → <strong className="text-white">{e.newStatus}</strong>
+          </span>
+        );
+      },
     },
     {
       key: 'performedByName',
@@ -646,12 +667,12 @@ export function SessionsPage() {
           onClick={() => setActiveTab('card_events')}
           className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold transition-all ${
             activeTab === 'card_events'
-              ? 'border-rose-600 text-rose-600 dark:border-rose-400 dark:text-rose-400'
+              ? 'border-violet-600 text-violet-600 dark:border-violet-400 dark:text-violet-400'
               : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
           }`}
         >
-          <ShieldAlert className="h-4 w-4" />
-          <span>Blocked Cards Audit Trail ({filteredEvents.length})</span>
+          <History className="h-4 w-4" />
+          <span>Card Audit Trail & History ({filteredEvents.length})</span>
         </button>
       </div>
 
@@ -671,7 +692,7 @@ export function SessionsPage() {
             />
           </div>
 
-          {/* Second Field: Status Filter in Sessions / Static 'Blocked' field in Audit */}
+          {/* Second Field: Status Filter in Sessions / Action Filter in Audit Trail */}
           {activeTab === 'sessions' ? (
             <Select
               value={sessionStatusFilter}
@@ -683,10 +704,16 @@ export function SessionsPage() {
               ]}
             />
           ) : (
-            <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/50 px-3.5 py-2.5 text-sm text-slate-300 select-none">
-              <Lock className="h-4 w-4 text-rose-400 shrink-0" />
-              <span className="font-medium text-slate-200">Blocked</span>
-            </div>
+            <Select
+              value={cardActionFilter}
+              onChange={(e) => setCardActionFilter(e.target.value as any)}
+              options={[
+                { value: 'ALL', label: 'All Card Actions' },
+                { value: 'CARD_BLOCKED', label: 'Blocked Cards' },
+                { value: 'CARD_UNBLOCKED', label: 'Unblocked Cards' },
+                { value: 'CARD_DELETED', label: 'Deleted Cards' },
+              ]}
+            />
           )}
 
           {/* Branch Filter */}
@@ -748,15 +775,16 @@ export function SessionsPage() {
         )
       ) : filteredEvents.length === 0 ? (
         <EmptyState
-          icon={<ShieldCheck className="h-8 w-8 text-emerald-500" />}
-          title={searchQuery || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? "No matching audit events" : "No blocked cards"}
-          description={searchQuery || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? "Try clearing search or filters to see all audit records." : "No cards are currently blocked. Audit events will be logged here when staff lock or unlock cards."}
+          icon={<History className="h-8 w-8 text-slate-400" />}
+          title={searchQuery || cardActionFilter !== 'ALL' || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? "No matching audit records" : "No audit records"}
+          description={searchQuery || cardActionFilter !== 'ALL' || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? "Try clearing search or filters to see all audit records." : "No card actions recorded yet. Audit events will appear here when cards are blocked, unblocked, or deleted."}
           action={
-            searchQuery || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? (
+            searchQuery || cardActionFilter !== 'ALL' || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? (
               <Button
                 variant="outline"
                 onClick={() => {
                   setSearchQuery('');
+                  setCardActionFilter('ALL');
                   setBranchFilter('ALL');
                   setDateRangeFilter('ALL');
                 }}

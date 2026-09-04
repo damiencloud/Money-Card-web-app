@@ -103,6 +103,7 @@ enum CardHistoryAction {
   CARD_UNBLOCKED
   CARD_ISSUED
   CARD_RETURNED
+  CARD_DELETED
 }
 
 enum ProductStatus {
@@ -341,7 +342,7 @@ model CardSession {
   id                String        @id @default(uuid())
   organizationId    String
   branchId          String
-  cardId            String
+  cardId            String?
   sessionToken      String        @unique
   balance           Float         @default(0.0)
   status            SessionStatus @default(ACTIVE)
@@ -357,7 +358,7 @@ model CardSession {
 
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   branch       Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  card         Card          @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  card         Card?         @relation(fields: [cardId], references: [id], onDelete: SetNull)
   issuedBy     User?         @relation("StaffIssuedSessions", fields: [issuedByUserId], references: [id])
   settledBy    User?         @relation("StaffSettledSessions", fields: [settledByUserId], references: [id])
   transactions Transaction[]
@@ -423,7 +424,7 @@ model BranchInventory {
 model CustomerHistoryEvent {
   id                 String            @id @default(uuid())
   organizationId     String
-  cardId             String
+  cardId             String?
   sessionId          String?
   customerName       String?
   customerPhone      String?
@@ -439,7 +440,7 @@ model CustomerHistoryEvent {
   createdAt          DateTime          @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  card         Card         @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  card         Card?        @relation(fields: [cardId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, cardId])
   @@index([organizationId, createdAt])

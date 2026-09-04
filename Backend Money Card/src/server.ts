@@ -26,6 +26,26 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 app.use(apiRateLimiter);
 
+// Mount root healthcheck endpoint for direct network discovery probes
+app.get('/health', async (_req, res) => {
+  try {
+    return res.status(200).json({
+      success: true,
+      data: {
+        status: 'HEALTHY',
+        timestamp: new Date().toISOString(),
+        uptimeSeconds: Math.floor(process.uptime()),
+      },
+    });
+  } catch {
+    return res.status(503).json({
+      success: false,
+      status: 'DEGRADED',
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
 // Mount API routes with versatile prefixes for compatibility
 app.use('/api/v1', apiRouter);
 app.use('/api', apiRouter);
@@ -40,15 +60,24 @@ app.use(globalErrorHandler);
 const HOST = process.env.HOST || '0.0.0.0';
 const PORT = Number(env.PORT) || 3000;
 
+import { startMdnsAdvertisement, stopMdnsAdvertisement } from './services/mdns.service.js';
+
 const server = app.listen(PORT, HOST, () => {
   console.log(`🚀 Money Card Backend Server running on http://${HOST}:${PORT}`);
   console.log(`💻 Local Loopback: http://localhost:${PORT}/api/v1`);
   console.log(`📱 Network LAN: http://0.0.0.0:${PORT}/api/v1 (Accessible from physical Android phone on Wi-Fi)`);
   console.log(`🏥 Healthcheck: http://localhost:${PORT}/api/v1/health`);
+
+  // Start mDNS advertisement for local mobile discovery
+  startMdnsAdvertisement(PORT);
 });
 
-process.on('SIGTERM', () => {
+const handleShutdown = async () => {
+  await stopMdnsAdvertisement();
   server.close(() => {
     process.exit(0);
   });
-});
+};
+
+process.on('SIGTERM', handleShutdown);
+process.on('SIGINT', handleShutdown);

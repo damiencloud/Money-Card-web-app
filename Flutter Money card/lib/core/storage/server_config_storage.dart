@@ -49,7 +49,7 @@ class ServerConfigStorage {
     } catch (_) {
       _inMemoryFallback = null;
     }
-    AppConfig.setBaseUrl(AppConfig.defaultLanBaseUrl);
+    AppConfig.setBaseUrl(AppConfig.defaultLocalBaseUrl);
   }
 
   /// Initializes AppConfig from persistent storage on startup
