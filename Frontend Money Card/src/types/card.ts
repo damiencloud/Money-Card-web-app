@@ -57,16 +57,26 @@ export interface CardSession {
 
 // ─── Transactions & Payments ────────────────────────────────
 
-export type TransactionType = 'RECHARGE' | 'PURCHASE' | 'REFUND';
+export type TransactionType =
+  | 'RECHARGE'
+  | 'PURCHASE'
+  | 'REFUND'
+  | 'RECHARGE_CASH'
+  | 'RECHARGE_UPI'
+  | 'REFUND_RETURN';
 export type TransactionStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED';
-export type PaymentMethod = 'CASH' | 'UPI';
+export type PaymentMethod = 'CASH' | 'UPI' | 'CARD_BALANCE';
 
 export interface PurchaseItem {
-  productId: string;
+  productId?: string;
   quantity: number;
   itemName?: string;
+  name?: string;
   unitPrice?: number;
+  price?: number;
   totalAmount?: number;
+  subtotal?: number;
+  totalPrice?: number;
 }
 
 export interface Transaction {
@@ -78,7 +88,7 @@ export interface Transaction {
   balanceAfter?: number;
   status: TransactionStatus;
   items?: PurchaseItem[];
-  paymentMethod?: PaymentMethod;
+  paymentMethod?: PaymentMethod | string;
   externalReference?: string;
   createdAt: string;
 }

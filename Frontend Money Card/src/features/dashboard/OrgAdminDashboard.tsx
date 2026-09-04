@@ -5,7 +5,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '@/services/api';
-import { useBranch, usePermissions } from '@/hooks';
+import { useBranch, usePermissions, useAuth } from '@/hooks';
 import type {
   Plan,
   Subscription,
@@ -26,7 +26,7 @@ import {
   LoadingState,
   ErrorState,
 } from '@/components/ui';
-import { formatCurrency } from '@/utils';
+import { formatCurrency, storage } from '@/utils';
 import {
   Building2,
   Users,
@@ -40,6 +40,7 @@ import {
   BarChart3,
   CheckCircle2,
   Sparkles,
+  X,
 } from 'lucide-react';
 
 export type DatePreset = 'thisMonth' | 'today' | 'yesterday' | 'last7' | 'last30' | 'all' | 'custom';
@@ -77,8 +78,20 @@ export function getPresetDates(preset: DatePreset): { startDate: string; endDate
 
 export function OrgAdminDashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { hasPermission } = usePermissions();
-  const { currentBranch, selectBranch, clearBranch } = useBranch();
+  const { currentBranch, selectBranch, clearBranch, setBranches: updateBranchContext } = useBranch();
+
+  const setupStorageKey = `org_setup_complete_${user?.organizationId || 'default'}`;
+  const setupDismissedKey = `org_setup_dismissed_${user?.organizationId || 'default'}`;
+
+  const isPreviouslyCompleted = useMemo(() => {
+    return storage.get<boolean>(setupStorageKey) === true;
+  }, [setupStorageKey]);
+
+  const [isDismissed, setIsDismissed] = useState<boolean>(() => {
+    return storage.get<boolean>(setupDismissedKey) === true;
+  });
 
   const [currentPlan, setCurrentPlan] = useState<Plan | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -138,7 +151,10 @@ export function OrgAdminDashboard() {
         setCurrentPlan(foundPlan);
       }
 
-      if (branchRes.success) setBranches(branchRes.data.items);
+      if (branchRes.success) {
+        setBranches(branchRes.data.items);
+        updateBranchContext(branchRes.data.items);
+      }
       if (staffRes.success) setStaffList(staffRes.data.items);
       if (cardRes.success) setCardsList(cardRes.data.items);
       if (invRes.success) setInventory(invRes.data.items);
@@ -184,7 +200,10 @@ export function OrgAdminDashboard() {
           setCurrentPlan(foundPlan);
         }
 
-        if (branchRes.success) setBranches(branchRes.data.items);
+        if (branchRes.success) {
+          setBranches(branchRes.data.items);
+          updateBranchContext(branchRes.data.items);
+        }
         if (staffRes.success) setStaffList(staffRes.data.items);
         if (cardRes.success) setCardsList(cardRes.data.items);
         if (invRes.success) setInventory(invRes.data.items);
@@ -244,7 +263,7 @@ export function OrgAdminDashboard() {
   }, [inventory]);
 
   // Getting Started Checklist Calculations
-  const hasBranches = branches.length > 0;
+  const hasBranches = branches.length > 0 || !!currentBranch;
   const hasStaff = staffList.length > 0;
   const hasCards = cardsList.length > 0;
   const hasProducts = inventory.length > 0;
@@ -287,6 +306,22 @@ export function OrgAdminDashboard() {
   const completedStepsCount = setupSteps.filter((s) => s.completed).length;
   const setupPercent = Math.round((completedStepsCount / setupSteps.length) * 100);
   const isSetupComplete = completedStepsCount === setupSteps.length;
+
+  // Persist setup completion so it never flashes or reappears once completed
+  useEffect(() => {
+    if (isSetupComplete && !isLoading) {
+      storage.set(setupStorageKey, true);
+    }
+  }, [isSetupComplete, isLoading, setupStorageKey]);
+
+  // NEVER show the first-time setup checklist while loading, when scoped to a specific branch,
+  // or when already completed or dismissed.
+  const showSetupChecklist =
+    !isLoading &&
+    !currentBranch &&
+    !isPreviouslyCompleted &&
+    !isDismissed &&
+    !isSetupComplete;
 
   return (
     <div className="space-y-6">
@@ -432,7 +467,7 @@ export function OrgAdminDashboard() {
       </div>
 
       {/* ─── Getting Started Checklist (Interactive Setup Guide) ─── */}
-      {!isSetupComplete && (
+      {showSetupChecklist && (
         <Card className="border-violet-500/30 bg-gradient-to-br from-slate-900 via-slate-900/90 to-violet-950/20 p-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
             <div>
@@ -449,17 +484,31 @@ export function OrgAdminDashboard() {
                 Complete these initial steps to get your cafeteria operations fully running.
               </p>
             </div>
-            <div className="w-full sm:w-48 space-y-1">
-              <div className="flex justify-between text-xs font-medium text-slate-300">
-                <span>Setup Progress</span>
-                <span className="font-bold text-violet-400">{setupPercent}%</span>
+            <div className="flex items-center gap-3">
+              <div className="w-full sm:w-48 space-y-1">
+                <div className="flex justify-between text-xs font-medium text-slate-300">
+                  <span>Setup Progress</span>
+                  <span className="font-bold text-violet-400">{setupPercent}%</span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-violet-500 to-emerald-400 transition-all duration-500"
+                    style={{ width: `${setupPercent}%` }}
+                  />
+                </div>
               </div>
-              <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-violet-500 to-emerald-400 transition-all duration-500"
-                  style={{ width: `${setupPercent}%` }}
-                />
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  storage.set(setupDismissedKey, true);
+                  setIsDismissed(true);
+                }}
+                className="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-800/80 transition-colors shrink-0"
+                title="Dismiss setup checklist"
+                aria-label="Dismiss setup checklist"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
           </div>
 

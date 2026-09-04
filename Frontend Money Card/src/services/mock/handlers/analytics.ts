@@ -197,6 +197,13 @@ export const mockAnalyticsHandlers = {
         if (!orgBranchIds.includes(t.branchId)) return false;
       }
       if (branchId && branchId !== 'ALL' && t.branchId !== branchId) return false;
+      if (filter?.startDate) {
+        if (new Date(t.createdAt) < new Date(filter.startDate)) return false;
+      }
+      if (filter?.endDate) {
+        const endD = new Date(filter.endDate.includes('T') ? filter.endDate : `${filter.endDate}T23:59:59.999Z`);
+        if (new Date(t.createdAt) > endD) return false;
+      }
       return true;
     });
 

@@ -35,6 +35,31 @@ import {
   Building2,
 } from 'lucide-react';
 
+export type TimeWindowPreset = 'thisMonth' | 'today' | 'last7' | 'last30';
+
+function getPeakPresetDates(preset: TimeWindowPreset): { startDate: string; endDate: string } {
+  const now = new Date();
+  const endStr = now.toISOString().split('T')[0];
+
+  if (preset === 'today') {
+    return { startDate: endStr, endDate: endStr };
+  }
+  if (preset === 'last7') {
+    const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    return { startDate: start.toISOString().split('T')[0], endDate: endStr };
+  }
+  if (preset === 'last30') {
+    const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return { startDate: start.toISOString().split('T')[0], endDate: endStr };
+  }
+  if (preset === 'thisMonth') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { startDate: start.toISOString().split('T')[0], endDate: endStr };
+  }
+
+  return { startDate: '', endDate: endStr };
+}
+
 export function PeakPage() {
   const { currentBranch } = useBranch();
 
@@ -45,7 +70,7 @@ export function PeakPage() {
 
   // Filters
   const [selectedBranchId, setSelectedBranchId] = useState<string>(currentBranch?.id || 'ALL');
-  const [selectedDateRange, setSelectedDateRange] = useState<'today' | '7d' | '30d'>('7d');
+  const [selectedDateRange, setSelectedDateRange] = useState<TimeWindowPreset>('thisMonth');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [isExporting, setIsExporting] = useState(false);
 
@@ -54,9 +79,12 @@ export function PeakPage() {
     setIsLoading(true);
     setError(null);
     try {
+      const { startDate, endDate } = getPeakPresetDates(selectedDateRange);
       const [peakRes, branchRes] = await Promise.all([
         apiService.analytics.getPeakAnalytics({
           branchId: selectedBranchId !== 'ALL' ? selectedBranchId : undefined,
+          startDate,
+          endDate,
         }),
         apiService.branches.getBranches(),
       ]);
@@ -75,7 +103,7 @@ export function PeakPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedBranchId]);
+  }, [selectedBranchId, selectedDateRange]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -83,9 +111,12 @@ export function PeakPage() {
       setIsLoading(true);
       setError(null);
       try {
+        const { startDate, endDate } = getPeakPresetDates(selectedDateRange);
         const [peakRes, branchRes] = await Promise.all([
           apiService.analytics.getPeakAnalytics({
             branchId: selectedBranchId !== 'ALL' ? selectedBranchId : undefined,
+            startDate,
+            endDate,
           }),
           apiService.branches.getBranches(),
         ]);
@@ -111,7 +142,7 @@ export function PeakPage() {
     return () => {
       isCancelled = true;
     };
-  }, [selectedBranchId]);
+  }, [selectedBranchId, selectedDateRange]);
 
   // ── CSV Export Handler ────────────────────────────────────
   // ── PDF Download Handler ──────────────────────────────────────────
@@ -128,11 +159,14 @@ export function PeakPage() {
         ? 'All Branches'
         : (selectedBranchObj?.name || 'Selected Branch');
 
-      const dateRangeLabel = selectedDateRange === 'today'
-        ? 'Today'
-        : selectedDateRange === '7d'
+      const dateRangeLabel =
+        selectedDateRange === 'today'
+          ? 'Today'
+          : selectedDateRange === 'last7'
           ? 'Last 7 Days'
-          : 'Last 30 Days';
+          : selectedDateRange === 'last30'
+          ? 'Last 30 Days'
+          : 'This Month';
 
       const doc = buildPeakDemandJsPdf({
         data: {
@@ -265,16 +299,6 @@ export function PeakPage() {
 
         <div className="flex flex-wrap items-center gap-3">
           <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchPeakData}
-            isLoading={isLoading}
-            leftIcon={<RefreshCw className="h-4 w-4" />}
-          >
-            Refresh
-          </Button>
-
-          <Button
             variant="primary"
             size="sm"
             onClick={handleDownloadPdf}
@@ -286,69 +310,64 @@ export function PeakPage() {
         </div>
       </div>
 
-      {/* ── Filters Bar ── */}
-      <div className="grid gap-4 sm:grid-cols-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-        {/* Branch Filter */}
-        <div>
-          <label className="text-xs font-semibold text-slate-400 block mb-1.5">Branch Location</label>
-          <Select
-            value={selectedBranchId}
-            onChange={(e) => setSelectedBranchId(e.target.value)}
-            options={[
-              { value: 'ALL', label: 'All Branches' },
-              ...allBranches.map((b) => ({ value: b.id, label: b.name })),
-            ]}
-          />
-        </div>
+      {/* ── Filter Toolbar ── */}
+      <div className="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 flex-1">
+          {/* Branch Scope Filter */}
+          <div>
+            <label className="text-xs font-semibold text-slate-400 block mb-1.5">Branch Scope</label>
+            <Select
+              id="peak-branch-scope"
+              value={selectedBranchId}
+              onChange={(e) => setSelectedBranchId(e.target.value)}
+              options={[
+                { value: 'ALL', label: 'All Branches' },
+                ...allBranches.map((b) => ({ value: b.id, label: b.name })),
+              ]}
+            />
+          </div>
 
-        {/* Date Range Selector */}
-        <div>
-          <label className="text-xs font-semibold text-slate-400 block mb-1.5">Analysis Window</label>
-          <div className="grid grid-cols-3 gap-1 rounded-lg border border-slate-800 bg-slate-950 p-1">
-            <button
-              onClick={() => setSelectedDateRange('today')}
-              className={`rounded py-1.5 text-xs font-medium transition-colors ${
-                selectedDateRange === 'today'
-                  ? 'bg-violet-600 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Today
-            </button>
-            <button
-              onClick={() => setSelectedDateRange('7d')}
-              className={`rounded py-1.5 text-xs font-medium transition-colors ${
-                selectedDateRange === '7d'
-                  ? 'bg-violet-600 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Last 7 Days
-            </button>
-            <button
-              onClick={() => setSelectedDateRange('30d')}
-              className={`rounded py-1.5 text-xs font-medium transition-colors ${
-                selectedDateRange === '30d'
-                  ? 'bg-violet-600 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Last 30 Days
-            </button>
+          {/* Time Window Selector */}
+          <div>
+            <label className="text-xs font-semibold text-slate-400 block mb-1.5">Time Window</label>
+            <Select
+              id="peak-time-window"
+              value={selectedDateRange}
+              onChange={(e) => setSelectedDateRange(e.target.value as TimeWindowPreset)}
+              options={[
+                { value: 'thisMonth', label: 'This Month' },
+                { value: 'today', label: 'Today' },
+                { value: 'last7', label: 'Last 7 Days' },
+                { value: 'last30', label: 'Last 30 Days' },
+              ]}
+            />
+          </div>
+
+          {/* Food Category Filter */}
+          <div>
+            <label className="text-xs font-semibold text-slate-400 block mb-1.5">Food Category</label>
+            <Select
+              id="peak-food-category"
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              options={[
+                { value: 'ALL', label: 'All Food Categories' },
+                ...categories.map((c) => ({ value: c, label: c })),
+              ]}
+            />
           </div>
         </div>
 
-        {/* Product Category Filter */}
-        <div>
-          <label className="text-xs font-semibold text-slate-400 block mb-1.5">Food Category</label>
-          <Select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            options={[
-              { value: 'ALL', label: 'All Food Categories' },
-              ...categories.map((c) => ({ value: c, label: c })),
-            ]}
-          />
+        <div className="flex items-center self-end lg:self-end">
+          <Button
+            variant="outline"
+            size="md"
+            onClick={fetchPeakData}
+            isLoading={isLoading}
+            leftIcon={<RefreshCw className="h-4 w-4" />}
+          >
+            Refresh Data
+          </Button>
         </div>
       </div>
 

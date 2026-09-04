@@ -479,6 +479,26 @@ export const SEED_TRANSACTIONS: Transaction[] = [
     paymentMethod: 'CASH',
     createdAt: '2026-01-10T10:05:00.000Z',
   },
+  {
+    id: 'TXN002',
+    sessionId: 'SESSION001',
+    branchId: 'branch_001',
+    type: 'PURCHASE',
+    amount: 50,
+    balanceAfter: 450,
+    status: 'SUCCESS',
+    paymentMethod: 'CARD_BALANCE',
+    items: [
+      {
+        productId: 'PROD001',
+        itemName: 'Espresso Coffee',
+        quantity: 1,
+        unitPrice: 50,
+        totalAmount: 50,
+      },
+    ],
+    createdAt: '2026-01-10T10:15:00.000Z',
+  },
 ];
 
 export const SEED_PAYMENTS: Payment[] = [

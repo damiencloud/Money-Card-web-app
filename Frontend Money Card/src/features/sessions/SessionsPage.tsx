@@ -28,7 +28,7 @@ import {
   ErrorState,
 } from '@/components/ui';
 import { DataTable } from '@/components/tables';
-import { formatDate, formatCurrency } from '@/utils';
+import { formatDate, formatCurrency, formatBlockedCardMessage, extractTransactionItems } from '@/utils';
 import {
   CreditCard,
   Building2,
@@ -567,11 +567,17 @@ export function SessionsPage() {
     {
       key: 'reason',
       header: 'Reason',
-      render: (event: CustomerHistoryEvent) => (
-        <span className="text-xs text-slate-300 dark:text-slate-300 italic max-w-xs truncate block font-medium">
-          {event.reason || '—'}
-        </span>
-      ),
+      render: (event: CustomerHistoryEvent) => {
+        const displayReason = formatBlockedCardMessage(event.reason, event.performedByName);
+        return (
+          <span
+            className="text-xs text-slate-300 dark:text-slate-300 italic max-w-xs truncate block font-medium"
+            title={displayReason}
+          >
+            {displayReason || '—'}
+          </span>
+        );
+      },
     },
   ];
 
@@ -871,51 +877,104 @@ export function SessionsPage() {
                   description="No purchase or recharge activity recorded for this session yet."
                 />
               ) : (
-                <div className="max-h-72 overflow-y-auto space-y-2">
-                  {sessionTxns.map((tx) => (
-                    <div
-                      key={tx.id}
-                      className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 text-sm"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`p-2 rounded-lg ${
-                            tx.type === 'PURCHASE'
-                              ? 'bg-rose-50 text-rose-600'
-                              : tx.type === 'RECHARGE'
-                              ? 'bg-emerald-50 text-emerald-600'
-                              : 'bg-amber-50 text-amber-600'
-                          }`}
-                        >
-                          {tx.type === 'PURCHASE' ? (
-                            <ShoppingBag className="h-4 w-4" />
-                          ) : tx.type === 'RECHARGE' ? (
-                            <ArrowUpRight className="h-4 w-4" />
-                          ) : (
-                            <RotateCcw className="h-4 w-4" />
+                <div className="max-h-80 overflow-y-auto space-y-2.5 pr-1">
+                  {sessionTxns.map((tx) => {
+                    const isRecharge = tx.type === 'RECHARGE' || String(tx.type).startsWith('RECHARGE');
+                    const isRefund = tx.type === 'REFUND' || String(tx.type).startsWith('REFUND');
+                    const isPurchase = tx.type === 'PURCHASE';
+                    const items = extractTransactionItems(tx.items);
+
+                    let title = 'Transaction';
+                    if (isPurchase) {
+                      if (items.length > 0) {
+                        title = items
+                          .map((i) => `${i.quantity > 1 ? `${i.quantity}× ` : ''}${i.name}`)
+                          .join(', ');
+                      } else {
+                        title = 'POS Purchase';
+                      }
+                    } else if (isRecharge) {
+                      title =
+                        tx.type === 'RECHARGE_UPI'
+                          ? 'Wallet Recharge (UPI)'
+                          : tx.type === 'RECHARGE_CASH'
+                          ? 'Wallet Recharge (Cash)'
+                          : 'Wallet Recharge';
+                    } else if (isRefund) {
+                      title = 'Settlement Refund';
+                    }
+
+                    return (
+                      <div
+                        key={tx.id}
+                        className="flex items-start justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 text-sm hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
+                      >
+                        <div className="flex items-start gap-2.5 flex-1 min-w-0 pr-3">
+                          <div
+                            className={`p-2 rounded-lg shrink-0 mt-0.5 ${
+                              isPurchase
+                                ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400'
+                                : isRecharge
+                                ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400'
+                                : 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400'
+                            }`}
+                          >
+                            {isPurchase ? (
+                              <ShoppingBag className="h-4 w-4" />
+                            ) : isRecharge ? (
+                              <ArrowUpRight className="h-4 w-4" />
+                            ) : (
+                              <RotateCcw className="h-4 w-4" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-slate-900 dark:text-slate-100 leading-snug break-words">
+                              {title}
+                            </p>
+
+                            {/* What all they bought chips / line item breakdown */}
+                            {isPurchase && items.length > 0 && (
+                              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                {items.map((item, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                                  >
+                                    <span>{item.quantity}× {item.name}</span>
+                                    {item.total !== undefined ? (
+                                      <span className="text-slate-400 dark:text-slate-500 font-mono">
+                                        ({formatCurrency(item.total)})
+                                      </span>
+                                    ) : item.unitPrice !== undefined ? (
+                                      <span className="text-slate-400 dark:text-slate-500 font-mono">
+                                        (@{formatCurrency(item.unitPrice)})
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            <p className="text-xs text-slate-500 mt-1">{formatDate(tx.createdAt)}</p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p
+                            className={`font-mono font-bold ${
+                              isRecharge
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-slate-900 dark:text-slate-100'
+                            }`}
+                          >
+                            {isRecharge ? '+' : '-'}{formatCurrency(tx.amount)}
+                          </p>
+                          {tx.balanceAfter !== undefined && (
+                            <p className="text-xs text-slate-400">Bal: {formatCurrency(tx.balanceAfter)}</p>
                           )}
                         </div>
-                        <div>
-                          <p className="font-semibold text-slate-900 dark:text-slate-100">
-                            {tx.type === 'PURCHASE' ? 'POS Purchase' : tx.type === 'RECHARGE' ? 'Wallet Recharge' : 'Settlement Refund'}
-                          </p>
-                          <p className="text-xs text-slate-500">{formatDate(tx.createdAt)}</p>
-                        </div>
                       </div>
-                      <div className="text-right">
-                        <p
-                          className={`font-mono font-bold ${
-                            tx.type === 'RECHARGE' ? 'text-emerald-600' : 'text-slate-900 dark:text-slate-100'
-                          }`}
-                        >
-                          {tx.type === 'RECHARGE' ? '+' : '-'}{formatCurrency(tx.amount)}
-                        </p>
-                        {tx.balanceAfter !== undefined && (
-                          <p className="text-xs text-slate-400">Bal: {formatCurrency(tx.balanceAfter)}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )
             )}
@@ -951,7 +1010,10 @@ export function SessionsPage() {
                         Performed by: <strong>{e.performedByName}</strong>
                       </p>
                       {e.reason && (
-                        <p className="text-xs text-slate-500 italic">Reason: {e.reason}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 italic">
+                          <strong className="text-slate-600 dark:text-slate-300 not-italic">Reason:</strong>{' '}
+                          {formatBlockedCardMessage(e.reason, e.performedByName)}
+                        </p>
                       )}
                     </div>
                   ))}
