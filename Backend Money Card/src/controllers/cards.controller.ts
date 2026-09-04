@@ -692,6 +692,10 @@ export async function getCardById(req: Request, res: Response) {
 export async function deleteCard(req: Request, res: Response) {
   const { id } = req.params;
   const orgId = req.user?.organizationId;
+  const staffUserId = req.user?.id;
+  const staffName = req.user?.name || req.user?.email || 'Administrator';
+  const { reason = 'Card permanently deleted by administrator' } = req.body || {};
+
   if (!orgId) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'User has no associated organization');
   }
@@ -701,12 +705,6 @@ export async function deleteCard(req: Request, res: Response) {
     include: {
       sessions: {
         where: { status: SessionStatus.ACTIVE },
-      },
-      _count: {
-        select: {
-          sessions: true,
-          historyEvents: true,
-        },
       },
     },
   });
@@ -724,22 +722,30 @@ export async function deleteCard(req: Request, res: Response) {
     );
   }
 
-  if (card._count.sessions > 0 || card._count.historyEvents > 0) {
-    const updated = await prisma.card.update({
-      where: { id },
+  await prisma.$transaction(async (tx) => {
+    // Record permanent card deletion in customer history before deleting card
+    await tx.customerHistoryEvent.create({
       data: {
-        status: CardStatus.BLOCKED,
+        organizationId: orgId,
+        cardId: null, // Keep null so this audit event remains permanently even after card deletion
+        physicalCardNumber: card.physicalCardNumber || card.qrToken,
+        action: CardHistoryAction.CARD_DELETED,
+        previousStatus: card.status,
+        newStatus: card.status,
+        performedByName: staffName,
+        performedByUserId: staffUserId || null,
+        reason: String(reason || 'Card permanently deleted by administrator'),
       },
     });
 
-    return sendSuccess(res, {
-      archived: true,
-      message: 'Card has historical session and transaction records. It has been safely deactivated/blocked to preserve financial history.',
-      card: updated,
-    });
-  }
+    // Delete card from registry.
+    // Thanks to ON DELETE SET NULL on both customer_history_events.cardId and card_sessions.cardId,
+    // all past history records and session records remain fully preserved with physicalCardNumber intact.
+    await tx.card.delete({ where: { id } });
+  });
 
-  await prisma.card.delete({ where: { id } });
-
-  return sendSuccess(res, { deleted: true, message: 'Card permanently deleted.' });
+  return sendSuccess(res, {
+    deleted: true,
+    message: `Card "${card.physicalCardNumber || card.qrToken}" permanently deleted. Record preserved in customer history.`,
+  });
 }

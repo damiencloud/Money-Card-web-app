@@ -470,9 +470,7 @@ export function CardsPage() {
       }
 
       toast.success(
-        res.data?.archived
-          ? `Card ${selectedCard.physicalCardNumber || selectedCard.qrToken} deactivated to preserve transaction history`
-          : `Card ${selectedCard.physicalCardNumber || selectedCard.qrToken} permanently deleted`,
+        res.data?.message || `Card ${selectedCard.physicalCardNumber || selectedCard.qrToken} permanently deleted. Record preserved in customer history.`,
       );
       setShowDeleteCardModal(false);
       fetchCardsData();
@@ -1506,7 +1504,7 @@ export function CardsPage() {
               ?
             </p>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Cards with no session or transaction history will be permanently deleted from the organization registry. Cards with historical sessions/transactions will be safely deactivated/blocked so that previous customer statements and receipts remain intact.
+              This card will be permanently deleted from the active card registry, freeing its physical card number and organization quota. A permanent deletion record and all historical audit logs will remain preserved in Customer History.
             </p>
           </div>
 

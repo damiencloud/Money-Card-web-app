@@ -199,11 +199,11 @@ export interface ImportCardsResponseData {
 }
 
 
-export type CardHistoryAction = 'CARD_BLOCKED' | 'CARD_UNBLOCKED' | 'CARD_ISSUED' | 'CARD_RETURNED';
+export type CardHistoryAction = 'CARD_BLOCKED' | 'CARD_UNBLOCKED' | 'CARD_ISSUED' | 'CARD_RETURNED' | 'CARD_DELETED';
 
 export interface CustomerHistoryEvent {
   id: string;
-  cardId: string;
+  cardId?: string | null;
   sessionId?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;

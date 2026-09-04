@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config/app_config.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/network/mdns_discovery_service.dart';
 import '../../core/storage/server_config_storage.dart';
 import '../../providers/api_providers.dart';
 
@@ -23,6 +24,7 @@ class ServerConfigDialog extends ConsumerStatefulWidget {
 class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
   late final TextEditingController _urlController;
   bool _isTesting = false;
+  bool _isDiscovering = false;
   String? _testResult;
   bool _testSuccess = false;
 
@@ -38,19 +40,43 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
     super.dispose();
   }
 
+  Future<void> _runMdnsDiscovery() async {
+    if (!mounted) return;
+    setState(() {
+      _isDiscovering = true;
+      _testResult = 'Searching local Wi-Fi via mDNS (_moneycard-api._tcp)...';
+      _testSuccess = false;
+    });
+
+    final stopwatch = Stopwatch();
+    stopwatch.start();
+    final discoveredUrl = await MdnsDiscoveryService.instance.discoverAndVerifyBackend(
+      timeout: const Duration(seconds: 10),
+      testStoredFirst: false,
+    );
+    stopwatch.stop();
+
+    if (!mounted) return;
+    setState(() {
+      _isDiscovering = false;
+      if (discoveredUrl != null && discoveredUrl.isNotEmpty) {
+        _urlController.text = discoveredUrl;
+        _testSuccess = true;
+        _testResult = '✓ Auto-discovered via mDNS (${stopwatch.elapsedMilliseconds}ms)\n$discoveredUrl';
+      } else {
+        _testSuccess = false;
+        _testResult =
+            '✗ Money Card server not found.\nMake sure your phone and computer are on the same Wi-Fi, the backend is running, and Wi-Fi AP isolation is disabled.';
+      }
+    });
+  }
+
   Future<void> _testConnection() async {
     final rawUrl = _urlController.text.trim();
     if (rawUrl.isEmpty) return;
 
     final normalized = AppConfig.normalizeUrl(rawUrl);
-    var healthUrl = normalized;
-    if (!healthUrl.endsWith('/health')) {
-      if (healthUrl.endsWith('/')) {
-        healthUrl = '${healthUrl}health';
-      } else {
-        healthUrl = '$healthUrl/health';
-      }
-    }
+    final healthUrl = normalized.endsWith('/') ? '${normalized}health' : '$normalized/health';
 
     if (!mounted) return;
     setState(() {
@@ -59,12 +85,14 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
       _testSuccess = false;
     });
 
-    final stopwatch = Stopwatch()..start();
+    final stopwatch = Stopwatch();
+    stopwatch.start();
     try {
       final testDio = Dio(
         BaseOptions(
           connectTimeout: const Duration(seconds: 4),
           receiveTimeout: const Duration(seconds: 4),
+          sendTimeout: const Duration(seconds: 4),
         ),
       );
 
@@ -73,14 +101,16 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
 
       if (!mounted) return;
       if (resp.statusCode == 200) {
+        final isLoopback = normalized.contains('127.0.0.1') || normalized.contains('localhost');
+        final modeDesc = isLoopback ? 'USB Reverse / Local' : 'Wi-Fi LAN';
         setState(() {
           _testSuccess = true;
-          _testResult = '✓ Connected (${stopwatch.elapsedMilliseconds}ms) • Backend Online';
+          _testResult = '✓ Connected (${stopwatch.elapsedMilliseconds}ms) • $modeDesc Online (HTTP 200)';
         });
       } else {
         setState(() {
           _testSuccess = false;
-          _testResult = '✗ HTTP ${resp.statusCode}: Server returned error';
+          _testResult = '✗ HTTP ${resp.statusCode}: Server returned unexpected status';
         });
       }
     } catch (e) {
@@ -90,9 +120,14 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
         _testSuccess = false;
         if (e is DioException) {
           if (e.type == DioExceptionType.connectionTimeout) {
-            _testResult = '✗ Timed out (4s). Ensure phone & laptop are on the same Wi-Fi.';
+            _testResult = '✗ Timed out (4s). Ensure phone & laptop are on the same Wi-Fi and port 3000 is open in firewall.';
           } else if (e.type == DioExceptionType.connectionError) {
-            _testResult = '✗ Connection refused. Check IP/port or if using USB run adb reverse.';
+            final isLoopback = normalized.contains('127.0.0.1') || normalized.contains('localhost');
+            if (isLoopback) {
+              _testResult = '✗ Connection refused on 127.0.0.1.\nFor USB cable, run in terminal on your computer:\nadb reverse tcp:3000 tcp:3000';
+            } else {
+              _testResult = '✗ Connection refused. Ensure backend server is running on laptop (http://0.0.0.0:3000).';
+            }
           } else {
             _testResult = '✗ ${e.message ?? "Connection error"}';
           }
@@ -160,7 +195,7 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Select connection mode or enter laptop IP:',
+              'Dynamic mDNS discovery or custom development host:',
               style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
             ),
             const SizedBox(height: 12),
@@ -168,7 +203,7 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
               controller: _urlController,
               style: const TextStyle(color: Colors.white, fontSize: 14),
               decoration: InputDecoration(
-                hintText: 'http://192.168.104.179:3000/api/v1',
+                hintText: 'http://192.168.x.x:3000/api/v1',
                 hintStyle: const TextStyle(color: Color(0xFF64748B)),
                 filled: true,
                 fillColor: const Color(0xFF0F172A),
@@ -194,8 +229,17 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
               runSpacing: 6,
               children: [
                 ActionChip(
+                  avatar: const Icon(Icons.usb, size: 14, color: Colors.cyan),
+                  label: const Text('USB (127.0.0.1)', style: TextStyle(fontSize: 12, color: Colors.white)),
+                  backgroundColor: const Color(0xFF0F172A),
+                  side: const BorderSide(color: Color(0xFF334155)),
+                  onPressed: () {
+                    _urlController.text = AppConfig.defaultBaseUrl;
+                  },
+                ),
+                ActionChip(
                   avatar: const Icon(Icons.wifi, size: 14, color: AppColors.primary),
-                  label: const Text('Wi-Fi LAN', style: TextStyle(fontSize: 12)),
+                  label: const Text('Wi-Fi LAN', style: TextStyle(fontSize: 12, color: Colors.white)),
                   backgroundColor: const Color(0xFF0F172A),
                   side: const BorderSide(color: Color(0xFF334155)),
                   onPressed: () {
@@ -203,13 +247,18 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
                   },
                 ),
                 ActionChip(
-                  avatar: const Icon(Icons.usb, size: 14, color: Colors.cyan),
-                  label: const Text('USB (127.0.0.1)', style: TextStyle(fontSize: 12)),
+                  avatar: _isDiscovering
+                      ? const SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                        )
+                      : const Icon(Icons.radar_rounded, size: 14, color: AppColors.primary),
+                  label: Text(_isDiscovering ? 'Searching...' : 'mDNS Auto-Discover',
+                      style: const TextStyle(fontSize: 12, color: Colors.white)),
                   backgroundColor: const Color(0xFF0F172A),
-                  side: const BorderSide(color: Color(0xFF334155)),
-                  onPressed: () {
-                    _urlController.text = AppConfig.defaultBaseUrl;
-                  },
+                  side: const BorderSide(color: AppColors.primary),
+                  onPressed: (_isDiscovering || _isTesting) ? null : _runMdnsDiscovery,
                 ),
               ],
             ),
@@ -218,7 +267,7 @@ class _ServerConfigDialogState extends ConsumerState<ServerConfigDialog> {
             Row(
               children: [
                 OutlinedButton.icon(
-                  onPressed: _isTesting ? null : _testConnection,
+                  onPressed: (_isTesting || _isDiscovering) ? null : _testConnection,
                   icon: _isTesting
                       ? const SizedBox(
                           width: 14,

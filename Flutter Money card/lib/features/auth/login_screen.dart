@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/config/app_config.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/storage/server_config_storage.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/common/app_button.dart';
-import '../../widgets/dialogs/server_config_dialog.dart';
+import '../../widgets/dev_connection_banner.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -252,41 +251,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       const SizedBox(height: AppSpacing.md),
 
-                      // Server Connection / Change IP Chip
-                      Center(
-                        child: InkWell(
-                          onTap: () async {
-                            await ServerConfigDialog.show(context);
-                            setState(() {});
-                          },
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: const Color(0xFFCBD5E1)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.dns_outlined, size: 14, color: AppColors.primary),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Server: ${AppConfig.displayHost}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondaryLight,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                const Icon(Icons.edit, size: 12, color: AppColors.textSecondaryLight),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
+                      // Server Connection / Dev Status
+                      const DevConnectionBanner(),
                     ],
                   ),
                 ),
