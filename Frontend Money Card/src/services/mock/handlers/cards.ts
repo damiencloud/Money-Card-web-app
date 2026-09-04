@@ -294,6 +294,8 @@ export const mockCardsHandlers = {
     if (!card) return createMockError('CARD_NOT_FOUND', 'Card not found');
 
     card.status = 'BLOCKED';
+    (card as any).blockedReason = reason;
+    (card as any).blockedBy = currentUser.name;
     card.updatedAt = mockStore.getTimestamp();
 
     mockStore.customerHistoryEvents.unshift({
@@ -323,6 +325,8 @@ export const mockCardsHandlers = {
     if (!card) return createMockError('CARD_NOT_FOUND', 'Card not found');
 
     card.status = 'ACTIVE';
+    delete (card as any).blockedReason;
+    delete (card as any).blockedBy;
     card.updatedAt = mockStore.getTimestamp();
 
     mockStore.customerHistoryEvents.unshift({

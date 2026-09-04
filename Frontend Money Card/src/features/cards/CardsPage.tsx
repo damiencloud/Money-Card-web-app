@@ -1,4 +1,4 @@
-import { formatCurrency, formatDate, cn } from '@/utils';
+import { formatCurrency, formatDate, cn, buildCardBlockReason, formatBlockedCardMessage } from '@/utils';
 import { generateSecureToken } from '@/utils/cryptoRandom';
 import { toast } from 'sonner';
 // ─── Cards Management Page (M7) ──────────────────────────────
@@ -485,11 +485,13 @@ export function CardsPage() {
   const handleConfirmBlock = async () => {
     if (!selectedCard) return;
     try {
-      const blockerStr = user ? `${user.name} (${user.role === 'ORG_ADMIN' ? 'Org Admin' : user.role})` : 'Org Admin';
       const notes = additionalBlockReason.trim();
-      const fullReason = notes
-        ? `[Blocked by ${blockerStr}] ${blockReasonCategory}: ${notes}`
-        : `[Blocked by ${blockerStr}] ${blockReasonCategory}`;
+      const fullReason = buildCardBlockReason(
+        blockReasonCategory,
+        notes,
+        user?.name,
+        user?.role,
+      );
 
       const res = await apiService.cards.blockCard(selectedCard.id, fullReason);
       if (res.success) {
@@ -551,7 +553,7 @@ export function CardsPage() {
                 </span>
               ) : (
                 <span className="inline-flex items-center text-amber-400 text-xs font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                  Unassigned QR
+                  Unassigned
                 </span>
               )}
             </div>
@@ -565,12 +567,13 @@ export function CardsPage() {
       render: (card: CardEntity) => {
         const isUnassigned = !card.physicalCardNumber || card.assignmentStatus === 'UNASSIGNED';
         if (card.status === 'BLOCKED') {
+          const displayReason = formatBlockedCardMessage(card.blockedReason, card.blockedBy);
           return (
             <div className="flex flex-col gap-0.5">
               <Badge variant="danger">Blocked</Badge>
               {card.blockedReason && (
-                <span className="text-[10px] text-rose-300 max-w-[150px] truncate" title={card.blockedReason}>
-                  {card.blockedReason}
+                <span className="text-[10px] text-rose-300 max-w-[180px] truncate" title={displayReason}>
+                  {displayReason}
                 </span>
               )}
             </div>
@@ -580,7 +583,7 @@ export function CardsPage() {
           return (
             <Badge variant="warning" className="gap-1 font-semibold text-xs">
               <AlertTriangle className="h-3 w-3" />
-              Free QR
+              Unassigned
             </Badge>
           );
         }
@@ -969,8 +972,8 @@ export function CardsPage() {
               onChange={(e) => setAssignmentFilter(e.target.value as CardAssignmentStatus | 'ALL')}
               options={[
                 { value: 'ALL', label: 'All Cards' },
-                { value: 'ASSIGNED', label: 'Assigned to Customer' },
-                { value: 'UNASSIGNED', label: 'Free / Unassigned QR' },
+                { value: 'ASSIGNED', label: 'Assigned Cards' },
+                { value: 'UNASSIGNED', label: 'Unassigned Cards' },
               ]}
             />
 
@@ -1327,9 +1330,11 @@ export function CardsPage() {
               {selectedCard.status === 'BLOCKED' && (
                 <div className="col-span-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
                   <p className="font-semibold text-rose-400">Card is Blocked</p>
-                  <p className="mt-1">{selectedCard.blockedReason || 'Blocked by Administrator'}</p>
+                  <p className="mt-1 font-medium leading-relaxed">
+                    {formatBlockedCardMessage(selectedCard.blockedReason, selectedCard.blockedBy)}
+                  </p>
                   {selectedCard.blockedBy && (
-                    <p className="mt-0.5 text-slate-400">Blocked By: {selectedCard.blockedBy}</p>
+                    <p className="mt-1 text-slate-400">Authorized By: {selectedCard.blockedBy}</p>
                   )}
                 </div>
               )}
@@ -1430,6 +1435,16 @@ export function CardsPage() {
                 rows={2}
                 className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-rose-500 focus:outline-none resize-none"
               />
+            </div>
+
+            {/* Live Business Logic Message Preview */}
+            <div className="rounded-lg border border-rose-500/20 bg-rose-950/20 p-2.5 text-xs text-slate-300 space-y-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-rose-400 block">
+                Recorded Business Reason & Policy:
+              </span>
+              <p className="text-rose-200 italic font-medium leading-relaxed">
+                {buildCardBlockReason(blockReasonCategory, additionalBlockReason, user?.name, user?.role)}
+              </p>
             </div>
           </div>
 

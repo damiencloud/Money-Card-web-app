@@ -411,7 +411,7 @@ export function ProductsPage({ defaultTab: _defaultTab }: ProductsPageProps = {}
       {/* ─── Page Header & Global Controls ─── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Products & Inventory</h1>
+          <h1 className="text-2xl font-bold text-slate-100">Menu</h1>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -555,7 +555,7 @@ export function ProductsPage({ defaultTab: _defaultTab }: ProductsPageProps = {}
       <Card className="p-0">
         {isLoading ? (
           <div className="py-12">
-            <LoadingState message="Loading products & inventory stock..." />
+            <LoadingState message="Loading menu & inventory stock..." />
           </div>
         ) : loadError ? (
           <div className="p-6">

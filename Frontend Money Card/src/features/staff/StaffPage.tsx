@@ -38,6 +38,7 @@ import {
   Send,
   RefreshCw,
   AlertCircle,
+  CheckCircle2,
   Eye, EyeOff,
   Check,
   ArrowRight,
@@ -460,6 +461,16 @@ export function StaffPage() {
       errors.password = 'Password is required';
     } else if (formPassword.length < 8) {
       errors.password = 'Password must be at least 8 characters';
+    } else if (formPassword.length > 128) {
+      errors.password = 'Password cannot exceed 128 characters';
+    } else if (!/[A-Z]/.test(formPassword)) {
+      errors.password = 'Password must contain at least one uppercase letter [A-Z]';
+    } else if (!/[a-z]/.test(formPassword)) {
+      errors.password = 'Password must contain at least one lowercase letter [a-z]';
+    } else if (!/[0-9]/.test(formPassword)) {
+      errors.password = 'Password must contain at least one number [0-9]';
+    } else if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(formPassword)) {
+      errors.password = 'Password must contain at least one special character (!@#$%^&*...)';
     }
 
     setFormErrors(errors);
@@ -481,12 +492,50 @@ export function StaffPage() {
     setIsSubmitting(true);
 
     try {
+      const finalPermissions = new Set(formPermissions);
+      if (finalPermissions.has('CARD_BLOCK') || finalPermissions.has('CARD_UNBLOCK')) {
+        finalPermissions.add('CARD_BLOCK');
+        finalPermissions.add('CARD_UNBLOCK');
+      }
+      if (finalPermissions.has('PRODUCT_VIEW') || finalPermissions.has('INVENTORY_VIEW')) {
+        finalPermissions.add('PRODUCT_VIEW');
+        finalPermissions.add('INVENTORY_VIEW');
+      }
+      if (
+        finalPermissions.has('PRODUCT_MANAGE') ||
+        finalPermissions.has('INVENTORY_MANAGE') ||
+        finalPermissions.has('INVENTORY_IMPORT')
+      ) {
+        finalPermissions.add('PRODUCT_MANAGE');
+        finalPermissions.add('INVENTORY_MANAGE');
+        finalPermissions.add('INVENTORY_IMPORT');
+        finalPermissions.add('PRODUCT_VIEW');
+        finalPermissions.add('INVENTORY_VIEW');
+      }
+      if (finalPermissions.has('BRANCH_VIEW') || finalPermissions.has('STAFF_VIEW')) {
+        finalPermissions.add('BRANCH_VIEW');
+        finalPermissions.add('STAFF_VIEW');
+      }
+      if (
+        finalPermissions.has('BRANCH_MANAGE') ||
+        finalPermissions.has('STAFF_MANAGE') ||
+        finalPermissions.has('VIEW_ANALYTICS') ||
+        finalPermissions.has('VIEW_REPORTS')
+      ) {
+        finalPermissions.add('BRANCH_MANAGE');
+        finalPermissions.add('STAFF_MANAGE');
+        finalPermissions.add('VIEW_ANALYTICS');
+        finalPermissions.add('VIEW_REPORTS');
+        finalPermissions.add('BRANCH_VIEW');
+        finalPermissions.add('STAFF_VIEW');
+      }
+
       const res = await apiService.staff.createStaff({
         name: formName.trim(),
         email: formEmail.trim(),
         password: formPassword,
         assignedBranchIds: formBranchIds,
-        permissions: formPermissions,
+        permissions: Array.from(finalPermissions),
       });
 
       if (!res.success) {
@@ -641,7 +690,46 @@ export function StaffPage() {
     setIsSubmitting(true);
 
     try {
-      const res = await apiService.staff.updateStaffPermissions(selectedStaff.id, formPermissions);
+      const permissionsToSave = new Set(formPermissions);
+      if (permissionsToSave.has('CARD_BLOCK') || permissionsToSave.has('CARD_UNBLOCK')) {
+        permissionsToSave.add('CARD_BLOCK');
+        permissionsToSave.add('CARD_UNBLOCK');
+      }
+      if (permissionsToSave.has('PRODUCT_VIEW') || permissionsToSave.has('INVENTORY_VIEW')) {
+        permissionsToSave.add('PRODUCT_VIEW');
+        permissionsToSave.add('INVENTORY_VIEW');
+      }
+      if (
+        permissionsToSave.has('PRODUCT_MANAGE') ||
+        permissionsToSave.has('INVENTORY_MANAGE') ||
+        permissionsToSave.has('INVENTORY_IMPORT')
+      ) {
+        permissionsToSave.add('PRODUCT_MANAGE');
+        permissionsToSave.add('INVENTORY_MANAGE');
+        permissionsToSave.add('INVENTORY_IMPORT');
+        permissionsToSave.add('PRODUCT_VIEW');
+        permissionsToSave.add('INVENTORY_VIEW');
+      }
+      if (permissionsToSave.has('BRANCH_VIEW') || permissionsToSave.has('STAFF_VIEW')) {
+        permissionsToSave.add('BRANCH_VIEW');
+        permissionsToSave.add('STAFF_VIEW');
+      }
+      if (
+        permissionsToSave.has('BRANCH_MANAGE') ||
+        permissionsToSave.has('STAFF_MANAGE') ||
+        permissionsToSave.has('VIEW_ANALYTICS') ||
+        permissionsToSave.has('VIEW_REPORTS')
+      ) {
+        permissionsToSave.add('BRANCH_MANAGE');
+        permissionsToSave.add('STAFF_MANAGE');
+        permissionsToSave.add('VIEW_ANALYTICS');
+        permissionsToSave.add('VIEW_REPORTS');
+        permissionsToSave.add('BRANCH_VIEW');
+        permissionsToSave.add('STAFF_VIEW');
+      }
+      const normalizedPermissions = Array.from(permissionsToSave);
+
+      const res = await apiService.staff.updateStaffPermissions(selectedStaff.id, normalizedPermissions);
 
       if (!res.success) {
         setModalApiError(res.error.message || 'Failed to update staff permissions');
@@ -649,7 +737,7 @@ export function StaffPage() {
       }
 
       notify.success('Permissions updated successfully.');
-      setSelectedStaff((prev) => (prev ? { ...prev, permissions: formPermissions } : null));
+      setSelectedStaff((prev) => (prev ? { ...prev, permissions: normalizedPermissions } : null));
       fetchStaffData();
     } catch {
       setModalApiError('An unexpected error occurred. Please try again.');
@@ -1572,6 +1660,59 @@ export function StaffPage() {
                     }
                   />
 
+                {/* Initial Password requirements checklist */}
+                <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-xs space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                      <ShieldCheck className="h-3.5 w-3.5 text-violet-400" />
+                      Password Requirements:
+                    </span>
+                    <span className="text-[11px] text-slate-500">All rules required</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-slate-400 pt-0.5">
+                    <div className={`flex items-center gap-1.5 transition-colors ${formPassword.length >= 8 ? 'text-emerald-400 font-medium' : ''}`}>
+                      {formPassword.length >= 8 ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                      ) : (
+                        <span className="text-slate-600 text-xs">•</span>
+                      )}
+                      <span>At least 8 characters</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 transition-colors ${/[A-Z]/.test(formPassword) ? 'text-emerald-400 font-medium' : ''}`}>
+                      {/[A-Z]/.test(formPassword) ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                      ) : (
+                        <span className="text-slate-600 text-xs">•</span>
+                      )}
+                      <span>One uppercase letter [A-Z]</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 transition-colors ${/[a-z]/.test(formPassword) ? 'text-emerald-400 font-medium' : ''}`}>
+                      {/[a-z]/.test(formPassword) ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                      ) : (
+                        <span className="text-slate-600 text-xs">•</span>
+                      )}
+                      <span>One lowercase letter [a-z]</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 transition-colors ${/[0-9]/.test(formPassword) ? 'text-emerald-400 font-medium' : ''}`}>
+                      {/[0-9]/.test(formPassword) ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                      ) : (
+                        <span className="text-slate-600 text-xs">•</span>
+                      )}
+                      <span>One number [0-9]</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 transition-colors sm:col-span-2 ${/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(formPassword) ? 'text-emerald-400 font-medium' : ''}`}>
+                      {/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(formPassword) ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                      ) : (
+                        <span className="text-slate-600 text-xs">•</span>
+                      )}
+                      <span>One special character (!@#$%^&*...)</span>
+                    </div>
+                  </div>
+                </div>
+
                 {orgOverview?.usage && (
                   <p className="text-xs text-slate-400 pt-2">
                     Active subscription allows up to {orgOverview.usage.staffLimit} staff accounts (
@@ -1728,13 +1869,12 @@ export function StaffPage() {
                         'INVENTORY_VIEW',
                         'INVENTORY_MANAGE',
                         'INVENTORY_IMPORT',
-                        'VIEW_REPORTS',
-                        'STAFF_VIEW',
                         'BRANCH_VIEW',
+                        'STAFF_VIEW',
                       ]);
                     }}
                     className={`flex flex-col justify-between p-4 rounded-xl border text-left transition-all cursor-pointer select-none ${
-                      formPermissions.length === 17 && formPermissions.includes('INVENTORY_MANAGE') && !formPermissions.includes('STAFF_MANAGE')
+                      formPermissions.length === 16 && formPermissions.includes('INVENTORY_MANAGE') && !formPermissions.includes('STAFF_MANAGE')
                         ? 'border-amber-500 bg-amber-500/10 ring-1 ring-amber-500'
                         : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
                     }`}
@@ -1744,17 +1884,17 @@ export function StaffPage() {
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                           Branch Lead
                         </span>
-                        {formPermissions.length === 17 && formPermissions.includes('INVENTORY_MANAGE') && !formPermissions.includes('STAFF_MANAGE') && (
+                        {formPermissions.length === 16 && formPermissions.includes('INVENTORY_MANAGE') && !formPermissions.includes('STAFF_MANAGE') && (
                           <Check className="h-4 w-4 text-amber-400" />
                         )}
                       </div>
                       <h5 className="font-bold text-sm text-slate-100">Supervisor</h5>
                       <p className="text-[11px] text-slate-400 mt-1">
-                        Cashier duties + stock counting, menu pricing, and daily reports.
+                        Cashier duties + stock counting, menu pricing, and branch/staff directory view.
                       </p>
                     </div>
                     <span className="text-[11px] font-mono text-amber-400 mt-3">
-                      17 permissions
+                      16 permissions
                     </span>
                   </button>
 

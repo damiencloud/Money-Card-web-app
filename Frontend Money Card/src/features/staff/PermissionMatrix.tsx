@@ -10,6 +10,7 @@ import {
   PERMISSION_DEPENDENCIES,
   PERMISSION_CHILDREN,
   type PermissionCategoryConfig,
+  type PermissionItemConfig,
 } from './constants';
 
 interface PermissionMatrixProps {
@@ -51,38 +52,53 @@ export function PermissionMatrix({
     setOpenGroups(allClosed);
   };
 
-  const isSelected = (perm: Permission) => selectedPermissions.includes(perm);
+  const isSelected = (permKey: Permission, linkedKeys?: Permission[]) => {
+    if (linkedKeys && linkedKeys.length > 0) {
+      return (
+        selectedPermissions.includes(permKey) ||
+        linkedKeys.some((k) => selectedPermissions.includes(k))
+      );
+    }
+    return selectedPermissions.includes(permKey);
+  };
 
   // ── Logical Permission Toggle with Parent/Child Cascading ──
-  const togglePermission = (perm: Permission) => {
+  const togglePermission = (permItem: PermissionItemConfig) => {
     if (readOnly || !onChange) return;
 
-    if (isSelected(perm)) {
-      // Deactivating a permission:
-      // Recursively deactivate any child permissions that require this permission
-      const toRemove = new Set<Permission>([perm]);
+    const allKeys = [permItem.key, ...(permItem.linkedKeys || [])];
+    const active = isSelected(permItem.key, permItem.linkedKeys);
+
+    if (active) {
+      // Deactivating:
+      // Recursively deactivate any child permissions that require this permission or its linked keys
+      const toRemove = new Set<Permission>(allKeys);
       const collectChildren = (p: Permission) => {
         const children = PERMISSION_CHILDREN[p] || [];
         children.forEach((child) => {
-          toRemove.add(child);
-          collectChildren(child);
+          if (!toRemove.has(child)) {
+            toRemove.add(child);
+            collectChildren(child);
+          }
         });
       };
-      collectChildren(perm);
+      allKeys.forEach((k) => collectChildren(k));
 
       onChange(selectedPermissions.filter((p) => !toRemove.has(p)));
     } else {
-      // Activating a permission:
+      // Activating:
       // Recursively activate any required prerequisite parent permissions
-      const toAdd = new Set<Permission>([perm]);
+      const toAdd = new Set<Permission>(allKeys);
       const collectParents = (p: Permission) => {
         const parents = PERMISSION_DEPENDENCIES[p] || [];
         parents.forEach((parent) => {
-          toAdd.add(parent);
-          collectParents(parent);
+          if (!toAdd.has(parent)) {
+            toAdd.add(parent);
+            collectParents(parent);
+          }
         });
       };
-      collectParents(perm);
+      allKeys.forEach((k) => collectParents(k));
 
       const updated = new Set([...selectedPermissions, ...Array.from(toAdd)]);
       onChange(Array.from(updated));
@@ -92,21 +108,21 @@ export function PermissionMatrix({
   // ── Group Toggle ──
   const toggleCategory = (group: PermissionCategoryConfig) => {
     if (readOnly || !onChange) return;
-    const groupPerms = group.permissions.map((p) => p.key);
-    const allSelected = groupPerms.every((p) => isSelected(p));
+    const allGroupKeys = group.permissions.flatMap((p) => [p.key, ...(p.linkedKeys || [])]);
+    const allSelected = group.permissions.every((p) => isSelected(p.key, p.linkedKeys));
 
     if (allSelected) {
       // Unselect all in group and any dependent children
-      const toRemove = new Set<Permission>(groupPerms);
-      groupPerms.forEach((p) => {
+      const toRemove = new Set<Permission>(allGroupKeys);
+      allGroupKeys.forEach((p) => {
         const children = PERMISSION_CHILDREN[p] || [];
         children.forEach((c) => toRemove.add(c));
       });
       onChange(selectedPermissions.filter((p) => !toRemove.has(p)));
     } else {
       // Select all in group and their prerequisites
-      const toAdd = new Set<Permission>(groupPerms);
-      groupPerms.forEach((p) => {
+      const toAdd = new Set<Permission>(allGroupKeys);
+      allGroupKeys.forEach((p) => {
         const parents = PERMISSION_DEPENDENCIES[p] || [];
         parents.forEach((parent) => toAdd.add(parent));
       });
@@ -161,9 +177,8 @@ export function PermissionMatrix({
 
       {/* ── Category Dropdown Accordion Cards ── */}
       {displayedGroups.map((group) => {
-        const groupPerms = group.permissions.map((p) => p.key);
-        const selectedCount = groupPerms.filter((p) => isSelected(p)).length;
-        const allSelected = selectedCount === groupPerms.length && groupPerms.length > 0;
+        const selectedCount = group.permissions.filter((p) => isSelected(p.key, p.linkedKeys)).length;
+        const allSelected = selectedCount === group.permissions.length && group.permissions.length > 0;
         const isOpen = openGroups[group.id] ?? true;
 
         return (
@@ -194,7 +209,7 @@ export function PermissionMatrix({
                   variant={selectedCount > 0 ? 'info' : 'outline'}
                   className="text-[10px] ml-1 font-mono"
                 >
-                  {selectedCount} / {groupPerms.length} Active
+                  {selectedCount} / {group.permissions.length} Active
                 </Badge>
               </div>
 
@@ -217,7 +232,7 @@ export function PermissionMatrix({
               <div className="border-t border-slate-800/80 p-4 pt-3 bg-slate-950/20">
                 <div className="grid gap-2.5 sm:grid-cols-2">
                   {group.permissions.map((perm) => {
-                    const active = isSelected(perm.key);
+                    const active = isSelected(perm.key, perm.linkedKeys);
                     const missingPrereq = perm.prerequisite && !isSelected(perm.prerequisite);
 
                     if (readOnly) {
@@ -258,7 +273,7 @@ export function PermissionMatrix({
                       <button
                         type="button"
                         key={perm.key}
-                        onClick={() => togglePermission(perm.key)}
+                        onClick={() => togglePermission(perm)}
                         role="checkbox"
                         aria-checked={active}
                         className={`group flex w-full cursor-pointer items-start gap-3 rounded-xl border p-3 text-xs text-left transition-all select-none ${
