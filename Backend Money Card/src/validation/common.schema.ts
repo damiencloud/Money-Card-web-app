@@ -134,3 +134,27 @@ export const safePhoneNumber = z
   .max(20, 'Phone number cannot exceed 20 characters')
   .regex(/^[+0-9\s()-]*$/, 'Phone number contains invalid characters')
   .optional();
+
+/**
+ * Safe Organization name:
+ * - 2 to 30 characters
+ * - Strips dangerous HTML tags and script injections
+ */
+export const safeOrgName = z
+  .string({ required_error: 'Organization name is required' })
+  .min(2, 'Organization name must be at least 2 characters')
+  .max(30, 'Organization name must be at most 30 characters')
+  .transform((val) => sanitizeText(val))
+  .refine((val) => val.length >= 2, {
+    message: 'Organization name must contain at least 2 valid characters',
+  });
+
+/**
+ * Simple password schema:
+ * - Minimum 6 characters, maximum 128 characters
+ */
+export const simplePasswordSchema = z
+  .string({ required_error: 'Password is required' })
+  .min(6, 'Password must be at least 6 characters')
+  .max(128, 'Password cannot exceed 128 characters');
+

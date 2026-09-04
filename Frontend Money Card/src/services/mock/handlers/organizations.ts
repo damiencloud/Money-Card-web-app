@@ -149,6 +149,9 @@ export const mockOrganizationsHandlers = {
     if (!data.name || !data.name.trim()) {
       return createMockError('VALIDATION_ERROR', 'Organization name is required');
     }
+    if (data.name.trim().length > 30) {
+      return createMockError('VALIDATION_ERROR', 'Organization name must be at most 30 characters');
+    }
 
     // 2. Validate Org Admin Email
     const adminEmail = (data.adminEmail || '').trim().toLowerCase();

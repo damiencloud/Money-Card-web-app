@@ -247,8 +247,13 @@ export function AdminPlansSubscriptionsView() {
   // ── Form Handlers ─────────────────────────────────────────
   const handleCreatePlanSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim()) {
+    const trimmedName = formName.trim();
+    if (!trimmedName) {
       setModalApiError('Plan name is required.');
+      return;
+    }
+    if (trimmedName.length > 20) {
+      setModalApiError('Plan name must be at most 20 characters.');
       return;
     }
     const priceNum = parseFloat(formPrice);
@@ -318,8 +323,13 @@ export function AdminPlansSubscriptionsView() {
   const handleEditPlanSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPlan) return;
-    if (!formName.trim()) {
+    const trimmedName = formName.trim();
+    if (!trimmedName) {
       setModalApiError('Plan name is required.');
+      return;
+    }
+    if (trimmedName.length > 20) {
+      setModalApiError('Plan name must be at most 20 characters.');
       return;
     }
     const priceNum = parseFloat(formPrice);
@@ -1209,7 +1219,17 @@ export function AdminPlansSubscriptionsView() {
             </div>
           )}
 
-          <Input label="Plan Name *" value={formName} onChange={(e) => setFormName(e.target.value)} required />
+          <Input
+            label="Plan Name *"
+            value={formName}
+            maxLength={20}
+            onChange={(e) => {
+              setFormName(e.target.value);
+              if (modalApiError) setModalApiError(null);
+            }}
+            placeholder="e.g. Starter, Growth (Max 20 chars)"
+            required
+          />
           <div className="grid grid-cols-2 gap-4">
             <Input label="Default Price (₹) *" type="number" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} required />
             <Select
@@ -1246,7 +1266,17 @@ export function AdminPlansSubscriptionsView() {
             </div>
           )}
 
-          <Input label="Plan Name *" value={formName} onChange={(e) => setFormName(e.target.value)} required />
+          <Input
+            label="Plan Name *"
+            value={formName}
+            maxLength={20}
+            onChange={(e) => {
+              setFormName(e.target.value);
+              if (modalApiError) setModalApiError(null);
+            }}
+            placeholder="e.g. Starter, Growth (Max 20 chars)"
+            required
+          />
           <div className="grid grid-cols-2 gap-4">
             <Input label="Default Price (₹) *" type="number" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} required />
             <Select
