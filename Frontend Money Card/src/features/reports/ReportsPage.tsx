@@ -132,7 +132,7 @@ export function ReportsPage() {
     try {
       const targetBranch = branchFilter !== 'ALL' ? branchFilter : undefined;
       const selectedBranchObj = branches.find((b) => b.id === branchFilter);
-      const selectedBranchName = branchFilter === 'ALL' ? 'All Permitted Branches' : selectedBranchObj?.name || branchFilter;
+      const selectedBranchName = branchFilter === 'ALL' ? 'All Branches' : selectedBranchObj?.name || branchFilter;
 
       // Fetch relevant scoped datasets for official PDF generation
       const [prodRes, sessRes] = await Promise.all([
@@ -264,7 +264,7 @@ export function ReportsPage() {
       header: 'Actions',
       className: 'text-right',
       render: (report: ReportItem) => (
-        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-2">
           <Button
             variant="ghost"
             size="sm"
@@ -300,9 +300,6 @@ export function ReportsPage() {
               12+ Formal Reports
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-slate-400">
-            Generate and download official financial settlements, inventory movement, and session audit records as PDF documents.
-          </p>
         </div>
 
         <Button variant="outline" size="md" onClick={fetchReportsData} leftIcon={<RefreshCw className="h-4 w-4" />}>
@@ -332,7 +329,7 @@ export function ReportsPage() {
             value={branchFilter}
             onChange={(e) => setBranchFilter(e.target.value)}
             options={[
-              { value: 'ALL', label: 'All Permitted Branches' },
+              { value: 'ALL', label: 'All Branches' },
               ...branches.map((b) => ({ value: b.id, label: b.name })),
             ]}
           />
@@ -377,7 +374,7 @@ export function ReportsPage() {
               <div>
                 <span className="text-xs text-slate-400">Category & Target Branch</span>
                 <p className="text-sm font-semibold text-slate-200">
-                  {previewReport.type} — {branchFilter === 'ALL' ? 'All Permitted Branches' : branches.find((b) => b.id === branchFilter)?.name || branchFilter}
+                  {previewReport.type} — {branchFilter === 'ALL' ? 'All Branches' : branches.find((b) => b.id === branchFilter)?.name || branchFilter}
                 </p>
               </div>
               <Badge variant="outline" className="text-rose-300 border-rose-500/30">

@@ -24,6 +24,17 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
   final _searchController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final state = ref.read(sessionListNotifierProvider);
+      if (state.sessions.isEmpty && !state.isLoading) {
+        ref.read(sessionListNotifierProvider.notifier).loadSessions();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();

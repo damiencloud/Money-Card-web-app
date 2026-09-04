@@ -216,7 +216,7 @@ export function OrgAdminAnalyticsView() {
     if (!analytics) return null;
 
     const selectedBranchObj = branches.find((b) => b.id === branchFilter);
-    const selectedBranchName = branchFilter === 'ALL' ? 'All Permitted Branches' : selectedBranchObj?.name || branchFilter;
+    const selectedBranchName = branchFilter === 'ALL' ? 'All Branches' : selectedBranchObj?.name || branchFilter;
 
     const dateLabel =
       datePreset === 'today'
@@ -339,9 +339,6 @@ export function OrgAdminAnalyticsView() {
               Organization Scope
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-slate-400">
-            Real-time transaction volumes, session health, and comprehensive branch performance comparison.
-          </p>
         </div>
 
         {/* Action Buttons: [ View PDF ] and [ Download PDF ] */}
@@ -380,7 +377,7 @@ export function OrgAdminAnalyticsView() {
               value={branchFilter}
               onChange={(e) => handleBranchChange(e.target.value)}
               options={[
-                { value: 'ALL', label: 'All Permitted Branches' },
+                { value: 'ALL', label: 'All Branches' },
                 ...branches.map((b) => ({ value: b.id, label: b.name })),
               ]}
             />
@@ -527,9 +524,6 @@ export function OrgAdminAnalyticsView() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-100">Branch Performance Comparison</h2>
-                <p className="text-xs text-slate-400">
-                  Compare sales volume, transaction frequency, and session health across branches.
-                </p>
               </div>
 
               {/* Sorting Metric Selector */}
@@ -565,10 +559,6 @@ export function OrgAdminAnalyticsView() {
                         Top Performing Branch
                       </Badge>
                     </div>
-                    <p className="text-xs text-slate-400">
-                      Generated {formatCurrency(topBranch.totalRevenue)} across{' '}
-                      {topBranch.transactionCount} transactions.
-                    </p>
                   </div>
                 </div>
                 <div className="hidden sm:block text-right font-mono">

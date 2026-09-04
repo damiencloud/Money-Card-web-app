@@ -16,6 +16,7 @@ import {
   SEED_AUDIT_LOGS,
   SEED_CUSTOMER_HISTORY_EVENTS,
 } from './data/seed';
+import { generateSecureToken } from '../../utils/cryptoRandom';
 
 import type {
   Organization,
@@ -83,7 +84,7 @@ class MockStore {
 
   // ── Helpers for UUID & Timestamp ──
   public generateId(prefix: string): string {
-    return `${prefix}_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`;
+    return generateSecureToken(prefix);
   }
 
   public getTimestamp(): string {

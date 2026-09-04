@@ -74,9 +74,7 @@ class InventoryNotifier extends StateNotifier<InventoryListState> {
   Timer? _messageTimer;
 
   InventoryNotifier(this._inventoryRepository, this._currentBranchId)
-      : super(const InventoryListState()) {
-    loadInventory();
-  }
+      : super(const InventoryListState());
 
   @override
   void dispose() {
@@ -84,9 +82,10 @@ class InventoryNotifier extends StateNotifier<InventoryListState> {
     super.dispose();
   }
 
-  Future<void> loadInventory() async {
+  Future<void> loadInventory({bool force = false}) async {
     final branchId = _currentBranchId;
     if (branchId == null) return;
+    if (!force && state.isLoading) return;
 
     state = state.copyWith(isLoading: true, errorMessage: null);
 

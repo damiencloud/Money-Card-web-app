@@ -94,8 +94,16 @@ export const mockOrganizationsHandlers = {
     let orgs = mockStore.organizations;
 
     if (params?.search) {
-      const q = params.search.toLowerCase();
-      orgs = orgs.filter((o) => o.name.toLowerCase().includes(q));
+      const q = params.search.toLowerCase().trim();
+      orgs = orgs.filter((o) => {
+        const admin = mockStore.staffUsers.find((u) => u.organizationId === o.id && u.role === 'ORG_ADMIN');
+        return (
+          o.name.toLowerCase().includes(q) ||
+          o.id.toLowerCase().includes(q) ||
+          (admin?.email && admin.email.toLowerCase().includes(q)) ||
+          (admin?.name && admin.name.toLowerCase().includes(q))
+        );
+      });
     }
 
     const overviews: OrganizationOverview[] = orgs.map((org) => {
@@ -254,7 +262,7 @@ export const mockOrganizationsHandlers = {
       usage: {
         branchCount: 0,
         branchLimit: plan.branchLimit,
-        staffCount: 1,
+        staffCount: 0,
         staffLimit: plan.staffLimit,
         cardCount: 0,
         cardLimit: plan.cardLimit,
@@ -331,6 +339,32 @@ export const mockOrganizationsHandlers = {
 
     mockStore.organizations[index] = updated;
     return createMockSuccess(updated);
+  },
+
+  // DELETE /api/v1/admin/organizations/:id (Delete org for SUPER_ADMIN)
+  async deleteAdminOrganization(id: string): Promise<ApiResult<{ message: string }>> {
+    await mockDelay();
+    const currentUser = mockAuthHandlers.getCurrentSessionUser();
+    if (!currentUser || currentUser.role !== 'SUPER_ADMIN') {
+      return createMockError('FORBIDDEN', 'Super Admin access required');
+    }
+
+    const index = mockStore.organizations.findIndex((o) => o.id === id);
+    if (index === -1) {
+      return createMockError('NOT_FOUND', `Organization '${id}' not found`);
+    }
+
+    const org = mockStore.organizations[index];
+    const orgCardIds = new Set(mockStore.cards.filter((c) => c.organizationId === id).map((c) => c.id));
+    mockStore.organizations = mockStore.organizations.filter((o) => o.id !== id);
+    mockStore.branches = mockStore.branches.filter((b) => b.organizationId !== id);
+    mockStore.staffUsers = mockStore.staffUsers.filter((u) => u.organizationId !== id);
+    mockStore.staffEntities = mockStore.staffEntities.filter((s) => s.organizationId !== id);
+    mockStore.sessions = mockStore.sessions.filter((s) => !orgCardIds.has(s.cardId));
+    mockStore.cards = mockStore.cards.filter((c) => c.organizationId !== id);
+    mockStore.subscriptions = mockStore.subscriptions.filter((s) => s.organizationId !== id);
+
+    return createMockSuccess({ message: `Organization '${org.name}' deleted successfully` });
   },
 
   async resetOrgAdminPassword(

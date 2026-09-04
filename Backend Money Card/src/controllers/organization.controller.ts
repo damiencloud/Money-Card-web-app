@@ -101,6 +101,11 @@ export async function getBranches(req: Request, res: Response) {
     }
   }
 
+  const { search } = req.query;
+  if (typeof search === 'string' && search.trim()) {
+    where.name = { contains: search.trim(), mode: 'insensitive' };
+  }
+
   const branches = await prisma.branch.findMany({
     where,
     include: {

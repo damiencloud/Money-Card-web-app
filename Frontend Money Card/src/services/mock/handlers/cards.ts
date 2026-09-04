@@ -1,6 +1,7 @@
 import { mockStore } from '../store';
 import { mockDelay, createMockSuccess, createMockError } from '../utils';
 import { mockAuthHandlers } from './auth';
+import { generateSecureToken } from '@/utils/cryptoRandom';
 import type {
   ApiResult,
   Card,
@@ -118,7 +119,7 @@ export const mockCardsHandlers = {
     const numClean = req.physicalCardNumber
       ? req.physicalCardNumber.toLowerCase().replace(/[^a-z0-9]/g, '')
       : 'card';
-    const randomQrToken = `qr_token_${numClean}_${Math.random().toString(36).substring(2, 8)}`;
+    const randomQrToken = generateSecureToken(`qr_token_${numClean}`);
 
     const newCard: Card = {
       id: mockStore.generateId('card'),
@@ -159,7 +160,7 @@ export const mockCardsHandlers = {
       }));
     } else if (req.cardNumbers && req.cardNumbers.length > 0) {
       targetEntries = req.cardNumbers.map((num: string) => ({
-        qrCode: `https://moneycard.app/scan/${num.trim().toLowerCase()}_${Math.random().toString(36).substring(2, 8)}`,
+        qrCode: `https://moneycard.app/scan/${generateSecureToken(num.trim().toLowerCase())}`,
         cardNumber: num.trim().toUpperCase(),
       }));
     }
@@ -293,6 +294,8 @@ export const mockCardsHandlers = {
     if (!card) return createMockError('CARD_NOT_FOUND', 'Card not found');
 
     card.status = 'BLOCKED';
+    (card as any).blockedReason = reason;
+    (card as any).blockedBy = currentUser.name;
     card.updatedAt = mockStore.getTimestamp();
 
     mockStore.customerHistoryEvents.unshift({
@@ -322,6 +325,8 @@ export const mockCardsHandlers = {
     if (!card) return createMockError('CARD_NOT_FOUND', 'Card not found');
 
     card.status = 'ACTIVE';
+    delete (card as any).blockedReason;
+    delete (card as any).blockedBy;
     card.updatedAt = mockStore.getTimestamp();
 
     mockStore.customerHistoryEvents.unshift({
@@ -372,7 +377,7 @@ export const mockCardsHandlers = {
       const numClean = entry.cardNumber
         ? entry.cardNumber.toLowerCase().replace(/[^a-z0-9]/g, '')
         : 'card';
-      const randomQrToken = `qr_token_${numClean}_${Math.random().toString(36).substring(2, 8)}`;
+      const randomQrToken = generateSecureToken(`qr_token_${numClean}`);
 
       const newCard: Card = {
         id: mockStore.generateId('card'),

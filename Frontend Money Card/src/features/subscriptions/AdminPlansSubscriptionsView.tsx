@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiService } from '@/services/api';
+import { generateSecureNumericCode } from '@/utils/cryptoRandom';
 import type {
   Plan,
   Subscription,
@@ -239,7 +240,7 @@ export function AdminPlansSubscriptionsView() {
     setPayOrgId(targetOrgId);
     setPayAmount('1499');
     setPayMethod('DIRECT_BANK_TRANSFER');
-    setPayReference(`DIRECT_NEFT_${Math.floor(100000 + Math.random() * 900000)}`);
+    setPayReference(`DIRECT_NEFT_${generateSecureNumericCode(6)}`);
     setModalApiError(null);
     setShowRecordPaymentModal(true);
   };
@@ -591,7 +592,7 @@ export function AdminPlansSubscriptionsView() {
       header: 'Actions',
       className: 'text-right',
       render: (plan: Plan) => (
-        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-2">
           <Button
             variant="ghost"
             size="sm"
@@ -698,7 +699,7 @@ export function AdminPlansSubscriptionsView() {
       header: 'Actions',
       className: 'text-right',
       render: (org: OrganizationOverview) => (
-        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -788,7 +789,7 @@ export function AdminPlansSubscriptionsView() {
       header: 'Review Actions',
       className: 'text-right',
       render: (req: PlanChangeRequest) => (
-        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-2">
           {req.status === 'PENDING' ? (
             <Button
               variant="primary"

@@ -23,7 +23,6 @@ import { ProductsPage } from '@/features/products';
 import { InventoryPage } from '@/features/inventory';
 import { AnalyticsPage } from '@/features/analytics';
 import { PeakPage } from '@/features/peak';
-import { ReportsPage } from '@/features/reports';
 import { SubscriptionsPage } from '@/features/subscriptions';
 import { SettingsPage } from '@/features/settings';
 
@@ -128,14 +127,6 @@ export function AppRoutes() {
           element={
             <PermissionGuard roles={['ORG_ADMIN']}>
               <PeakPage />
-            </PermissionGuard>
-          }
-        />
-        <Route
-          path="/reports"
-          element={
-            <PermissionGuard roles={['ORG_ADMIN']}>
-              <ReportsPage />
             </PermissionGuard>
           }
         />

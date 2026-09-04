@@ -310,7 +310,10 @@ export async function getPeakAnalytics(req: Request, res: Response) {
       orderBy: { createdAt: 'asc' },
     }),
     prisma.product.findMany({
-      where: orgId ? { organizationId: orgId } : {},
+      where: {
+        ...(orgId ? { organizationId: orgId } : {}),
+        status: { not: 'ARCHIVED' },
+      },
       include: { inventoryItems: true },
     }),
     prisma.branch.findMany({

@@ -28,7 +28,7 @@ import {
   ErrorState,
 } from '@/components/ui';
 import { DataTable } from '@/components/tables';
-import { formatDate, formatCurrency } from '@/utils';
+import { formatDate, formatCurrency, formatBlockedCardMessage, extractTransactionItems } from '@/utils';
 import {
   CreditCard,
   Building2,
@@ -186,7 +186,7 @@ export function SessionsPage() {
         sessionStatus: s.status,
         balance: Number(s.balance) || 0,
         branchId: s.branchId,
-        branchName: branch ? branch.name : (((s as any).branchName || (s as any).branch?.name || 'Branch') || 'Main Cafeteria'),
+        branchName: branch ? branch.name : ((s as any).branchName || (s as any).branch?.name || 'Main Cafeteria'),
         startedAt: s.startedAt || s.createdAt,
         settledAt: s.settledAt || null,
         issuedByName: (s as any).issuedBy?.name,
@@ -567,11 +567,17 @@ export function SessionsPage() {
     {
       key: 'reason',
       header: 'Reason',
-      render: (event: CustomerHistoryEvent) => (
-        <span className="text-xs text-slate-300 dark:text-slate-300 italic max-w-xs truncate block font-medium">
-          {event.reason || '—'}
-        </span>
-      ),
+      render: (event: CustomerHistoryEvent) => {
+        const displayReason = formatBlockedCardMessage(event.reason, event.performedByName);
+        return (
+          <span
+            className="text-xs text-slate-300 dark:text-slate-300 italic max-w-xs truncate block font-medium"
+            title={displayReason}
+          >
+            {displayReason || '—'}
+          </span>
+        );
+      },
     },
   ];
 
@@ -583,9 +589,6 @@ export function SessionsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
             Customer History & Audit Trail
           </h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Authoritative registry of customer cafeteria sessions, purchases, and permanent card block/unblock audit events.
-          </p>
         </div>
         <div className="flex items-center gap-3">
           <Button
@@ -607,25 +610,21 @@ export function SessionsPage() {
           title="Active Customer Sessions"
           value={activeCount}
           icon={<Wallet className="h-5 w-5 text-emerald-600" />}
-          description="Currently active in cafeteria"
         />
         <StatCard
           title="Active Floating Balance"
           value={formatCurrency(totalActiveBalance)}
           icon={<CreditCard className="h-5 w-5 text-blue-600" />}
-          description="Unsettled customer funds"
         />
         <StatCard
           title="Blocked Cards"
           value={blockedCardsCount}
           icon={<ShieldAlert className="h-5 w-5 text-rose-600" />}
-          description="Disabled for fraud/loss prevention"
         />
         <StatCard
           title="Audit Trail Records"
           value={totalAuditEventsCount}
           icon={<History className="h-5 w-5 text-violet-600" />}
-          description="Card status & lifecycle changes"
         />
       </div>
 
@@ -664,7 +663,7 @@ export function SessionsPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Search customer, card (MC 105)..."
+              placeholder="Search by customer, phone, or card number..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value.slice(0, 30))}
               maxLength={30}
@@ -678,9 +677,9 @@ export function SessionsPage() {
               value={sessionStatusFilter}
               onChange={(e) => setSessionStatusFilter(e.target.value as any)}
               options={[
-                { value: 'ALL', label: 'All Session Statuses' },
-                { value: 'ACTIVE', label: 'Active Sessions Only' },
-                { value: 'SETTLED', label: 'Settled Sessions Only' },
+                { value: 'ALL', label: 'All Sessions' },
+                { value: 'ACTIVE', label: 'In Use (Active Now)' },
+                { value: 'SETTLED', label: 'Completed (Settled)' },
               ]}
             />
           ) : (
@@ -715,7 +714,6 @@ export function SessionsPage() {
         </div>
       </UiCard>
 
-
       {/* ─── Content Views ────────────────────────────────────────── */}
       {isLoading ? (
         <LoadingState message="Loading customer history..." />
@@ -725,8 +723,25 @@ export function SessionsPage() {
         filteredSessions.length === 0 ? (
           <EmptyState
             icon={<Wallet className="h-8 w-8 text-slate-400" />}
-            title="No Customer Sessions Found"
-            description="No customer sessions match your current search and filter criteria."
+            title={searchQuery || sessionStatusFilter !== 'ALL' || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? "No matching sessions found" : "No customer sessions yet"}
+            description={searchQuery || sessionStatusFilter !== 'ALL' || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? "Try adjusting your search or filters." : "Active and past cafeteria card sessions will appear here in real time."}
+            action={
+              searchQuery || sessionStatusFilter !== 'ALL' || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSessionStatusFilter('ALL');
+                    setBranchFilter('ALL');
+                    setDateRangeFilter('ALL');
+                  }}
+                  className="gap-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span>Clear Filters</span>
+                </Button>
+              ) : undefined
+            }
           />
         ) : (
           <DataTable data={filteredSessions} columns={sessionColumns} />
@@ -734,8 +749,24 @@ export function SessionsPage() {
       ) : filteredEvents.length === 0 ? (
         <EmptyState
           icon={<ShieldCheck className="h-8 w-8 text-emerald-500" />}
-          title="No Card Status Events"
-          description="No card block or unblock audit records match your query. Card status events are permanently preserved here when staff members perform actions."
+          title={searchQuery || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? "No matching audit events" : "No blocked cards"}
+          description={searchQuery || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? "Try clearing search or filters to see all audit records." : "No cards are currently blocked. Audit events will be logged here when staff lock or unlock cards."}
+          action={
+            searchQuery || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearchQuery('');
+                  setBranchFilter('ALL');
+                  setDateRangeFilter('ALL');
+                }}
+                className="gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                <span>Clear Filters</span>
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <DataTable data={filteredEvents} columns={eventColumns} />
@@ -846,51 +877,104 @@ export function SessionsPage() {
                   description="No purchase or recharge activity recorded for this session yet."
                 />
               ) : (
-                <div className="max-h-72 overflow-y-auto space-y-2">
-                  {sessionTxns.map((tx) => (
-                    <div
-                      key={tx.id}
-                      className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 text-sm"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`p-2 rounded-lg ${
-                            tx.type === 'PURCHASE'
-                              ? 'bg-rose-50 text-rose-600'
-                              : tx.type === 'RECHARGE'
-                              ? 'bg-emerald-50 text-emerald-600'
-                              : 'bg-amber-50 text-amber-600'
-                          }`}
-                        >
-                          {tx.type === 'PURCHASE' ? (
-                            <ShoppingBag className="h-4 w-4" />
-                          ) : tx.type === 'RECHARGE' ? (
-                            <ArrowUpRight className="h-4 w-4" />
-                          ) : (
-                            <RotateCcw className="h-4 w-4" />
+                <div className="max-h-80 overflow-y-auto space-y-2.5 pr-1">
+                  {sessionTxns.map((tx) => {
+                    const isRecharge = tx.type === 'RECHARGE' || String(tx.type).startsWith('RECHARGE');
+                    const isRefund = tx.type === 'REFUND' || String(tx.type).startsWith('REFUND');
+                    const isPurchase = tx.type === 'PURCHASE';
+                    const items = extractTransactionItems(tx.items);
+
+                    let title = 'Transaction';
+                    if (isPurchase) {
+                      if (items.length > 0) {
+                        title = items
+                          .map((i) => `${i.quantity > 1 ? `${i.quantity}× ` : ''}${i.name}`)
+                          .join(', ');
+                      } else {
+                        title = 'POS Purchase';
+                      }
+                    } else if (isRecharge) {
+                      title =
+                        tx.type === 'RECHARGE_UPI'
+                          ? 'Wallet Recharge (UPI)'
+                          : tx.type === 'RECHARGE_CASH'
+                          ? 'Wallet Recharge (Cash)'
+                          : 'Wallet Recharge';
+                    } else if (isRefund) {
+                      title = 'Settlement Refund';
+                    }
+
+                    return (
+                      <div
+                        key={tx.id}
+                        className="flex items-start justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 text-sm hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
+                      >
+                        <div className="flex items-start gap-2.5 flex-1 min-w-0 pr-3">
+                          <div
+                            className={`p-2 rounded-lg shrink-0 mt-0.5 ${
+                              isPurchase
+                                ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400'
+                                : isRecharge
+                                ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400'
+                                : 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400'
+                            }`}
+                          >
+                            {isPurchase ? (
+                              <ShoppingBag className="h-4 w-4" />
+                            ) : isRecharge ? (
+                              <ArrowUpRight className="h-4 w-4" />
+                            ) : (
+                              <RotateCcw className="h-4 w-4" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-slate-900 dark:text-slate-100 leading-snug break-words">
+                              {title}
+                            </p>
+
+                            {/* What all they bought chips / line item breakdown */}
+                            {isPurchase && items.length > 0 && (
+                              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                {items.map((item, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                                  >
+                                    <span>{item.quantity}× {item.name}</span>
+                                    {item.total !== undefined ? (
+                                      <span className="text-slate-400 dark:text-slate-500 font-mono">
+                                        ({formatCurrency(item.total)})
+                                      </span>
+                                    ) : item.unitPrice !== undefined ? (
+                                      <span className="text-slate-400 dark:text-slate-500 font-mono">
+                                        (@{formatCurrency(item.unitPrice)})
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            <p className="text-xs text-slate-500 mt-1">{formatDate(tx.createdAt)}</p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p
+                            className={`font-mono font-bold ${
+                              isRecharge
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-slate-900 dark:text-slate-100'
+                            }`}
+                          >
+                            {isRecharge ? '+' : '-'}{formatCurrency(tx.amount)}
+                          </p>
+                          {tx.balanceAfter !== undefined && (
+                            <p className="text-xs text-slate-400">Bal: {formatCurrency(tx.balanceAfter)}</p>
                           )}
                         </div>
-                        <div>
-                          <p className="font-semibold text-slate-900 dark:text-slate-100">
-                            {tx.type === 'PURCHASE' ? 'POS Purchase' : tx.type === 'RECHARGE' ? 'Wallet Recharge' : 'Settlement Refund'}
-                          </p>
-                          <p className="text-xs text-slate-500">{formatDate(tx.createdAt)}</p>
-                        </div>
                       </div>
-                      <div className="text-right">
-                        <p
-                          className={`font-mono font-bold ${
-                            tx.type === 'RECHARGE' ? 'text-emerald-600' : 'text-slate-900 dark:text-slate-100'
-                          }`}
-                        >
-                          {tx.type === 'RECHARGE' ? '+' : '-'}{formatCurrency(tx.amount)}
-                        </p>
-                        {tx.balanceAfter !== undefined && (
-                          <p className="text-xs text-slate-400">Bal: {formatCurrency(tx.balanceAfter)}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )
             )}
@@ -926,7 +1010,10 @@ export function SessionsPage() {
                         Performed by: <strong>{e.performedByName}</strong>
                       </p>
                       {e.reason && (
-                        <p className="text-xs text-slate-500 italic">Reason: {e.reason}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 italic">
+                          <strong className="text-slate-600 dark:text-slate-300 not-italic">Reason:</strong>{' '}
+                          {formatBlockedCardMessage(e.reason, e.performedByName)}
+                        </p>
                       )}
                     </div>
                   ))}

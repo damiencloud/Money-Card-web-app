@@ -33,8 +33,13 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(inventoryNotifierProvider.notifier).loadInventory();
-      ref.read(inventoryNotifierProvider.notifier).loadMovements();
+      final state = ref.read(inventoryNotifierProvider);
+      if (state.items.isEmpty && !state.isLoading) {
+        ref.read(inventoryNotifierProvider.notifier).loadInventory();
+      }
+      if (state.movements.isEmpty) {
+        ref.read(inventoryNotifierProvider.notifier).loadMovements();
+      }
     });
   }
 

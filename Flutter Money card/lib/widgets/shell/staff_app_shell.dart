@@ -59,11 +59,9 @@ class _StaffAppShellState extends ConsumerState<StaffAppShell> with WidgetsBindi
         context.go('/app/home');
         break;
       case 1:
-        ref.read(cardListNotifierProvider.notifier).loadCards();
         context.go('/app/cards');
         break;
       case 2:
-        ref.read(sessionListNotifierProvider.notifier).loadSessions();
         context.go('/app/sessions');
         break;
       case 3:

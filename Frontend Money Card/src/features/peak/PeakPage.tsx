@@ -30,11 +30,35 @@ import {
   Clock,
   TrendingUp,
   Download,
-  AlertTriangle,
   RefreshCw,
   ShoppingBag,
   Building2,
 } from 'lucide-react';
+
+export type TimeWindowPreset = 'thisMonth' | 'today' | 'last7' | 'last30';
+
+function getPeakPresetDates(preset: TimeWindowPreset): { startDate: string; endDate: string } {
+  const now = new Date();
+  const endStr = now.toISOString().split('T')[0];
+
+  if (preset === 'today') {
+    return { startDate: endStr, endDate: endStr };
+  }
+  if (preset === 'last7') {
+    const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    return { startDate: start.toISOString().split('T')[0], endDate: endStr };
+  }
+  if (preset === 'last30') {
+    const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return { startDate: start.toISOString().split('T')[0], endDate: endStr };
+  }
+  if (preset === 'thisMonth') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { startDate: start.toISOString().split('T')[0], endDate: endStr };
+  }
+
+  return { startDate: '', endDate: endStr };
+}
 
 export function PeakPage() {
   const { currentBranch } = useBranch();
@@ -46,7 +70,7 @@ export function PeakPage() {
 
   // Filters
   const [selectedBranchId, setSelectedBranchId] = useState<string>(currentBranch?.id || 'ALL');
-  const [selectedDateRange, setSelectedDateRange] = useState<'today' | '7d' | '30d'>('7d');
+  const [selectedDateRange, setSelectedDateRange] = useState<TimeWindowPreset>('thisMonth');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [isExporting, setIsExporting] = useState(false);
 
@@ -55,9 +79,12 @@ export function PeakPage() {
     setIsLoading(true);
     setError(null);
     try {
+      const { startDate, endDate } = getPeakPresetDates(selectedDateRange);
       const [peakRes, branchRes] = await Promise.all([
         apiService.analytics.getPeakAnalytics({
           branchId: selectedBranchId !== 'ALL' ? selectedBranchId : undefined,
+          startDate,
+          endDate,
         }),
         apiService.branches.getBranches(),
       ]);
@@ -76,7 +103,7 @@ export function PeakPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedBranchId]);
+  }, [selectedBranchId, selectedDateRange]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -84,9 +111,12 @@ export function PeakPage() {
       setIsLoading(true);
       setError(null);
       try {
+        const { startDate, endDate } = getPeakPresetDates(selectedDateRange);
         const [peakRes, branchRes] = await Promise.all([
           apiService.analytics.getPeakAnalytics({
             branchId: selectedBranchId !== 'ALL' ? selectedBranchId : undefined,
+            startDate,
+            endDate,
           }),
           apiService.branches.getBranches(),
         ]);
@@ -112,7 +142,7 @@ export function PeakPage() {
     return () => {
       isCancelled = true;
     };
-  }, [selectedBranchId]);
+  }, [selectedBranchId, selectedDateRange]);
 
   // ── CSV Export Handler ────────────────────────────────────
   // ── PDF Download Handler ──────────────────────────────────────────
@@ -126,17 +156,23 @@ export function PeakPage() {
     try {
       const selectedBranchObj = allBranches.find((b) => b.id === selectedBranchId);
       const selectedBranchName = selectedBranchId === 'ALL'
-        ? 'All Permitted Branches'
+        ? 'All Branches'
         : (selectedBranchObj?.name || 'Selected Branch');
 
-      const dateRangeLabel = selectedDateRange === 'today'
-        ? 'Today'
-        : selectedDateRange === '7d'
+      const dateRangeLabel =
+        selectedDateRange === 'today'
+          ? 'Today'
+          : selectedDateRange === 'last7'
           ? 'Last 7 Days'
-          : 'Last 30 Days';
+          : selectedDateRange === 'last30'
+          ? 'Last 30 Days'
+          : 'This Month';
 
       const doc = buildPeakDemandJsPdf({
-        data,
+        data: {
+          ...data,
+          productDemand,
+        },
         selectedBranchName,
         dateRangeLabel,
         organizationName: 'Money Card Cafeteria',
@@ -154,26 +190,43 @@ export function PeakPage() {
   };
 
   // ── Filtered Products Demand ──────────────────────────────
-  const productDemand = data?.productDemand;
-  const hourlyDistribution = data?.hourlyDistribution;
+  const productDemand = useMemo(() => {
+    if (!data?.productDemand) return [];
+    return data.productDemand
+      .filter((p) => !p.productName.toLowerCase().includes('temp delete'))
+      .map((p) => {
+        const cleanedCats = (p.category || '')
+          .split(',')
+          .map((c) => c.trim())
+          .filter((c) => c.toLowerCase() !== 'fast food');
+        return {
+          ...p,
+          category: cleanedCats.length > 0 ? cleanedCats.join(', ') : 'General Food',
+        };
+      });
+  }, [data?.productDemand]);
 
   const categories = useMemo(() => {
     if (!productDemand) return [];
-    const set = new Set(productDemand.map((p) => p.category));
+    const set = new Set<string>();
+    productDemand.forEach((p) => {
+      p.category.split(',').forEach((c) => {
+        const trimmed = c.trim();
+        if (trimmed && trimmed.toLowerCase() !== 'fast food') {
+          set.add(trimmed);
+        }
+      });
+    });
     return Array.from(set);
   }, [productDemand]);
 
   const filteredProducts = useMemo(() => {
     if (!productDemand) return [];
     if (selectedCategory === 'ALL') return productDemand;
-    return productDemand.filter((p) => p.category === selectedCategory);
+    return productDemand.filter((p) =>
+      p.category.toLowerCase().includes(selectedCategory.toLowerCase())
+    );
   }, [productDemand, selectedCategory]);
-
-  // Peak Hours Filter
-  const peakHourBuckets = useMemo(() => {
-    if (!hourlyDistribution) return [];
-    return hourlyDistribution.filter((h) => h.isPeak);
-  }, [hourlyDistribution]);
 
   // Columns for Product Demand Table
   const productColumns = [
@@ -242,22 +295,9 @@ export function PeakPage() {
               Live Demand
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-slate-400">
-            Hour-by-hour operational traffic, lunch/dinner peak comparison, and item demand distribution.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchPeakData}
-            isLoading={isLoading}
-            leftIcon={<RefreshCw className="h-4 w-4" />}
-          >
-            Refresh
-          </Button>
-
           <Button
             variant="primary"
             size="sm"
@@ -270,69 +310,64 @@ export function PeakPage() {
         </div>
       </div>
 
-      {/* ── Filters Bar ── */}
-      <div className="grid gap-4 sm:grid-cols-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-        {/* Branch Filter */}
-        <div>
-          <label className="text-xs font-semibold text-slate-400 block mb-1.5">Branch Location</label>
-          <Select
-            value={selectedBranchId}
-            onChange={(e) => setSelectedBranchId(e.target.value)}
-            options={[
-              { value: 'ALL', label: 'All Permitted Branches' },
-              ...allBranches.map((b) => ({ value: b.id, label: b.name })),
-            ]}
-          />
-        </div>
+      {/* ── Filter Toolbar ── */}
+      <div className="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 flex-1">
+          {/* Branch Scope Filter */}
+          <div>
+            <label className="text-xs font-semibold text-slate-400 block mb-1.5">Branch Scope</label>
+            <Select
+              id="peak-branch-scope"
+              value={selectedBranchId}
+              onChange={(e) => setSelectedBranchId(e.target.value)}
+              options={[
+                { value: 'ALL', label: 'All Branches' },
+                ...allBranches.map((b) => ({ value: b.id, label: b.name })),
+              ]}
+            />
+          </div>
 
-        {/* Date Range Selector */}
-        <div>
-          <label className="text-xs font-semibold text-slate-400 block mb-1.5">Analysis Window</label>
-          <div className="grid grid-cols-3 gap-1 rounded-lg border border-slate-800 bg-slate-950 p-1">
-            <button
-              onClick={() => setSelectedDateRange('today')}
-              className={`rounded py-1.5 text-xs font-medium transition-colors ${
-                selectedDateRange === 'today'
-                  ? 'bg-violet-600 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Today
-            </button>
-            <button
-              onClick={() => setSelectedDateRange('7d')}
-              className={`rounded py-1.5 text-xs font-medium transition-colors ${
-                selectedDateRange === '7d'
-                  ? 'bg-violet-600 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Last 7 Days
-            </button>
-            <button
-              onClick={() => setSelectedDateRange('30d')}
-              className={`rounded py-1.5 text-xs font-medium transition-colors ${
-                selectedDateRange === '30d'
-                  ? 'bg-violet-600 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Last 30 Days
-            </button>
+          {/* Time Window Selector */}
+          <div>
+            <label className="text-xs font-semibold text-slate-400 block mb-1.5">Time Window</label>
+            <Select
+              id="peak-time-window"
+              value={selectedDateRange}
+              onChange={(e) => setSelectedDateRange(e.target.value as TimeWindowPreset)}
+              options={[
+                { value: 'thisMonth', label: 'This Month' },
+                { value: 'today', label: 'Today' },
+                { value: 'last7', label: 'Last 7 Days' },
+                { value: 'last30', label: 'Last 30 Days' },
+              ]}
+            />
+          </div>
+
+          {/* Food Category Filter */}
+          <div>
+            <label className="text-xs font-semibold text-slate-400 block mb-1.5">Food Category</label>
+            <Select
+              id="peak-food-category"
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              options={[
+                { value: 'ALL', label: 'All Food Categories' },
+                ...categories.map((c) => ({ value: c, label: c })),
+              ]}
+            />
           </div>
         </div>
 
-        {/* Product Category Filter */}
-        <div>
-          <label className="text-xs font-semibold text-slate-400 block mb-1.5">Food Category</label>
-          <Select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            options={[
-              { value: 'ALL', label: 'All Food Categories' },
-              ...categories.map((c) => ({ value: c, label: c })),
-            ]}
-          />
+        <div className="flex items-center self-end lg:self-end">
+          <Button
+            variant="outline"
+            size="md"
+            onClick={fetchPeakData}
+            isLoading={isLoading}
+            leftIcon={<RefreshCw className="h-4 w-4" />}
+          >
+            Refresh Data
+          </Button>
         </div>
       </div>
 
@@ -441,9 +476,6 @@ export function PeakPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
                 <h2 className="text-lg font-bold text-slate-100">Top Food & Item Demand</h2>
-                <p className="text-xs text-slate-400">
-                  Item sales volume, gross revenue, and current stock status.
-                </p>
               </div>
 
               {selectedCategory !== 'ALL' && (
@@ -468,82 +500,6 @@ export function PeakPage() {
                 />
               </Card>
             )}
-          </div>
-
-          {/* ── Section 3: Operational Peak Insights & Stock Alerts ── */}
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* Peak Hours Breakdown Card */}
-            <Card>
-              <CardHeader
-                title="Peak Hour Traffic Breakdown"
-                description="Breakdown of transactions, recharges, and purchases during top operational rush hours."
-              />
-              <CardContent className="space-y-3">
-                {peakHourBuckets.slice(0, 4).map((h) => (
-                  <div
-                    key={h.hour}
-                    className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs"
-                  >
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 font-mono font-bold">
-                        {h.hourLabel.replace(':00', 'h')}
-                      </div>
-                      <div>
-                        <p className="font-bold text-slate-100">{h.hourLabel} Window</p>
-                        <span className="text-slate-400 font-mono">
-                          {h.rechargeCount} Recharges • {h.purchaseCount} Purchases
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-mono font-bold text-violet-300">
-                        {formatCurrency(h.totalVolume)}
-                      </span>
-                      <p className="text-[10px] text-slate-400">{h.transactionCount} txns</p>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* Inventory Demand & Running Low Warnings */}
-            <Card>
-              <CardHeader
-                title="Peak Stock Alerts & Low Inventory"
-                description="Items with accelerated consumption rates during peak periods that require replenishment."
-              />
-              <CardContent className="space-y-3">
-                {filteredProducts
-                  .filter((p) => p.stockStatus === 'LOW' || p.stockStatus === 'OUT_OF_STOCK')
-                  .slice(0, 3)
-                  .map((p) => (
-                    <div
-                      key={p.productId}
-                      className="flex items-center justify-between rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-300"
-                    >
-                      <div className="flex flex-wrap items-center gap-2.5">
-                        <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
-                        <div>
-                          <p className="font-bold text-slate-100">{p.productName}</p>
-                          <span className="text-[11px] text-rose-400">
-                            High rush demand ({p.peakHourQuantity} sold in peak window)
-                          </span>
-                        </div>
-                      </div>
-                      <Badge variant="danger" className="text-[10px]">
-                        {p.stockStatus}
-                      </Badge>
-                    </div>
-                  ))}
-
-                {filteredProducts.filter((p) => p.stockStatus !== 'NORMAL').length === 0 && (
-                  <div className="py-6 text-center text-xs text-slate-400">
-                    <p className="text-emerald-400 font-semibold mb-1">All Peak Stock Levels Normal</p>
-                    All high-demand food items have sufficient inventory buffers.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </div>
         </div>
       ) : null}

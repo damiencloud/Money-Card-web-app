@@ -23,8 +23,8 @@ class AppConfig {
   /// Primary USB Reverse / Local Loopback endpoint
   static const String defaultBaseUrl = 'http://127.0.0.1:3000/api/v1';
 
-  /// Current active Laptop Wi-Fi LAN endpoint
-  static const String defaultLanBaseUrl = 'http://192.168.105.39:3000/api/v1';
+  /// Current active Laptop Wi-Fi / Ethernet LAN endpoint
+  static const String defaultLanBaseUrl = 'http://192.168.1.2:3000/api/v1';
 
   /// Active API Mode: Strictly REAL LIVE SERVER
   static ApiMode apiMode = ApiMode.real;
@@ -32,15 +32,15 @@ class AppConfig {
   /// Helper flag for backward compatibility
   static bool get useMockApi => apiMode.isMock;
 
-  /// Network timeouts
-  static const Duration connectTimeout = Duration(seconds: 15);
-  static const Duration receiveTimeout = Duration(seconds: 15);
-  static const Duration sendTimeout = Duration(seconds: 15);
+  /// Network timeouts (optimized for local POS operation with quick failover)
+  static const Duration connectTimeout = Duration(seconds: 4);
+  static const Duration receiveTimeout = Duration(seconds: 8);
+  static const Duration sendTimeout = Duration(seconds: 8);
 
   /// Configurable active base URL (overridden via --dart-define=BASE_URL=... or dynamically in-app)
   static String _activeBaseUrl = const String.fromEnvironment(
     'BASE_URL',
-    defaultValue: defaultLanBaseUrl,
+    defaultValue: defaultBaseUrl,
   );
 
   static String get baseUrl => _activeBaseUrl;

@@ -2,7 +2,8 @@
 // Complete Branch Management for ORG_ADMIN & SUPER_ADMIN.
 // Uses apiService abstraction strictly — does NOT import mock handlers directly.
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { apiService } from '@/services/api';
 import { useBranch, usePermissions } from '@/hooks';
 import type { Branch, ApiResult, OrganizationOverview } from '@/types';
@@ -28,7 +29,169 @@ import {
   AlertCircle,
   RefreshCw,
   Trash2,
+  MoreVertical,
+  ChevronDown,
+  X,
 } from 'lucide-react';
+
+interface BranchActionMenuProps {
+  branch: Branch;
+  canManage: boolean;
+  onEdit: () => void;
+  onToggleStatus: () => void;
+  onDelete: () => void;
+}
+
+function BranchActionMenu({
+  branch,
+  canManage,
+  onEdit,
+  onToggleStatus,
+  onDelete,
+}: BranchActionMenuProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({
+    top: 0,
+    left: 0,
+  });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const updatePosition = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const menuWidth = 190;
+    const menuHeight = 140;
+
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUpwards = spaceBelow < menuHeight && rect.top > menuHeight;
+
+    const top = openUpwards ? rect.top - menuHeight - 6 : rect.bottom + 6;
+    const left = Math.max(8, rect.right - menuWidth);
+
+    setMenuPosition({ top, left });
+  }, []);
+
+  const handleToggle = () => {
+    if (!isOpen) {
+      updatePosition();
+      setIsOpen(true);
+    } else {
+      setIsOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(event.target as Node) &&
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleScrollOrResize = () => {
+      setIsOpen(false);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
+  if (!canManage) return null;
+
+  return (
+    <div ref={containerRef} className="inline-block text-left">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleToggle}
+        className="flex items-center gap-1.5 text-xs py-1 px-2.5 bg-slate-900 border-slate-700 hover:border-violet-500 text-slate-200"
+      >
+        <MoreVertical className="h-3.5 w-3.5 text-slate-400" />
+        <span>Actions</span>
+        <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+      </Button>
+
+      {isOpen &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={{
+              position: 'fixed',
+              top: `${menuPosition.top}px`,
+              left: `${menuPosition.left}px`,
+              zIndex: 9999,
+            }}
+            className="w-48 rounded-xl border border-slate-700/80 bg-slate-900 p-1.5 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onEdit();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer text-left"
+            >
+              <Edit2 className="h-4 w-4 text-violet-400" />
+              <span>Edit Branch</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onToggleStatus();
+              }}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer text-left ${
+                branch.status === 'ACTIVE'
+                  ? 'text-rose-400 hover:bg-rose-500/10 hover:text-rose-300'
+                  : 'text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300'
+              }`}
+            >
+              <Power className="h-4 w-4" />
+              <span>{branch.status === 'ACTIVE' ? 'Deactivate Branch' : 'Activate Branch'}</span>
+            </button>
+
+            <div className="my-1 border-t border-slate-800" />
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onDelete();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer text-left"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Delete Branch</span>
+            </button>
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
 
 export function BranchesPage() {
   const { currentBranch, selectBranch, setBranches: updateBranchContext } = useBranch();
@@ -63,7 +226,7 @@ export function BranchesPage() {
     setError(null);
     try {
       const [branchRes, orgRes] = await Promise.all([
-        apiService.branches.getBranches({ search: searchQuery }),
+        apiService.branches.getBranches(),
         apiService.organizations.getOrganization(),
       ]);
 
@@ -83,7 +246,7 @@ export function BranchesPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery, updateBranchContext]);
+  }, [updateBranchContext]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -91,7 +254,7 @@ export function BranchesPage() {
       setError(null);
       try {
         const [branchRes, orgRes] = await Promise.all([
-          apiService.branches.getBranches({ search: searchQuery }),
+          apiService.branches.getBranches(),
           apiService.organizations.getOrganization(),
         ]);
         if (isCancelled) return;
@@ -122,7 +285,14 @@ export function BranchesPage() {
     return () => {
       isCancelled = true;
     };
-  }, [searchQuery, updateBranchContext]);
+  }, [updateBranchContext]);
+
+  // ── Instant Client-Side Filtered Branches ──────────────────
+  const filteredBranches = useMemo(() => {
+    if (!searchQuery.trim()) return branches;
+    const q = searchQuery.toLowerCase().trim();
+    return branches.filter((b) => b.name.toLowerCase().includes(q));
+  }, [branches, searchQuery]);
 
   // ── Create Branch ─────────────────────────────────────────
   const handleOpenCreate = () => {
@@ -317,7 +487,6 @@ export function BranchesPage() {
           </div>
           <div>
             <p className="font-semibold text-slate-100">{branch.name}</p>
-            <p className="text-xs text-slate-500">ID: {branch.id}</p>
           </div>
         </div>
       ),
@@ -342,50 +511,17 @@ export function BranchesPage() {
       key: 'actions',
       header: 'Actions',
       className: 'text-right',
-      render: (branch: Branch) => {
-        return (
-          <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-            {/* Edit */}
-            {canManage && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleOpenEdit(branch)}
-                title="Edit Branch"
-                leftIcon={<Edit2 className="h-3.5 w-3.5" />}
-              >
-                Edit
-              </Button>
-            )}
-
-            {/* Toggle Status */}
-            {canManage && (
-              <Button
-                variant={branch.status === 'ACTIVE' ? 'ghost' : 'outline'}
-                size="sm"
-                onClick={() => handleOpenStatusToggle(branch)}
-                title={branch.status === 'ACTIVE' ? 'Deactivate Branch' : 'Activate Branch'}
-                leftIcon={<Power className="h-3.5 w-3.5" />}
-              >
-                {branch.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-              </Button>
-            )}
-            {/* Delete Branch */}
-            {canManage && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleOpenDelete(branch)}
-                title="Delete Branch"
-                className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30"
-                leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-              >
-                Delete
-              </Button>
-            )}
-          </div>
-        );
-      },
+      render: (branch: Branch) => (
+        <div className="flex items-center justify-end">
+          <BranchActionMenu
+            branch={branch}
+            canManage={canManage}
+            onEdit={() => handleOpenEdit(branch)}
+            onToggleStatus={() => handleOpenStatusToggle(branch)}
+            onDelete={() => handleOpenDelete(branch)}
+          />
+        </div>
+      ),
     },
   ];
 
@@ -395,9 +531,6 @@ export function BranchesPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Branches</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Manage organization branch locations and active context.
-          </p>
         </div>
 
         {canManage && (
@@ -447,8 +580,18 @@ export function BranchesPage() {
             value={searchQuery}
             maxLength={30}
             onChange={(e) => setSearchQuery(e.target.value.slice(0, 30))}
-            className="w-full rounded-lg border border-slate-800 bg-slate-900/60 pl-10 pr-4 py-2 text-sm text-slate-100 placeholder-slate-500 transition-colors focus:border-violet-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-800 bg-slate-900/60 pl-10 pr-10 py-2 text-sm text-slate-100 placeholder-slate-500 transition-colors focus:border-violet-500 focus:outline-none"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
         <Button variant="outline" size="md" onClick={fetchBranches} leftIcon={<RefreshCw className="h-4 w-4" />}>
           Refresh
@@ -464,22 +607,29 @@ export function BranchesPage() {
         <EmptyState
           icon={<Building2 className="h-8 w-8 text-slate-500" />}
           title="No branches found"
-          description={
-            searchQuery
-              ? `No branches matching "${searchQuery}"`
-              : 'Get started by creating your first organization branch.'
-          }
+          description="Get started by creating your first organization branch."
           action={
-            canManage && !searchQuery ? (
+            canManage ? (
               <Button variant="primary" onClick={handleOpenCreate} leftIcon={<Plus className="h-4 w-4" />}>
                 Create Branch
               </Button>
             ) : undefined
           }
         />
+      ) : filteredBranches.length === 0 ? (
+        <EmptyState
+          icon={<Building2 className="h-8 w-8 text-slate-500" />}
+          title="No matching branches"
+          description={`No branches matching "${searchQuery}". Try a different name or clear the search.`}
+          action={
+            <Button variant="outline" onClick={() => setSearchQuery('')} leftIcon={<X className="h-4 w-4" />}>
+              Clear Search
+            </Button>
+          }
+        />
       ) : (
-        <Card padding="none">
-          <DataTable<Branch> data={branches} columns={columns} keyExtractor={(item: Branch) => item.id} />
+        <Card padding="none" className="min-h-[220px]">
+          <DataTable<Branch> data={filteredBranches} columns={columns} keyExtractor={(item: Branch) => item.id} />
         </Card>
       )}
 
@@ -582,18 +732,14 @@ export function BranchesPage() {
             the branch <span className="text-violet-400 font-semibold">{selectedBranch?.name}</span>?
           </p>
 
-          {selectedBranch?.status === 'ACTIVE' && activeBranchesCount <= 1 ? (
+          {selectedBranch?.status === 'ACTIVE' && activeBranchesCount <= 1 && (
             <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3.5 text-sm text-rose-300">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
               <span>
                 Cannot deactivate this branch. Your organization must have at least one active branch at all times.
               </span>
             </div>
-          ) : selectedBranch?.status === 'ACTIVE' ? (
-            <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 p-3 rounded-lg">
-              Deactivating a branch will prevent staff from operating in this branch until it is reactivated.
-            </p>
-          ) : null}
+          )}
 
           <ModalFooter>
             <Button variant="outline" onClick={() => setShowStatusModal(false)} disabled={isSubmitting}>
@@ -633,9 +779,6 @@ export function BranchesPage() {
             <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 space-y-2">
               <p className="text-sm text-slate-200 font-medium">
                 Are you sure you want to delete <span className="text-violet-300 font-bold font-mono">{selectedBranch?.name}</span>?
-              </p>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                If this branch has no dependent transactions or sessions, it will be permanently deleted. If historical records exist, the backend will safely preserve accounting data.
               </p>
             </div>
           ) : (
