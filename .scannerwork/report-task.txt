@@ -2,5 +2,5 @@ projectKey=Money-card-system
 serverUrl=http://localhost:9000
 serverVersion=26.8.0.126808
 dashboardUrl=http://localhost:9000/dashboard?id=Money-card-system
-ceTaskId=e5198f8f-c048-4475-9ad3-c56cf0ffdab8
-ceTaskUrl=http://localhost:9000/api/ce/task?id=e5198f8f-c048-4475-9ad3-c56cf0ffdab8
+ceTaskId=1b13c8ee-c890-484f-bb1d-f43301e706f9
+ceTaskUrl=http://localhost:9000/api/ce/task?id=1b13c8ee-c890-484f-bb1d-f43301e706f9
