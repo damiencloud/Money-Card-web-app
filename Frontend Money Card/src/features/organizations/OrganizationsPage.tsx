@@ -21,6 +21,7 @@ import {
   Search,
   Power,
   Eye,
+  EyeOff,
   Edit2,
   RefreshCw,
   AlertCircle,
@@ -128,6 +129,9 @@ function OrgActionMenu({
         variant="outline"
         size="sm"
         onClick={handleToggle}
+        aria-expanded={isOpen}
+        aria-haspopup="true"
+        aria-label="Organization actions"
         className="flex items-center gap-1.5 text-xs py-1 px-2.5 bg-slate-900 border-slate-700 hover:border-violet-500 text-slate-200"
       >
         <MoreVertical className="h-3.5 w-3.5 text-slate-400" />
@@ -251,6 +255,8 @@ export function OrganizationsPage() {
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [tempPassword, setTempPassword] = useState('');
   const [confirmTempPassword, setConfirmTempPassword] = useState('');
+  const [showTempPassword, setShowTempPassword] = useState(false);
+  const [showConfirmTempPassword, setShowConfirmTempPassword] = useState(false);
   const [tempPasswordError, setTempPasswordError] = useState<string | null>(null);
   const [confirmTempPasswordError, setConfirmTempPasswordError] = useState<string | null>(null);
 
@@ -258,6 +264,7 @@ export function OrganizationsPage() {
   const [formName, setFormName] = useState('');
   const [formAdminEmail, setFormAdminEmail] = useState('');
   const [formPassword, setFormPassword] = useState('');
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [formPlanId, setFormPlanId] = useState('plan_002');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -332,37 +339,18 @@ export function OrganizationsPage() {
     };
   }, [searchQuery]);
 
-  // ── Open Create Modal ─────────────────────────────────────
-  //  Open Reset Password Modal
+  // ── Open Reset Password Modal ──────────────────────────────
   const handleOpenResetPasswordModal = (org: OrganizationOverview) => {
     setSelectedOrg(org);
     setTempPassword('');
     setConfirmTempPassword('');
+    setShowTempPassword(false);
+    setShowConfirmTempPassword(false);
     setTempPasswordError(null);
     setConfirmTempPasswordError(null);
     setModalApiError(null);
     setShowResetPasswordModal(true);
   };
-
-    
-
-  
-
-  /* const _handleResendAdminInvite = async (orgId: string) => {
-    setResendingAdminOrgId(orgId);
-    try {
-      const res = await apiService.organizations.resendAdminInvite(orgId);
-      if (res.success) {
-        notify.success((res.data as any)?.message || 'Admin invitation re-sent successfully!');
-      } else {
-        notify.error(res.error?.message || 'Failed to resend admin invitation.');
-      }
-    } catch {
-      notify.error('An unexpected error occurred while resending the invitation.');
-    } finally {
-      setResendingAdminOrgId(null);
-    }
-  }; */
 
   const handleResetPasswordSubmit = async () => {
     if (!selectedOrg) return;
@@ -371,18 +359,20 @@ export function OrganizationsPage() {
     setModalApiError(null);
 
     let hasErrors = false;
-    if (!tempPassword) {
+    const trimmedTemp = tempPassword.trim();
+    if (!trimmedTemp) {
       setTempPasswordError('Temporary password is required');
       hasErrors = true;
-    } else if (tempPassword.length < 6) {
-      setTempPasswordError('Temporary password must be at least 6 characters');
+    } else if (trimmedTemp.length < 6) {
+      setTempPasswordError('Password must be at least 6 characters');
       hasErrors = true;
     }
 
-    if (!confirmTempPassword) {
+    const trimmedConfirm = confirmTempPassword.trim();
+    if (!trimmedConfirm) {
       setConfirmTempPasswordError('Please confirm the temporary password');
       hasErrors = true;
-    } else if (tempPassword && confirmTempPassword !== tempPassword) {
+    } else if (trimmedTemp && trimmedConfirm !== trimmedTemp) {
       setConfirmTempPasswordError('Passwords do not match');
       hasErrors = true;
     }
@@ -392,7 +382,7 @@ export function OrganizationsPage() {
     setIsSubmitting(true);
     try {
       const res = await apiService.organizations.resetOrgAdminPassword(selectedOrg.id, {
-        temporaryPassword: tempPassword,
+        temporaryPassword: trimmedTemp,
       });
 
       if (!res.success) {
@@ -402,6 +392,10 @@ export function OrganizationsPage() {
 
       notify.success(res.data.message || `Password reset successfully for ${selectedOrg.adminUser?.name || 'Org Admin'}.`);
       setShowResetPasswordModal(false);
+      setTempPassword('');
+      setConfirmTempPassword('');
+      setShowTempPassword(false);
+      setShowConfirmTempPassword(false);
       fetchOrganizations();
     } catch {
       setModalApiError('An unexpected error occurred. Please try again.');
@@ -414,6 +408,7 @@ export function OrganizationsPage() {
     setFormName('');
     setFormAdminEmail('');
     setFormPassword('');
+    setShowCreatePassword(false);
     setFormPlanId(plans[0]?.id || 'plan_002');
     setFormErrors({});
     setModalApiError(null);
@@ -422,19 +417,27 @@ export function OrganizationsPage() {
 
   const validateCreateForm = (): boolean => {
     const errs: Record<string, string> = {};
-    if (!formName.trim()) {
+    const trimmedName = formName.trim();
+    if (!trimmedName) {
       errs.name = 'Organization name is required';
+    } else if (trimmedName.length > 30) {
+      errs.name = 'Organization name must be at most 30 characters';
     }
-    if (!formAdminEmail.trim()) {
+
+    const trimmedEmail = formAdminEmail.trim();
+    if (!trimmedEmail) {
       errs.adminEmail = 'Org Admin email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formAdminEmail.trim())) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       errs.adminEmail = 'Please enter a valid email address';
     }
-    if (!formPassword.trim()) {
-      errs.password = 'Initial password is required';
-    } else if (formPassword.length < 6) {
+
+    const trimmedPassword = formPassword.trim();
+    if (!trimmedPassword) {
+      errs.password = 'Password is required';
+    } else if (trimmedPassword.length < 6) {
       errs.password = 'Password must be at least 6 characters';
     }
+
     if (!formPlanId) {
       errs.planId = 'Subscription plan is required';
     }
@@ -452,7 +455,7 @@ export function OrganizationsPage() {
       const res = await apiService.organizations.createOrganization({
         name: formName.trim(),
         adminEmail: formAdminEmail.trim(),
-        password: formPassword,
+        password: formPassword.trim(),
         planId: formPlanId,
       });
 
@@ -466,6 +469,7 @@ export function OrganizationsPage() {
       setFormName('');
       setFormAdminEmail('');
       setFormPassword('');
+      setShowCreatePassword(false);
       fetchOrganizations();
     } catch {
       setModalApiError('An unexpected error occurred. Please try again.');
@@ -486,8 +490,12 @@ export function OrganizationsPage() {
 
   const handleEditSubmit = async () => {
     if (!selectedOrg) return;
-    if (!editFormName.trim()) {
+    const trimmedEditName = editFormName.trim();
+    if (!trimmedEditName) {
       setEditFormErrors({ name: 'Organization name is required' });
+      return;
+    } else if (trimmedEditName.length > 30) {
+      setEditFormErrors({ name: 'Organization name must be at most 30 characters' });
       return;
     }
 
@@ -677,9 +685,6 @@ export function OrganizationsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Tenant Organizations</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Manage multi-tenant organizations, subscription plans, and platform resource quotas.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -709,9 +714,15 @@ export function OrganizationsPage() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search organizations by name or ID..."
+            placeholder="Search organization by name or ID..."
+            maxLength={30}
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val.length <= 30) {
+                setSearchQuery(val);
+              }
+            }}
             className="w-full rounded-lg border border-slate-800 bg-slate-950/50 py-2 pl-9 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
           />
         </div>
@@ -763,29 +774,56 @@ export function OrganizationsPage() {
           )}
 
           <Input
+            id="create-org-name"
             label="Organization Name *"
             placeholder="e.g. Acme Cafeterias"
+            maxLength={30}
             value={formName}
-            onChange={(e) => setFormName(e.target.value)}
+            onChange={(e) => {
+              setFormName(e.target.value);
+              if (formErrors.name) setFormErrors((prev) => ({ ...prev, name: '' }));
+            }}
             error={formErrors.name}
+            disabled={isSubmitting}
+            autoFocus
           />
 
           <Input
+            id="create-org-admin-email"
             label="Org Admin Email *"
             type="email"
             placeholder="e.g. admin@acmecafeteria.com"
             value={formAdminEmail}
-            onChange={(e) => setFormAdminEmail(e.target.value)}
+            onChange={(e) => {
+              setFormAdminEmail(e.target.value);
+              if (formErrors.adminEmail) setFormErrors((prev) => ({ ...prev, adminEmail: '' }));
+            }}
             error={formErrors.adminEmail}
+            disabled={isSubmitting}
           />
 
           <Input
+            id="create-org-password"
             label="Password *"
-            type="password"
+            type={showCreatePassword ? 'text' : 'password'}
             placeholder="Min. 6 characters"
             value={formPassword}
-            onChange={(e) => setFormPassword(e.target.value)}
+            onChange={(e) => {
+              setFormPassword(e.target.value);
+              if (formErrors.password) setFormErrors((prev) => ({ ...prev, password: '' }));
+            }}
             error={formErrors.password}
+            disabled={isSubmitting}
+            rightElement={
+              <button
+                type="button"
+                className="text-slate-400 hover:text-slate-200 transition-colors p-1 flex items-center justify-center focus:outline-none"
+                onClick={() => setShowCreatePassword((prev) => !prev)}
+                title={showCreatePassword ? "Hide password" : "Show password"}
+              >
+                {showCreatePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            }
           />
 
           {plans.length > 0 && (
@@ -837,10 +875,15 @@ export function OrganizationsPage() {
           </div>
 
           <Input
+            id="edit-org-name"
             label="Organization Name *"
             placeholder="e.g. Acme Cafeterias"
+            maxLength={30}
             value={editFormName}
-            onChange={(e) => setEditFormName(e.target.value)}
+            onChange={(e) => {
+              setEditFormName(e.target.value);
+              if (editFormErrors.name) setEditFormErrors((prev) => ({ ...prev, name: '' }));
+            }}
             error={editFormErrors.name}
           />
 
@@ -1087,9 +1130,10 @@ export function OrganizationsPage() {
           </div>
 
           <Input
+            id="reset-temp-password"
             label="Temporary Password *"
-            type="password"
-            placeholder="Enter temporary password (min 6 characters)"
+            type={showTempPassword ? 'text' : 'password'}
+            placeholder="Min. 6 characters"
             value={tempPassword}
             onChange={(e) => {
               setTempPassword(e.target.value);
@@ -1098,11 +1142,22 @@ export function OrganizationsPage() {
             }}
             error={tempPasswordError ?? undefined}
             disabled={isSubmitting}
+            rightElement={
+              <button
+                type="button"
+                className="text-slate-400 hover:text-slate-200 transition-colors p-1 flex items-center justify-center focus:outline-none"
+                onClick={() => setShowTempPassword((prev) => !prev)}
+                title={showTempPassword ? "Hide password" : "Show password"}
+              >
+                {showTempPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            }
           />
 
           <Input
+            id="reset-confirm-temp-password"
             label="Confirm Temporary Password *"
-            type="password"
+            type={showConfirmTempPassword ? 'text' : 'password'}
             placeholder="Confirm temporary password"
             value={confirmTempPassword}
             onChange={(e) => {
@@ -1112,6 +1167,16 @@ export function OrganizationsPage() {
             }}
             error={confirmTempPasswordError ?? undefined}
             disabled={isSubmitting}
+            rightElement={
+              <button
+                type="button"
+                className="text-slate-400 hover:text-slate-200 transition-colors p-1 flex items-center justify-center focus:outline-none"
+                onClick={() => setShowConfirmTempPassword((prev) => !prev)}
+                title={showConfirmTempPassword ? "Hide password" : "Show password"}
+              >
+                {showConfirmTempPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            }
           />
 
           <ModalFooter>

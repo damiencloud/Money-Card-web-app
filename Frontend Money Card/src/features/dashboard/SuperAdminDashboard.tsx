@@ -1,6 +1,6 @@
-// ─── Super Admin Platform Dashboard (M11) ────────────────────
-// Platform-wide metrics, tenant selection, subscription oversight,
-// and unified date-range calendar filtered operational metrics.
+// ─── Super Admin Platform Dashboard ───────────────────────────
+// Built for non-technical users: clear hierarchy, prominent Action Needed,
+// quick actions, simplified KPI cards, and plain-English sections.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -25,7 +25,6 @@ import { DataTable } from '@/components/tables';
 import { formatDate, formatCurrency } from '@/utils';
 import {
   Building2,
-  ShieldCheck,
   BarChart3,
   TrendingUp,
   Receipt,
@@ -38,6 +37,13 @@ import {
   CalendarDays,
   Clock,
   X,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+  Search,
+  PlusCircle,
+  Bell,
+  CheckCircle2,
 } from 'lucide-react';
 
 export type DatePreset = 'all' | 'today' | 'yesterday' | 'last7' | 'last30' | 'thisMonth' | 'custom';
@@ -90,6 +96,10 @@ export function SuperAdminDashboard() {
   const [endDate, setEndDate] = useState<string>('');
   const [showCustomPicker, setShowCustomPicker] = useState(false);
 
+  // Search & Business Overview Accordion Toggle
+  const [searchOrgTerm, setSearchOrgTerm] = useState('');
+  const [isDetailedView, setIsDetailedView] = useState(false);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,7 +140,7 @@ export function SuperAdminDashboard() {
       ]);
 
       if (!orgsRes.success) {
-        setError(orgsRes.error.message || 'Failed to load platform data');
+        setError(orgsRes.error.message || 'Failed to load dashboard data');
         return;
       }
 
@@ -139,7 +149,7 @@ export function SuperAdminDashboard() {
       if (analyticsRes.success) setAnalytics(analyticsRes.data);
       if (reqsRes.success) setPlanRequests(reqsRes.data || []);
     } catch {
-      setError('Unable to connect to server. Please try again.');
+      setError('Unable to connect to server. Please check your connection.');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -164,7 +174,7 @@ export function SuperAdminDashboard() {
         if (isCancelled) return;
 
         if (!orgsRes.success) {
-          setError(orgsRes.error.message || 'Failed to load platform data');
+          setError(orgsRes.error.message || 'Failed to load dashboard data');
           return;
         }
 
@@ -188,32 +198,30 @@ export function SuperAdminDashboard() {
   const activeOrgsCount = orgs.filter((o) => o.status === 'ACTIVE').length;
 
   const selectedOrgName = useMemo(() => {
-    if (!selectedOrgId) return 'All Organizations';
+    if (!selectedOrgId) return 'All Cafeterias';
     const found = orgs.find((o) => o.id === selectedOrgId);
-    return found ? found.name : 'Selected Organization';
+    return found ? found.name : 'Selected Cafeteria';
   }, [selectedOrgId, orgs]);
 
-  // Formatted date period description
-  const activeDateLabel = useMemo(() => {
-    if (!startDate && !endDate) return 'All Time';
-    if (startDate && endDate && startDate === endDate) {
-      return `Date: ${startDate}`;
-    }
-    if (startDate && endDate) {
-      return `${startDate} to ${endDate}`;
-    }
-    if (startDate) return `From ${startDate}`;
-    if (endDate) return `Until ${endDate}`;
-    return 'All Time';
-  }, [startDate, endDate]);
+  const pendingRequests = useMemo(
+    () => planRequests.filter((r) => r.status === 'PENDING'),
+    [planRequests]
+  );
 
+  const filteredOrgs = useMemo(() => {
+    if (!searchOrgTerm.trim()) return orgs;
+    const term = searchOrgTerm.toLowerCase().trim();
+    return orgs.filter((o) => o.name.toLowerCase().includes(term));
+  }, [orgs, searchOrgTerm]);
+
+  // Simplified Table Headers: Cafeteria, Status, Plan, Joined, View
   const orgColumns = [
     {
       key: 'name',
-      header: 'Organization Name',
+      header: 'Cafeteria',
       render: (org: OrganizationOverview) => (
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/10 text-violet-400">
             <Building2 className="h-4 w-4" />
           </div>
           <div>
@@ -227,533 +235,460 @@ export function SuperAdminDashboard() {
       header: 'Status',
       render: (org: OrganizationOverview) => (
         <Badge variant={org.status === 'ACTIVE' ? 'success' : 'danger'}>
-          {org.status}
+          {org.status === 'ACTIVE' ? 'Active' : 'Inactive'}
         </Badge>
       ),
     },
     {
       key: 'plan',
-      header: 'Active Plan',
+      header: 'Plan',
       render: (org: OrganizationOverview) => (
         <Badge variant="outline" className="text-violet-300 border-violet-500/30">
-          {org.plan?.name || 'Standard Plan'}
+          {org.plan?.name || 'Standard'}
         </Badge>
       ),
     },
     {
       key: 'createdAt',
-      header: 'Joined Date',
+      header: 'Joined',
       render: (org: OrganizationOverview) => (
         <span className="text-xs text-slate-400">{formatDate(org.createdAt)}</span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'View',
+      render: (_org: OrganizationOverview) => (
+        <button
+          onClick={() => navigate('/organizations')}
+          className="text-xs font-semibold text-violet-400 hover:text-violet-300 hover:underline inline-flex items-center gap-1"
+        >
+          <span>Open</span>
+          <ArrowRight className="h-3.5 w-3.5" />
+        </button>
       ),
     },
   ];
 
   return (
     <div className="space-y-6">
-      {/* Header Bar */}
+      {/* ── 1. Header ────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-100">Super Admin Platform Overview</h1>
-            <Badge variant="outline" className="text-violet-300 border-violet-500/30">
-              Super Admin
-            </Badge>
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-600/20 text-violet-400">
+            <Sparkles className="h-5 w-5" />
           </div>
-          <p className="mt-1 text-sm text-slate-400">
-            Multi-tenant organization oversight, plan catalog control, and platform activity.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-100">
+            Welcome back, Super Admin 👋
+          </h1>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Organization Selector */}
-          <select
-            value={selectedOrgId}
-            onChange={(e) => setSelectedOrgId(e.target.value)}
-            className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
-          >
-            <option value="">All Organizations</option>
-            {orgs.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fetchPlatformData(false)}
-            isLoading={isRefreshing}
-            leftIcon={<RefreshCw className="h-4 w-4" />}
-          >
-            Refresh Overview
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => fetchPlatformData(false)}
+          isLoading={isRefreshing}
+          leftIcon={<RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />}
+        >
+          Refresh
+        </Button>
       </div>
 
-      {/* Pending Renewal / Plan Change Alert Banner for Super Admin */}
-      {planRequests.filter((r) => r.status === 'PENDING').length > 0 && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
-          <div className="flex items-start sm:items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-bold text-slate-100 text-sm">
-                  {planRequests.filter((r) => r.status === 'PENDING').length} Pending Subscription & Plan Alert
-                  {planRequests.filter((r) => r.status === 'PENDING').length > 1 ? 's' : ''}
-                </span>
-                {planRequests.some((r) => r.status === 'PENDING' && r.requestType === 'RENEWAL') && (
-                  <Badge variant="success" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px]">
-                    Subscription Renewal Pending
-                  </Badge>
-                )}
-                <Badge variant="warning" className="text-[10px]">ACTION REQUIRED</Badge>
+      {/* ── 2. Action Needed (Most Prominent Section) ────────────────────── */}
+      {pendingRequests.length > 0 ? (
+        <div className="rounded-2xl border-2 border-amber-500/50 bg-gradient-to-r from-amber-500/20 via-slate-900 to-amber-500/10 p-5 shadow-lg shadow-amber-500/10">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-400">
+                <AlertTriangle className="h-6 w-6" />
               </div>
-              <p className="text-slate-300 mt-1">
-                {planRequests.some((r) => r.status === 'PENDING' && r.requestType === 'RENEWAL')
-                  ? `${
-                      planRequests.find((r) => r.status === 'PENDING' && r.requestType === 'RENEWAL')
-                        ?.organizationName || 'An organization'
-                    } has requested active subscription renewal. Review and accept in Subscriptions.`
-                  : 'Organizations have requested plan changes requiring Super Admin review and approval.'}
-              </p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-base font-bold text-slate-100">
+                    Action Needed: {pendingRequests.length} Request{pendingRequests.length > 1 ? 's' : ''} Awaiting Approval
+                  </span>
+                  <Badge variant="warning" className="text-[10px] font-bold">URGENT</Badge>
+                </div>
+                <p className="text-xs text-slate-300 mt-1">
+                  {pendingRequests.some((r) => r.requestType === 'RENEWAL')
+                    ? `${pendingRequests[0]?.organizationName || 'A cafeteria'} requested plan renewal. Tap to approve.`
+                    : 'Cafeterias submitted plan changes requiring your approval.'}
+                </p>
+              </div>
             </div>
+
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => navigate('/subscriptions')}
+              rightIcon={<ArrowRight className="h-4 w-4" />}
+              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 shrink-0 shadow-md shadow-amber-500/25"
+            >
+              Review Requests
+            </Button>
           </div>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => navigate('/subscriptions')}
-            rightIcon={<ArrowRight className="h-4 w-4" />}
-          >
-            Review & Accept Requests
-          </Button>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+            <span className="text-sm font-semibold text-emerald-200">
+              Action Needed: All caught up! No pending approvals right now.
+            </span>
+          </div>
+          <span className="text-xs text-emerald-400/80 font-medium">All systems normal</span>
         </div>
       )}
 
-      {/* Quick Actions Bar */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <button
-          onClick={() => navigate('/organizations')}
-          className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-all hover:border-violet-500/50 hover:bg-slate-900 text-left"
-        >
-          <div className="space-y-0.5">
-            <span className="text-xs font-semibold text-slate-200">Organizations</span>
-            <p className="text-[11px] text-slate-500">Manage all tenants</p>
-          </div>
-          <Building2 className="h-5 w-5 text-violet-400 shrink-0" />
-        </button>
+      {/* ── 3. Quick Actions ──────────────────────────────────────────────── */}
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400">
+            Quick Actions
+          </h2>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <button
+            onClick={() => navigate('/organizations')}
+            className="group flex flex-col sm:flex-row items-center sm:items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 text-center sm:text-left transition-all hover:border-violet-500/50 hover:bg-slate-900 hover:shadow-md hover:shadow-violet-500/10"
+          >
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-500/15 text-violet-400 group-hover:scale-105 transition-transform">
+              <PlusCircle className="h-5 w-5" />
+            </div>
+            <div>
+              <span className="text-sm font-bold text-slate-100 group-hover:text-violet-300 transition-colors">
+                Add Cafeteria
+              </span>
+            </div>
+          </button>
 
-        <button
-          onClick={() => navigate('/plans')}
-          className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-all hover:border-violet-500/50 hover:bg-slate-900 text-left"
-        >
-          <div className="space-y-0.5">
-            <span className="text-xs font-semibold text-slate-200">Plan Catalog</span>
-            <p className="text-[11px] text-slate-500">Prices & technical limits</p>
-          </div>
-          <Layers className="h-5 w-5 text-indigo-400 shrink-0" />
-        </button>
+          <button
+            onClick={() => navigate('/subscriptions')}
+            className="group flex flex-col sm:flex-row items-center sm:items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 text-center sm:text-left transition-all hover:border-amber-500/50 hover:bg-slate-900 hover:shadow-md hover:shadow-amber-500/10"
+          >
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/15 text-amber-400 group-hover:scale-105 transition-transform">
+              <Bell className="h-5 w-5" />
+            </div>
+            <div>
+              <span className="text-sm font-bold text-slate-100 group-hover:text-amber-300 transition-colors">
+                Review Requests
+              </span>
+            </div>
+          </button>
 
-        <button
-          onClick={() => navigate('/subscriptions')}
-          className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-all hover:border-violet-500/50 hover:bg-slate-900 text-left"
-        >
-          <div className="space-y-0.5">
-            <span className="text-xs font-semibold text-slate-200">Subscriptions</span>
-            <p className="text-[11px] text-slate-500">Audit invoices</p>
-          </div>
-          <Receipt className="h-5 w-5 text-emerald-400 shrink-0" />
-        </button>
+          <button
+            onClick={() => navigate('/plans')}
+            className="group flex flex-col sm:flex-row items-center sm:items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 text-center sm:text-left transition-all hover:border-indigo-500/50 hover:bg-slate-900 hover:shadow-md hover:shadow-indigo-500/10"
+          >
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-400 group-hover:scale-105 transition-transform">
+              <Layers className="h-5 w-5" />
+            </div>
+            <div>
+              <span className="text-sm font-bold text-slate-100 group-hover:text-indigo-300 transition-colors">
+                Manage Plans
+              </span>
+            </div>
+          </button>
 
-        <button
-          onClick={() => navigate('/analytics')}
-          className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-all hover:border-violet-500/50 hover:bg-slate-900 text-left"
-        >
-          <div className="space-y-0.5">
-            <span className="text-xs font-semibold text-slate-200">Platform Analytics</span>
-            <p className="text-[11px] text-slate-500">System trends & reports</p>
-          </div>
-          <BarChart3 className="h-5 w-5 text-sky-400 shrink-0" />
-        </button>
+          <button
+            onClick={() => navigate('/analytics')}
+            className="group flex flex-col sm:flex-row items-center sm:items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 text-center sm:text-left transition-all hover:border-sky-500/50 hover:bg-slate-900 hover:shadow-md hover:shadow-sky-500/10"
+          >
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-500/15 text-sky-400 group-hover:scale-105 transition-transform">
+              <BarChart3 className="h-5 w-5" />
+            </div>
+            <div>
+              <span className="text-sm font-bold text-slate-100 group-hover:text-sky-300 transition-colors">
+                View Reports
+              </span>
+            </div>
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
-        <LoadingState message="Loading platform overview metrics..." />
+        <LoadingState message="Loading dashboard..." />
       ) : error ? (
-        <ErrorState title="Failed to load platform dashboard" message={error} onRetry={() => fetchPlatformData(false)} />
+        <ErrorState title="Could not load dashboard data" message={error} onRetry={() => fetchPlatformData(false)} />
       ) : (
         <div className="space-y-6">
-          {/* Summary Stat Cards (Platform / Organization Scope) */}
+          {/* ── 4. Simplified KPI Cards (Cafeterias, Sales, Active Cards, Orders) ── */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
-              label={selectedOrgId ? "Selected Organization" : "Total Organizations"}
-              value={selectedOrgId ? selectedOrgName : orgs.length}
+              label="Cafeterias"
+              value={`${activeOrgsCount} Active`}
               icon={<Building2 className="h-5 w-5 text-violet-400" />}
             />
 
             <StatCard
-              label={selectedOrgId ? "Tenant Status" : "Active Tenants"}
-              value={
-                selectedOrgId
-                  ? (orgs.find((o) => o.id === selectedOrgId)?.status || 'ACTIVE')
-                  : activeOrgsCount
-              }
-              icon={<ShieldCheck className="h-5 w-5 text-emerald-400" />}
-            />
-
-            <StatCard
-              label={selectedOrgId ? `${selectedOrgName} Sales` : "Platform Sales Volume"}
+              label="Sales"
               value={formatCurrency(analytics?.totalPurchaseVolume || 0)}
               icon={<TrendingUp className="h-5 w-5 text-emerald-400" />}
             />
 
             <StatCard
-              label={selectedOrgId ? `${selectedOrgName} Txns` : "Total System Txns"}
+              label="Active Cards"
+              value={(analytics?.activeCardsCount || 0).toLocaleString()}
+              icon={<CreditCard className="h-5 w-5 text-sky-400" />}
+            />
+
+            <StatCard
+              label="Orders"
               value={(analytics?.totalTransactions || 0).toLocaleString()}
-              icon={<BarChart3 className="h-5 w-5 text-indigo-400" />}
+              icon={<ShoppingBag className="h-5 w-5 text-indigo-400" />}
             />
           </div>
 
-          {/* ── UNIFIED FILTERED METRICS BOX (Date Filter Toolbar + 4 Operational Stat Cards) ── */}
-          <Card className="border-slate-800/80 bg-slate-900/50 backdrop-blur-sm">
-            <CardHeader
-              title={`Operational & Financial Metrics: ${selectedOrgName}`}
-              description={`Key metrics for ${selectedOrgName.toLowerCase()} filtered for ${activeDateLabel.toLowerCase()}.`}
-              action={
+          {/* ── 5. Simple Time & Cafeteria Filter ───────────────────────────── */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              {/* Quick Date Presets */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 mr-2">
+                  <CalendarDays className="h-4 w-4 text-violet-400" />
+                  Time Period:
+                </span>
+
+                {(
+                  [
+                    { id: 'all', label: 'All Time' },
+                    { id: 'today', label: 'Today' },
+                    { id: 'yesterday', label: 'Yesterday' },
+                    { id: 'last7', label: 'Last 7 Days' },
+                    { id: 'thisMonth', label: 'This Month' },
+                    { id: 'custom', label: 'Custom Dates' },
+                  ] as const
+                ).map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => handlePresetChange(preset.id)}
+                    className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-all ${
+                      datePreset === preset.id
+                        ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                        : 'bg-slate-950 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Cafeteria Dropdown & Reset */}
+              <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-950 px-2.5 py-1 text-xs font-medium text-slate-300 border border-slate-800">
-                    <Clock className="h-3.5 w-3.5 text-violet-400" />
-                    <span>Period: <strong className="text-slate-100">{activeDateLabel}</strong></span>
-                  </span>
-
-                  {(startDate || endDate || selectedOrgId) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleClearDateFilter();
-                        setSelectedOrgId('');
-                      }}
-                      className="inline-flex items-center gap-1 rounded-md bg-slate-800/80 px-2 py-1 text-xs font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                      title="Reset filters"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                      <span>Reset All</span>
-                    </button>
-                  )}
-                </div>
-              }
-            />
-
-            <CardContent className="space-y-5">
-              {/* Date Filter & Organization Selector Toolbar inside the box */}
-              <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3 space-y-3">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-                  {/* Quick Preset Pills */}
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 mr-2">
-                      <CalendarDays className="h-4 w-4 text-violet-400" />
-                      Date Filter:
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => handlePresetChange('all')}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                        datePreset === 'all'
-                          ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                          : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
-                      }`}
-                    >
-                      All Time
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handlePresetChange('today')}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                        datePreset === 'today'
-                          ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                          : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
-                      }`}
-                    >
-                      Today
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handlePresetChange('yesterday')}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                        datePreset === 'yesterday'
-                          ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                          : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
-                      }`}
-                    >
-                      Yesterday
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handlePresetChange('last7')}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                        datePreset === 'last7'
-                          ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                          : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
-                      }`}
-                    >
-                      Last 7 Days
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handlePresetChange('last30')}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                        datePreset === 'last30'
-                          ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                          : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
-                      }`}
-                    >
-                      Last 30 Days
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handlePresetChange('thisMonth')}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                        datePreset === 'thisMonth'
-                          ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                          : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
-                      }`}
-                    >
-                      This Month
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handlePresetChange('custom')}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                        datePreset === 'custom'
-                          ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                          : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
-                      }`}
-                    >
-                      Custom Range
-                    </button>
-                  </div>
-
-                  {/* Scope Selector */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-400">Org:</span>
-                    <select
-                      value={selectedOrgId}
-                      onChange={(e) => setSelectedOrgId(e.target.value)}
-                      className="rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-1 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
-                    >
-                      <option value="">All Organizations</option>
-                      {orgs.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <span className="text-xs font-semibold text-slate-400">Cafeteria:</span>
+                  <select
+                    value={selectedOrgId}
+                    onChange={(e) => setSelectedOrgId(e.target.value)}
+                    className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 focus:border-violet-500 focus:outline-none"
+                  >
+                    <option value="">All Cafeterias</option>
+                    {orgs.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                {/* Expanded Custom Date Picker Inputs */}
-                {(showCustomPicker || datePreset === 'custom') && (
-                  <div className="flex flex-wrap items-center gap-3 pt-2.5 border-t border-slate-800/80 text-xs">
-                    <div className="flex items-center gap-2">
-                      <label htmlFor="superadmin-start-date" className="font-medium text-slate-400">
-                        From:
-                      </label>
-                      <input
-                        id="superadmin-start-date"
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => {
-                          setStartDate(e.target.value);
-                          setDatePreset('custom');
-                        }}
-                        className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none [color-scheme:dark]"
-                      />
+                {(startDate || endDate || selectedOrgId || datePreset !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleClearDateFilter();
+                      setSelectedOrgId('');
+                    }}
+                    className="inline-flex items-center gap-1 rounded-xl bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    <span>Reset</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Custom Date Pickers */}
+            {(showCustomPicker || datePreset === 'custom') && (
+              <div className="flex flex-wrap items-center gap-4 pt-3 border-t border-slate-800 text-xs">
+                <div className="flex items-center gap-2">
+                  <label htmlFor="superadmin-start-date" className="font-semibold text-slate-400">
+                    From:
+                  </label>
+                  <input
+                    id="superadmin-start-date"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      setDatePreset('custom');
+                    }}
+                    className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none [color-scheme:dark]"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <label htmlFor="superadmin-end-date" className="font-semibold text-slate-400">
+                    To:
+                  </label>
+                  <input
+                    id="superadmin-end-date"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
+                      setDatePreset('custom');
+                    }}
+                    className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none [color-scheme:dark]"
+                  />
+                </div>
+
+                <span className="text-[11px] text-slate-500">
+                  Metrics update automatically for selected dates.
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* ── 6. Business Overview (Renamed from Financial & Operational Breakdown) ── */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 backdrop-blur-sm overflow-hidden">
+            <button
+              onClick={() => setIsDetailedView((prev) => !prev)}
+              className="w-full flex items-center justify-between p-4 sm:p-5 text-left hover:bg-slate-900/80 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/10 text-violet-400">
+                  <BarChart3 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-100">
+                    Business Overview ({selectedOrgName})
+                  </h3>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-violet-400">
+                <span>{isDetailedView ? 'Hide Details' : 'Show Details'}</span>
+                {isDetailedView ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </div>
+            </button>
+
+            {isDetailedView && (
+              <div className="p-5 pt-0 space-y-5 border-t border-slate-800/80">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 pt-4">
+                  <StatCard
+                    label="Money Added to Cards"
+                    value={formatCurrency(analytics?.totalRechargeVolume || 0)}
+                    icon={<TrendingUp className="h-5 w-5 text-violet-400" />}
+                  />
+
+                  <StatCard
+                    label="Customer Refunds"
+                    value={formatCurrency(analytics?.totalRefundVolume || 0)}
+                    icon={<Receipt className="h-5 w-5 text-rose-400" />}
+                  />
+
+                  <StatCard
+                    label="Net Revenue"
+                    value={formatCurrency(
+                      Math.max(0, (analytics?.totalPurchaseVolume || 0) - (analytics?.totalRefundVolume || 0))
+                    )}
+                    icon={<Receipt className="h-5 w-5 text-teal-400" />}
+                  />
+
+                  <StatCard
+                    label="Active Sessions"
+                    value={analytics?.activeSessionsCount || 0}
+                    icon={<Clock className="h-5 w-5 text-amber-400" />}
+                  />
+                </div>
+
+                {/* Branch Breakdown Table */}
+                {analytics?.branchPerformance && analytics.branchPerformance.length > 0 && (
+                  <div className="space-y-3 pt-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                        Branch Breakdown
+                      </h4>
+                      <span className="text-xs text-slate-500 font-mono">
+                        {analytics.branchPerformance.length} location{analytics.branchPerformance.length > 1 ? 's' : ''}
+                      </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <label htmlFor="superadmin-end-date" className="font-medium text-slate-400">
-                        To:
-                      </label>
-                      <input
-                        id="superadmin-end-date"
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => {
-                          setEndDate(e.target.value);
-                          setDatePreset('custom');
-                        }}
-                        className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none [color-scheme:dark]"
-                      />
+                    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950">
+                      <table className="w-full text-left text-xs text-slate-300">
+                        <thead className="border-b border-slate-800 bg-slate-900/60 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                          <tr>
+                            <th className="px-4 py-3">Location</th>
+                            <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3 text-right">Purchases</th>
+                            <th className="px-4 py-3 text-right">Recharges</th>
+                            <th className="px-4 py-3 text-right">Refunds</th>
+                            <th className="px-4 py-3 text-right">Orders</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60">
+                          {analytics.branchPerformance.map((bp) => (
+                            <tr key={bp.branchId} className="hover:bg-slate-900/40 transition-colors">
+                              <td className="px-4 py-3 font-semibold text-slate-100 flex items-center gap-2">
+                                <Building2 className="h-3.5 w-3.5 text-violet-400 shrink-0" />
+                                <span>{bp.branchName}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <Badge variant={bp.status === 'ACTIVE' ? 'success' : 'danger'}>
+                                  {bp.status === 'ACTIVE' ? 'Open' : 'Closed'}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3 text-right font-medium text-emerald-400">
+                                {formatCurrency(bp.purchaseVolume)}
+                              </td>
+                              <td className="px-4 py-3 text-right font-medium text-violet-300">
+                                {formatCurrency(bp.rechargeVolume)}
+                              </td>
+                              <td className="px-4 py-3 text-right font-medium text-rose-400">
+                                {formatCurrency(bp.refundVolume)}
+                              </td>
+                              <td className="px-4 py-3 text-right font-medium text-slate-200">
+                                {bp.transactionCount.toLocaleString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-
-                    <span className="text-[11px] text-slate-500">
-                      Metrics update automatically when dates are selected.
-                    </span>
                   </div>
                 )}
               </div>
+            )}
+          </div>
 
-              {/* Operational & Financial Stat Cards inside the box */}
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <StatCard
-                  label="Purchase Sales Volume"
-                  value={formatCurrency(analytics?.totalPurchaseVolume || 0)}
-                  icon={<ShoppingBag className="h-5 w-5 text-emerald-400" />}
-                />
-
-                <StatCard
-                  label="Card Wallet Recharges"
-                  value={formatCurrency(analytics?.totalRechargeVolume || 0)}
-                  icon={<TrendingUp className="h-5 w-5 text-violet-400" />}
-                />
-
-                <StatCard
-                  label="Total Refunds"
-                  value={formatCurrency(analytics?.totalRefundVolume || 0)}
-                  icon={<Receipt className="h-5 w-5 text-rose-400" />}
-                />
-
-                <StatCard
-                  label="Net Revenue"
-                  value={formatCurrency(
-                    Math.max(0, (analytics?.totalPurchaseVolume || 0) - (analytics?.totalRefundVolume || 0))
-                  )}
-                  icon={<Receipt className="h-5 w-5 text-teal-400" />}
-                />
-
-                <StatCard
-                  label="Total Transactions"
-                  value={(analytics?.totalTransactions || 0).toLocaleString()}
-                  icon={<BarChart3 className="h-5 w-5 text-indigo-400" />}
-                />
-
-                <StatCard
-                  label="Active Card Sessions"
-                  value={analytics?.activeSessionsCount || 0}
-                  icon={<Clock className="h-5 w-5 text-amber-400" />}
-                />
-
-                <StatCard
-                  label="Cards Issued / Available"
-                  value={analytics?.activeCardsCount || 0}
-                  icon={<CreditCard className="h-5 w-5 text-sky-400" />}
-                />
-
-                <StatCard
-                  label="Low Stock Alert Items"
-                  value={analytics?.lowStockItemsCount || 0}
-                  icon={<AlertTriangle className="h-5 w-5 text-amber-400" />}
-                />
-              </div>
-
-              {/* Branch Breakdown Table for Selected Organization / Scope */}
-              {analytics?.branchPerformance && analytics.branchPerformance.length > 0 && (
-                <div className="space-y-3 pt-3 border-t border-slate-800/80">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-violet-400" />
-                      <h3 className="text-sm font-bold text-slate-200">
-                        {selectedOrgId ? `${selectedOrgName} Branch Breakdown` : 'Platform Branch Performance Breakdown'}
-                      </h3>
-                    </div>
-                    <span className="text-xs text-slate-400 font-mono">
-                      {analytics.branchPerformance.length} {analytics.branchPerformance.length === 1 ? 'branch' : 'branches'}
-                    </span>
-                  </div>
-
-                  <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60">
-                    <table className="w-full text-left text-xs text-slate-300">
-                      <thead className="border-b border-slate-800 bg-slate-900/50 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                        <tr>
-                          <th className="px-4 py-3">Branch Name</th>
-                          <th className="px-4 py-3">Status</th>
-                          <th className="px-4 py-3 text-right">Sales Volume</th>
-                          <th className="px-4 py-3 text-right">Recharges</th>
-                          <th className="px-4 py-3 text-right">Refunds</th>
-                          <th className="px-4 py-3 text-right">Transactions</th>
-                          <th className="px-4 py-3 text-right">Active Sessions</th>
-                          <th className="px-4 py-3 text-right">Low Stock</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/60">
-                        {analytics.branchPerformance.map((bp) => (
-                          <tr key={bp.branchId} className="hover:bg-slate-900/40 transition-colors">
-                            <td className="px-4 py-3 font-semibold text-slate-100 flex items-center gap-2">
-                              <Building2 className="h-3.5 w-3.5 text-violet-400 shrink-0" />
-                              <span>{bp.branchName}</span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <Badge variant={bp.status === 'ACTIVE' ? 'success' : 'danger'}>
-                                {bp.status}
-                              </Badge>
-                            </td>
-                            <td className="px-4 py-3 text-right font-medium text-emerald-400">
-                              {formatCurrency(bp.purchaseVolume)}
-                            </td>
-                            <td className="px-4 py-3 text-right font-medium text-violet-300">
-                              {formatCurrency(bp.rechargeVolume)}
-                            </td>
-                            <td className="px-4 py-3 text-right font-medium text-rose-400">
-                              {formatCurrency(bp.refundVolume)}
-                            </td>
-                            <td className="px-4 py-3 text-right font-medium text-slate-200">
-                              {bp.transactionCount.toLocaleString()}
-                            </td>
-                            <td className="px-4 py-3 text-right font-medium text-sky-300">
-                              {bp.activeSessionsCount}
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              {bp.lowStockItemCount > 0 ? (
-                                <Badge variant="warning">{bp.lowStockItemCount}</Badge>
-                              ) : (
-                                <span className="text-slate-500">0</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Platform Subscription Distribution */}
+          {/* ── 7. Subscription Plans ─────────────────────────────────────── */}
           <Card>
             <CardHeader
-              title="Platform Subscription Distribution"
-              description="Distribution of active organization tenants across plan tiers."
+              title="Subscription Plans"
             />
             <CardContent>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {plans.map((plan) => {
                   const count = orgs.filter(
-                    (o) => o.plan?.id === plan.id || o.plan?.name === plan.name,
+                    (o) => o.plan?.id === plan.id || o.plan?.name === plan.name
                   ).length;
 
                   return (
                     <div
                       key={plan.id}
-                      className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs"
+                      className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 p-4 transition-all hover:border-violet-500/40"
                     >
-                      <div className="space-y-0.5">
-                        <span className="font-bold text-slate-200">{plan.name}</span>
-                        <p className="text-[11px] text-slate-400">
-                          {formatCurrency(plan.price)} / {plan.billingInterval.toLowerCase()}
+                      <div className="space-y-1">
+                        <span className="text-sm font-bold text-slate-100">{plan.name}</span>
+                        <p className="text-xs font-semibold text-emerald-400">
+                          {formatCurrency(plan.price)} <span className="text-[10px] text-slate-500 font-normal">/ {plan.billingInterval.toLowerCase()}</span>
                         </p>
                       </div>
-                      <Badge variant="outline" className="font-mono text-violet-300">
-                        {count} Orgs
-                      </Badge>
+                      <div className="text-right">
+                        <Badge variant="outline" className="font-bold text-violet-300 border-violet-500/30">
+                          {count} Cafeteria{count !== 1 ? 's' : ''}
+                        </Badge>
+                      </div>
                     </div>
                   );
                 })}
@@ -761,33 +696,50 @@ export function SuperAdminDashboard() {
             </CardContent>
           </Card>
 
-          {/* Registered Organizations Table */}
+          {/* ── 8. Cafeterias Directory (With Search) ──────────────────────── */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-slate-100">
-                  {selectedOrgId ? `Organization Record: ${selectedOrgName}` : 'Registered Platform Organizations'}
+                  Cafeterias
                 </h2>
-                <p className="text-xs text-slate-400">
-                  {selectedOrgId
-                    ? `Active tenant overview and subscription details for ${selectedOrgName}.`
-                    : 'Manage tenant accounts and active subscriptions.'}
-                </p>
               </div>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigate('/organizations')}
-                rightIcon={<ArrowRight className="h-4 w-4" />}
-              >
-                View All Organizations
-              </Button>
+              <div className="flex items-center gap-3">
+                {/* Search Cafeterias */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+                  <input
+                    type="text"
+                    value={searchOrgTerm}
+                    onChange={(e) => setSearchOrgTerm(e.target.value)}
+                    placeholder="Search cafeteria..."
+                    className="rounded-xl border border-slate-800 bg-slate-900 pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:border-violet-500 focus:outline-none"
+                  />
+                  {searchOrgTerm && (
+                    <button
+                      onClick={() => setSearchOrgTerm('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/organizations')}
+                  rightIcon={<ArrowRight className="h-4 w-4" />}
+                >
+                  Manage All
+                </Button>
+              </div>
             </div>
 
             <Card padding="none">
               <DataTable<OrganizationOverview>
-                data={selectedOrgId ? orgs.filter((o) => o.id === selectedOrgId) : orgs.slice(0, 5)}
+                data={filteredOrgs.slice(0, 6)}
                 columns={orgColumns}
                 keyExtractor={(item: OrganizationOverview) => item.id}
               />

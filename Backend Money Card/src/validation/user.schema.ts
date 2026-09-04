@@ -1,5 +1,13 @@
 import { z } from 'zod';
-import { safeEmail, strongPasswordSchema, safeDisplayName, safeFreeText, safeId } from './common.schema.js';
+import {
+  safeEmail,
+  strongPasswordSchema,
+  simplePasswordSchema,
+  safeDisplayName,
+  safeOrgName,
+  safeFreeText,
+  safeId,
+} from './common.schema.js';
 
 export const createStaffMemberSchema = z
   .object({
@@ -65,14 +73,14 @@ export const changeStaffPasswordSchema = z
 
 export const createOrganizationSchema = z
   .object({
-    name: safeDisplayName,
+    name: safeOrgName,
     planId: safeId.optional(),
     email: safeEmail.optional(),
     phone: z.string().max(20).optional(),
     address: safeFreeText.optional(),
     adminName: safeDisplayName.optional(),
     adminEmail: safeEmail,
-    adminPassword: strongPasswordSchema.optional(),
+    adminPassword: simplePasswordSchema.optional(),
   })
   .strict();
 

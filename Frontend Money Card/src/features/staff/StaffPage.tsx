@@ -451,12 +451,14 @@ export function StaffPage() {
     const errors: Record<string, string> = {};
     if (!formName.trim()) errors.name = 'Staff name is required';
     else if (formName.trim().length > 20) errors.name = 'Staff name must be at most 20 characters';
+    
     const trimmedEmail = formEmail.trim();
     if (!trimmedEmail) {
       errors.email = 'Email is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       errors.email = 'Please enter a valid email address';
     }
+
     if (!formPassword.trim()) {
       errors.password = 'Password is required';
     } else if (formPassword.length < 8) {
@@ -1609,7 +1611,8 @@ export function StaffPage() {
                   <Input
                     id="add-staff-name"
                     label="Staff Full Name"
-                    placeholder="e.g. John Cashier" maxLength={20}
+                    placeholder="e.g. John Cashier"
+                    maxLength={20}
                     value={formName}
                     onChange={(e) => {
                       setFormName(e.target.value);
@@ -1637,28 +1640,28 @@ export function StaffPage() {
                 </div>
 
                 <Input
-                    id="add-staff-password"
-                    type={showPassword ? 'text' : 'password'}
-                    label="Initial Password"
-                    placeholder="At least 8 characters"
-                    value={formPassword}
-                    onChange={(e) => {
-                      setFormPassword(e.target.value);
-                      if (formErrors.password) setFormErrors((prev) => ({ ...prev, password: '' }));
-                    }}
-                    error={formErrors.password}
-                    disabled={isSubmitting}
-                    rightElement={
-                      <button
-                        type="button"
-                        className="text-slate-400 hover:text-slate-200 transition-colors p-1 flex items-center justify-center focus:outline-none"
-                        onClick={() => setShowPassword((prev) => !prev)}
-                        title={showPassword ? "Hide password" : "Show password"}
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    }
-                  />
+                  id="add-staff-password"
+                  type={showPassword ? 'text' : 'password'}
+                  label="Initial Password"
+                  placeholder="At least 8 characters"
+                  value={formPassword}
+                  onChange={(e) => {
+                    setFormPassword(e.target.value);
+                    if (formErrors.password) setFormErrors((prev) => ({ ...prev, password: '' }));
+                  }}
+                  error={formErrors.password}
+                  disabled={isSubmitting}
+                  rightElement={
+                    <button
+                      type="button"
+                      className="text-slate-400 hover:text-slate-200 transition-colors p-1 flex items-center justify-center focus:outline-none"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      title={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  }
+                />
 
                 {/* Initial Password requirements checklist */}
                 <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-xs space-y-1.5">

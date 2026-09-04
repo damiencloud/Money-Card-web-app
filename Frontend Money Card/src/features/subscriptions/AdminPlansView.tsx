@@ -146,7 +146,12 @@ export function AdminPlansView() {
     e.preventDefault();
     const errors: Record<string, string> = {};
 
-    if (!formName.trim()) errors.name = 'Plan name is required';
+    const trimmedName = formName.trim();
+    if (!trimmedName) {
+      errors.name = 'Plan name is required';
+    } else if (trimmedName.length > 20) {
+      errors.name = 'Plan name must be at most 20 characters';
+    }
     const priceNum = parseFloat(formPrice);
     if (isNaN(priceNum) || priceNum < 0) errors.price = 'Valid non-negative price required';
 
@@ -161,7 +166,7 @@ export function AdminPlansView() {
 
     try {
       const res = await apiService.subscriptions.createPlan({
-        name: formName.trim(),
+        name: trimmedName,
         price: priceNum,
         currency: formCurrency,
         billingInterval: formInterval,
@@ -219,7 +224,12 @@ export function AdminPlansView() {
     if (!selectedPlan) return;
 
     const errors: Record<string, string> = {};
-    if (!formName.trim()) errors.name = 'Plan name is required';
+    const trimmedName = formName.trim();
+    if (!trimmedName) {
+      errors.name = 'Plan name is required';
+    } else if (trimmedName.length > 20) {
+      errors.name = 'Plan name must be at most 20 characters';
+    }
     const priceNum = parseFloat(formPrice);
     if (isNaN(priceNum) || priceNum < 0) errors.price = 'Valid non-negative price required';
 
@@ -234,7 +244,7 @@ export function AdminPlansView() {
 
     try {
       const res = await apiService.subscriptions.updatePlan(selectedPlan.id, {
-        name: formName.trim(),
+        name: trimmedName,
         price: priceNum,
         currency: formCurrency,
         billingInterval: formInterval,
@@ -539,11 +549,18 @@ export function AdminPlansView() {
 
           <Input
             id="create-plan-name"
-            label="Plan Display Name"
+            label="Plan Name *"
             value={formName}
-            onChange={(e) => setFormName(e.target.value)}
+            maxLength={20}
+            onChange={(e) => {
+              setFormName(e.target.value);
+              if (formErrors.name) setFormErrors((prev) => ({ ...prev, name: '' }));
+              if (modalApiError) setModalApiError(null);
+            }}
+            placeholder="e.g., Starter, Growth (Max 20 chars)"
             error={formErrors.name}
             disabled={isSubmitting}
+            required
           />
 
           <div className="grid gap-4 sm:grid-cols-3">
@@ -626,11 +643,18 @@ export function AdminPlansView() {
 
           <Input
             id="edit-plan-name"
-            label="Plan Display Name"
+            label="Plan Name *"
             value={formName}
-            onChange={(e) => setFormName(e.target.value)}
+            maxLength={20}
+            onChange={(e) => {
+              setFormName(e.target.value);
+              if (formErrors.name) setFormErrors((prev) => ({ ...prev, name: '' }));
+              if (modalApiError) setModalApiError(null);
+            }}
+            placeholder="e.g., Starter, Growth (Max 20 chars)"
             error={formErrors.name}
             disabled={isSubmitting}
+            required
           />
 
           <div className="grid gap-4 sm:grid-cols-2">

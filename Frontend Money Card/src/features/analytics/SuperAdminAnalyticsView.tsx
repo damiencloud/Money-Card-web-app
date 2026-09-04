@@ -41,7 +41,42 @@ import {
   Eye,
   Download,
   Clock,
+  CalendarDays,
+  X,
 } from 'lucide-react';
+
+export type DatePreset = 'all' | 'today' | 'yesterday' | 'last7' | 'last30' | 'thisMonth' | 'custom';
+
+export function getPresetDates(preset: DatePreset): { startDate: string; endDate: string } {
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+
+  if (preset === 'today') {
+    return { startDate: todayStr, endDate: todayStr };
+  }
+  if (preset === 'yesterday') {
+    const yest = new Date(now);
+    yest.setDate(yest.getDate() - 1);
+    const yestStr = yest.toISOString().split('T')[0];
+    return { startDate: yestStr, endDate: yestStr };
+  }
+  if (preset === 'last7') {
+    const start = new Date(now);
+    start.setDate(start.getDate() - 7);
+    return { startDate: start.toISOString().split('T')[0], endDate: todayStr };
+  }
+  if (preset === 'last30') {
+    const start = new Date(now);
+    start.setDate(start.getDate() - 30);
+    return { startDate: start.toISOString().split('T')[0], endDate: todayStr };
+  }
+  if (preset === 'thisMonth') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { startDate: start.toISOString().split('T')[0], endDate: todayStr };
+  }
+
+  return { startDate: '', endDate: '' };
+}
 
 export function SuperAdminAnalyticsView() {
   const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
@@ -51,6 +86,13 @@ export function SuperAdminAnalyticsView() {
   const [payments, setPayments] = useState<SubscriptionPayment[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
 
+  // Time Period & Cafeteria Filter State
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('');
+  const [datePreset, setDatePreset] = useState<DatePreset>('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [showCustomPicker, setShowCustomPicker] = useState(false);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,12 +101,36 @@ export function SuperAdminAnalyticsView() {
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
 
+  const handlePresetChange = (preset: DatePreset) => {
+    setDatePreset(preset);
+    if (preset === 'custom') {
+      setShowCustomPicker(true);
+    } else {
+      setShowCustomPicker(false);
+      const { startDate: s, endDate: e } = getPresetDates(preset);
+      setStartDate(s);
+      setEndDate(e);
+    }
+  };
+
+  const handleClearDateFilter = () => {
+    setDatePreset('all');
+    setStartDate('');
+    setEndDate('');
+    setShowCustomPicker(false);
+  };
+
   const fetchPlatformData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const [analyticsRes, peakRes, orgsRes, branchesRes, payRes, plansRes] = await Promise.all([
-        apiService.analytics.getOverview(),
+        apiService.analytics.getOverview({
+          organizationId: selectedOrgId || undefined,
+          branchId: undefined,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+        }),
         apiService.analytics.getPeakAnalytics(),
         apiService.organizations.getOrganizations({ limit: 100 }),
         apiService.branches.getBranches(),
@@ -88,46 +154,11 @@ export function SuperAdminAnalyticsView() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [selectedOrgId, startDate, endDate]);
 
   useEffect(() => {
-    let isCancelled = false;
-    const load = async () => {
-      setError(null);
-      try {
-        const [analyticsRes, peakRes, orgsRes, branchesRes, payRes, plansRes] = await Promise.all([
-          apiService.analytics.getOverview(),
-          apiService.analytics.getPeakAnalytics(),
-          apiService.organizations.getOrganizations({ limit: 100 }),
-          apiService.branches.getBranches(),
-          apiService.subscriptions.getPayments(),
-          apiService.plans.getPlans(),
-        ]);
-        if (isCancelled) return;
-
-        if (!analyticsRes.success) {
-          setError(analyticsRes.error.message || 'Failed to load platform analytics');
-          return;
-        }
-
-        setAnalytics(analyticsRes.data);
-        if (peakRes.success) setPeakData(peakRes.data);
-        if (orgsRes.success) setOrgs(orgsRes.data.items);
-        if (branchesRes.success) setBranches(branchesRes.data.items);
-        if (payRes.success) setPayments(payRes.data);
-        if (plansRes.success) setPlans(plansRes.data);
-      } catch {
-        if (!isCancelled) setError('Unable to connect to the server. Please try again.');
-      } finally {
-        if (!isCancelled) setIsLoading(false);
-      }
-    };
-
-    load();
-    return () => {
-      isCancelled = true;
-    };
-  }, []);
+    fetchPlatformData();
+  }, [fetchPlatformData]);
 
   const totalGatewayRevenue = payments
     .filter((p) => p.status === 'SUCCESS')
@@ -368,6 +399,100 @@ export function SuperAdminAnalyticsView() {
         <ErrorState title="Failed to load platform analytics" message={error} onRetry={fetchPlatformData} />
       ) : analytics ? (
         <div className="space-y-8">
+          {/* ── Simple Time & Cafeteria Filter ───────────────────────────── */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              {/* Quick Date Presets */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 mr-2">
+                  <CalendarDays className="h-4 w-4 text-violet-400" />
+                  Time Period:
+                </span>
+
+                {(
+                  [
+                    { id: 'all', label: 'All Time' },
+                    { id: 'today', label: 'Today' },
+                    { id: 'yesterday', label: 'Yesterday' },
+                    { id: 'last7', label: 'Last 7 Days' },
+                    { id: 'thisMonth', label: 'This Month' },
+                    { id: 'custom', label: 'Custom Dates' },
+                  ] as const
+                ).map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => handlePresetChange(preset.id)}
+                    className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-all ${
+                      datePreset === preset.id
+                        ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
+                        : 'bg-slate-950 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Cafeteria Dropdown & Reset */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-400">Cafeteria:</span>
+                  <select
+                    value={selectedOrgId}
+                    onChange={(e) => setSelectedOrgId(e.target.value)}
+                    className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 focus:border-violet-500 focus:outline-none"
+                  >
+                    <option value="">All Cafeterias</option>
+                    {orgs.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {(startDate || endDate || selectedOrgId || datePreset !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleClearDateFilter();
+                      setSelectedOrgId('');
+                    }}
+                    className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Reset Filters
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Custom Date Pickers Drawer */}
+            {showCustomPicker && (
+              <div className="grid gap-3 pt-3 border-t border-slate-800/80 sm:grid-cols-2 max-w-md animate-in fade-in">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 mb-1">From Date</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 mb-1">To Date</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Top Platform KPI Cards */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
@@ -420,7 +545,7 @@ export function SuperAdminAnalyticsView() {
             <h2 className="text-lg font-bold text-slate-100">Platform Organizations Performance</h2>
             <Card padding="none">
               <DataTable<OrganizationOverview>
-                data={orgs}
+                data={selectedOrgId ? orgs.filter((o) => o.id === selectedOrgId) : orgs}
                 columns={orgColumns}
                 keyExtractor={(item: OrganizationOverview) => item.id}
               />

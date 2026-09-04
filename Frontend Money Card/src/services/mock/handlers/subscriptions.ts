@@ -39,13 +39,16 @@ export const mockSubscriptionsHandlers = {
       return createMockError('FORBIDDEN', 'Super Admin privileges required');
     }
 
-    if (!req.name || req.price === undefined || req.price < 0) {
+    if (!req.name || !req.name.trim() || req.price === undefined || req.price < 0) {
       return createMockError('VALIDATION_ERROR', 'Valid plan name and non-negative price required');
+    }
+    if (req.name.trim().length > 20) {
+      return createMockError('VALIDATION_ERROR', 'Plan name must be at most 20 characters');
     }
 
     const newPlan: Plan = {
       id: req.id || mockStore.generateId('plan'),
-      name: req.name,
+      name: req.name.trim(),
       status: req.status || 'ACTIVE',
       price: req.price,
       currency: req.currency || 'INR',
@@ -75,6 +78,15 @@ export const mockSubscriptionsHandlers = {
       return createMockError('FORBIDDEN', 'Super Admin privileges required');
     }
 
+    if (req.name !== undefined) {
+      if (!req.name.trim()) {
+        return createMockError('VALIDATION_ERROR', 'Plan name cannot be empty');
+      }
+      if (req.name.trim().length > 20) {
+        return createMockError('VALIDATION_ERROR', 'Plan name must be at most 20 characters');
+      }
+    }
+
     const index = mockStore.plans.findIndex((p) => p.id === id);
     if (index === -1) {
       return createMockError('NOT_FOUND', `Plan '${id}' not found`);
@@ -84,6 +96,7 @@ export const mockSubscriptionsHandlers = {
     const updated: Plan = {
       ...existing,
       ...req,
+      ...(req.name ? { name: req.name.trim() } : {}),
       id: existing.id, // Immutable ID
       updatedAt: mockStore.getTimestamp(),
     };

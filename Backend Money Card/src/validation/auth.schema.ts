@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { safeEmail, loginPasswordSchema, strongPasswordSchema } from './common.schema.js';
+import { safeEmail, loginPasswordSchema, strongPasswordSchema, simplePasswordSchema } from './common.schema.js';
 
 export const loginSchema = z
   .object({
@@ -40,7 +40,7 @@ export const changePasswordSchema = z
 
 export const resetOrgAdminPasswordSchema = z
   .object({
-    temporaryPassword: strongPasswordSchema,
+    temporaryPassword: simplePasswordSchema,
   })
   .strict();
 

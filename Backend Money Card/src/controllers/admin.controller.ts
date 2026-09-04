@@ -515,15 +515,25 @@ export async function getPlanById(req: Request, res: Response) {
 
 export async function createPlan(req: Request, res: Response) {
   const { name, price, billingInterval, branchLimit, staffLimit, cardLimit, description, features, isPopular } = req.body;
-  if (!name || price === undefined) {
+  if (!name || typeof name !== 'string' || !name.trim() || price === undefined) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'Plan name and price are required');
+  }
+
+  const trimmedName = name.trim();
+  if (trimmedName.length > 20) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Plan name must be at most 20 characters');
+  }
+
+  const numericPrice = Number(price);
+  if (!Number.isFinite(numericPrice) || numericPrice < 0) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Price must be a valid non-negative number');
   }
 
   try {
     const plan = await prisma.plan.create({
       data: {
-        name,
-        price: Number(price),
+        name: trimmedName,
+        price: numericPrice,
         billingInterval: billingInterval || 'MONTHLY',
         branchLimit: Number(branchLimit) || 1,
         staffLimit: Number(staffLimit) || 5,
@@ -537,7 +547,7 @@ export async function createPlan(req: Request, res: Response) {
     return sendSuccess(res, plan, 201);
   } catch (err: any) {
     if (err?.code === 'P2002') {
-      return sendError(res, 409, 'DUPLICATE_PLAN_NAME', `A plan with the name '${name}' already exists.`);
+      return sendError(res, 409, 'DUPLICATE_PLAN_NAME', `A plan with the name '${trimmedName}' already exists.`);
     }
     return sendError(res, 400, 'PLAN_CREATION_FAILED', err?.message || 'Failed to create plan');
   }
@@ -547,12 +557,31 @@ export async function updatePlan(req: Request, res: Response) {
   const { id } = req.params;
   const { name, price, billingInterval, branchLimit, staffLimit, cardLimit, description, features, isPopular } = req.body;
 
+  let trimmedName: string | undefined = undefined;
+  if (name !== undefined) {
+    if (typeof name !== 'string' || !name.trim()) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Plan name cannot be empty');
+    }
+    trimmedName = name.trim();
+    if (trimmedName.length > 20) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Plan name must be at most 20 characters');
+    }
+  }
+
+  let numericPrice: number | undefined = undefined;
+  if (price !== undefined) {
+    numericPrice = Number(price);
+    if (!Number.isFinite(numericPrice) || numericPrice < 0) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Price must be a valid non-negative number');
+    }
+  }
+
   try {
     const plan = await prisma.plan.update({
       where: { id },
       data: {
-        ...(name ? { name } : {}),
-        ...(price !== undefined ? { price: Number(price) } : {}),
+        ...(trimmedName ? { name: trimmedName } : {}),
+        ...(numericPrice !== undefined ? { price: numericPrice } : {}),
         ...(billingInterval ? { billingInterval } : {}),
         ...(branchLimit !== undefined ? { branchLimit: Number(branchLimit) } : {}),
         ...(staffLimit !== undefined ? { staffLimit: Number(staffLimit) } : {}),
