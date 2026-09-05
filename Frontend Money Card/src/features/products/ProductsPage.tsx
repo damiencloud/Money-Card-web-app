@@ -19,6 +19,7 @@ import {
 } from '@/components/ui';
 import { notify, formatCurrency } from '@/utils';
 import { UnauthorizedPage } from '@/features/auth';
+import { DataTable, type Column } from '@/components/tables';
 import { CategorySelector } from './CategorySelector';
 import {
   Package,
@@ -399,12 +400,162 @@ export function ProductsPage({ defaultTab: _defaultTab }: ProductsPageProps = {}
     }
   };
 
+  // ─── Menu Table Columns (Rows & Columns View) ───────────────────────────
+  const productColumns: Column<UnifiedProductItem>[] = useMemo(() => [
+    {
+      key: 'itemName',
+      header: 'Item Name',
+      className: 'min-w-[180px]',
+      render: (p: UnifiedProductItem) => (
+        <div className="flex flex-col">
+          <span className="font-semibold text-slate-100 text-sm">{p.itemName}</span>
+          {p.branchName && (
+            <span className="text-[11px] text-slate-400 mt-0.5">🏪 {p.branchName}</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'category',
+      header: 'Category',
+      className: 'min-w-[140px]',
+      render: (p: UnifiedProductItem) => {
+        const isVeg = Array.isArray(p.category) && p.category.some((c) => c.toLowerCase() === 'veg');
+        const isNonVeg = Array.isArray(p.category) && p.category.some((c) => c.toLowerCase() === 'non-veg');
+        const isBeverage = Array.isArray(p.category) && p.category.some((c) => c.toLowerCase() === 'beverage' || c.toLowerCase() === 'drink');
+        const otherCategories = Array.isArray(p.category)
+          ? p.category.filter((c) => !['veg', 'non-veg', 'beverage', 'drink'].includes(c.toLowerCase()))
+          : [];
+
+        return (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {isVeg && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                🟢 Veg
+              </span>
+            )}
+            {isNonVeg && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30">
+                🔴 Non-Veg
+              </span>
+            )}
+            {isBeverage && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/30">
+                ☕ Drink
+              </span>
+            )}
+            {otherCategories.map((cat) => (
+              <span key={cat} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                {cat}
+              </span>
+            ))}
+            {!isVeg && !isNonVeg && !isBeverage && otherCategories.length === 0 && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                Food
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'price',
+      header: 'Price',
+      className: 'whitespace-nowrap',
+      render: (p: UnifiedProductItem) => (
+        <span className="font-mono text-sm font-bold text-violet-300">
+          {formatCurrency(p.price)}
+        </span>
+      ),
+    },
+    {
+      key: 'quantity',
+      header: 'Live Stock',
+      className: 'whitespace-nowrap',
+      render: (p: UnifiedProductItem) => {
+        if (p.quantity === 0) {
+          return (
+            <span className="inline-flex items-center font-bold text-rose-400 bg-rose-500/10 px-2.5 py-0.5 rounded-full border border-rose-500/30 text-xs">
+              Out of stock (0)
+            </span>
+          );
+        }
+        if (p.quantity < 10) {
+          return (
+            <span className="inline-flex items-center font-bold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30 text-xs">
+              Low: {p.quantity} units
+            </span>
+          );
+        }
+        return (
+          <span className="inline-flex items-center font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30 text-xs">
+            {p.quantity} in stock
+          </span>
+        );
+      },
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      className: 'whitespace-nowrap',
+      render: (p: UnifiedProductItem) => (
+        <Badge variant={p.status === 'ACTIVE' ? 'success' : 'danger'} className="text-xs">
+          {p.status === 'ACTIVE' ? 'Active' : 'Inactive'}
+        </Badge>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      className: 'text-right whitespace-nowrap',
+      render: (p: UnifiedProductItem) => (
+        <div className="flex items-center justify-end gap-1.5">
+          {canManageInventory && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs py-1 px-2.5 border-slate-700 text-slate-200 hover:border-violet-500 hover:text-white"
+              onClick={() => handleOpenAdjust(p)}
+              leftIcon={<Sliders className="h-3.5 w-3.5" />}
+              title="Adjust Stock"
+            >
+              Stock
+            </Button>
+          )}
+
+          {canManageProducts && (
+            <Button
+              variant={p.status === 'ACTIVE' ? 'ghost' : 'outline'}
+              size="sm"
+              className="text-xs py-1 px-2.5"
+              onClick={() => handleToggleStatus(p)}
+              leftIcon={<Power className="h-3.5 w-3.5" />}
+              title={p.status === 'ACTIVE' ? 'Deactivate product' : 'Activate product'}
+            >
+              {p.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+            </Button>
+          )}
+
+          {canManageProducts && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleOpenDeleteProduct(p)}
+              className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 p-1.5"
+              title="Archive/Delete product"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ], [canManageInventory, canManageProducts]);
+
   // ─── Guard Check ──────────────────────────────────────────────────────────
   if (!canViewProducts && !canViewInventory) {
     return <UnauthorizedPage />;
   }
-
-
 
   return (
     <div className="space-y-6">
@@ -587,125 +738,14 @@ export function ProductsPage({ defaultTab: _defaultTab }: ProductsPageProps = {}
             />
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 p-4">
-            {filteredProducts.map((p) => {
-              const isVeg = Array.isArray(p.category) && p.category.some((c) => c.toLowerCase() === 'veg');
-              const isNonVeg = Array.isArray(p.category) && p.category.some((c) => c.toLowerCase() === 'non-veg');
-              const isBeverage = Array.isArray(p.category) && p.category.some((c) => c.toLowerCase() === 'beverage' || c.toLowerCase() === 'drink');
-
-              return (
-                <div
-                  key={p.id}
-                  className={`flex flex-col justify-between rounded-2xl border p-4.5 transition-all shadow-md ${
-                    p.status === 'ACTIVE'
-                      ? 'border-slate-800 bg-slate-900/70 hover:border-slate-700 hover:bg-slate-900'
-                      : 'border-slate-800/60 bg-slate-950/40 opacity-75'
-                  }`}
-                >
-                  <div>
-                    {/* Header: Category pills & Status */}
-                    <div className="flex items-center justify-between gap-2 mb-3">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {isVeg && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                            🟢 Veg
-                          </span>
-                        )}
-                        {isNonVeg && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30">
-                            🔴 Non-Veg
-                          </span>
-                        )}
-                        {isBeverage && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/30">
-                            ☕ Drink
-                          </span>
-                        )}
-                        {!isVeg && !isNonVeg && !isBeverage && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
-                            {Array.isArray(p.category) ? p.category[0] || 'Food' : 'Food'}
-                          </span>
-                        )}
-                      </div>
-
-                      <Badge variant={p.status === 'ACTIVE' ? 'success' : 'danger'} className="text-[10px]">
-                        {p.status}
-                      </Badge>
-                    </div>
-
-                    {/* Food Name & Price */}
-                    <h4 className="font-bold text-base text-slate-100 line-clamp-1">
-                      {p.itemName}
-                    </h4>
-                    {p.branchName && (
-                      <p className="text-xs text-slate-400 mt-0.5">🏪 {p.branchName}</p>
-                    )}
-                    <p className="mt-1 font-mono text-xl font-extrabold text-violet-300">
-                      {formatCurrency(p.price)}
-                    </p>
-                  </div>
-
-                  {/* Stock Level & Actions Footer */}
-                  <div className="mt-4 pt-3 border-t border-slate-800/80 space-y-3">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400 font-medium">Stock Level:</span>
-                      {p.quantity === 0 ? (
-                        <span className="font-bold text-rose-400 bg-rose-500/10 px-2.5 py-0.5 rounded-full border border-rose-500/30">
-                          Out of stock (0)
-                        </span>
-                      ) : p.quantity < 10 ? (
-                        <span className="font-bold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30">
-                          Low: {p.quantity} units
-                        </span>
-                      ) : (
-                        <span className="font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                          {p.quantity} in stock
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-1">
-                      {canManageInventory && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs py-1 border-slate-700 text-slate-200 hover:border-violet-500"
-                          onClick={() => handleOpenAdjust(p)}
-                          leftIcon={<Sliders className="h-3.5 w-3.5" />}
-                        >
-                          Stock
-                        </Button>
-                      )}
-
-                      {canManageProducts && (
-                        <Button
-                          variant={p.status === 'ACTIVE' ? 'ghost' : 'outline'}
-                          size="sm"
-                          className="flex-1 text-xs py-1"
-                          onClick={() => handleToggleStatus(p)}
-                          leftIcon={<Power className="h-3.5 w-3.5" />}
-                        >
-                          {p.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-                        </Button>
-                      )}
-
-                      {canManageProducts && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleOpenDeleteProduct(p)}
-                          className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 px-2"
-                          title="Delete product"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <DataTable<UnifiedProductItem>
+            data={filteredProducts}
+            columns={productColumns}
+            keyExtractor={(item) => item.id}
+            rowClassName={(item) =>
+              item.status !== 'ACTIVE' ? 'opacity-70 bg-slate-950/20' : undefined
+            }
+          />
         )}
       </Card>
 

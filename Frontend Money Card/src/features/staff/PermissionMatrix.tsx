@@ -188,7 +188,15 @@ export function PermissionMatrix({
           >
             {/* Category Header (Click to toggle Dropdown) */}
             <div
+              role="button"
+              tabIndex={0}
               onClick={() => toggleGroupOpen(group.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggleGroupOpen(group.id);
+                }
+              }}
               className="flex items-center justify-between p-4 cursor-pointer select-none hover:bg-slate-800/30 transition-colors"
             >
               <div className="flex items-center gap-2.5">
