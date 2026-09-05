@@ -4,7 +4,7 @@ import { ErrorBoundary } from '@/components/ui';
 // Staff operational UI and User Portal auth are strictly separate.
 
 import { useState, useMemo } from 'react';
-import { Outlet, NavLink } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { cn } from '@/utils';
 import { useAuth, useBranch, usePermissions } from '@/hooks';
 import { Breadcrumbs, ProfileMenu, LoadingState } from '@/components/ui';
@@ -30,6 +30,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Shield,
+  ArrowLeft,
 } from 'lucide-react';
 
 // Icon Map for dynamic lookup from config
@@ -51,6 +52,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
 };
 
 export function DashboardLayout() {
+  const navigate = useNavigate();
   const { user, isLoading } = useAuth();
   const { currentBranch, branches, selectBranch } = useBranch();
   const { hasPermission } = usePermissions();
@@ -232,7 +234,7 @@ export function DashboardLayout() {
       {/* ── Main Workspace Area ── */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top Bar */}
-        <header className="relative z-30 flex h-16 shrink-0 items-center gap-4 border-b border-slate-800/60 bg-slate-950/80 px-4 backdrop-blur-md lg:px-6">
+        <header className="relative z-30 flex h-16 shrink-0 items-center gap-3 border-b border-slate-800/60 bg-slate-950/80 px-4 backdrop-blur-md lg:px-6">
           {/* Mobile Drawer Trigger */}
           <button
             onClick={() => setMobileDrawerOpen(true)}
@@ -240,6 +242,24 @@ export function DashboardLayout() {
             aria-label="Open navigation menu"
           >
             <Menu className="h-5 w-5" />
+          </button>
+
+          {/* Top Left Back Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (window.history.state && window.history.state.idx > 0) {
+                navigate(-1);
+              } else {
+                navigate('/dashboard');
+              }
+            }}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold text-slate-300 transition-all hover:border-violet-500/50 hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 shadow-sm group"
+            title="Go back"
+            aria-label="Go back to previous page"
+          >
+            <ArrowLeft className="h-3.5 w-3.5 text-slate-400 group-hover:text-violet-400 group-hover:-translate-x-0.5 transition-all" />
+            <span>Back</span>
           </button>
 
           {/* Breadcrumb Navigation */}
