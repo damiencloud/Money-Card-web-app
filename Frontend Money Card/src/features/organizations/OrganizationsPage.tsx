@@ -230,19 +230,32 @@ export function OrganizationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // ── Client Filtered Organizations for Instant Search ────────
+  const [selectedPlanFilter, setSelectedPlanFilter] = useState<string>('ALL');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('ALL');
+
+  // ── Client Filtered Organizations for Instant Search & Filtering ────────
   const filteredOrganizations = useMemo(() => {
-    if (!searchQuery.trim()) return organizations;
-    const q = searchQuery.toLowerCase().trim();
-    return organizations.filter(
-      (org) =>
+    return organizations.filter((org) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
         org.name.toLowerCase().includes(q) ||
         org.id.toLowerCase().includes(q) ||
         (org.adminUser?.name && org.adminUser.name.toLowerCase().includes(q)) ||
         (org.adminUser?.email && org.adminUser.email.toLowerCase().includes(q)) ||
-        (org.plan?.name && org.plan.name.toLowerCase().includes(q)),
-    );
-  }, [organizations, searchQuery]);
+        (org.plan?.name && org.plan.name.toLowerCase().includes(q));
+
+      const matchesPlan =
+        selectedPlanFilter === 'ALL' ||
+        org.planId === selectedPlanFilter ||
+        org.plan?.id === selectedPlanFilter;
+
+      const matchesStatus =
+        selectedStatusFilter === 'ALL' || org.status === selectedStatusFilter;
+
+      return matchesSearch && matchesPlan && matchesStatus;
+    });
+  }, [organizations, searchQuery, selectedPlanFilter, selectedStatusFilter]);
 
   // Modals
   const [selectedOrg, setSelectedOrg] = useState<OrganizationOverview | null>(null);
@@ -687,16 +700,7 @@ export function OrganizationsPage() {
           <h1 className="text-2xl font-bold text-slate-100">Tenant Organizations</h1>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="md"
-            onClick={() => fetchOrganizations()}
-            leftIcon={<RefreshCw className="h-4 w-4" />}
-          >
-            Refresh
-          </Button>
-
+        <div>
           <Button
             variant="primary"
             size="md"
@@ -708,25 +712,70 @@ export function OrganizationsPage() {
         </div>
       </div>
 
-      {/* ── Search Bar ── */}
-      <Card className="p-4">
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search organization by name or ID..."
-            maxLength={30}
-            value={searchQuery}
-            onChange={(e) => {
-              const val = e.target.value;
-              if (val.length <= 30) {
-                setSearchQuery(val);
-              }
-            }}
-            className="w-full rounded-lg border border-slate-800 bg-slate-950/50 py-2 pl-9 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
-          />
+      {/* ── Filter Toolbar (Search, Plan Scope, Status Scope, Refresh Data) ── */}
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Search */}
+          <div className="w-full sm:w-72">
+            <label className="mb-1 block text-[11px] font-medium text-slate-400">Search Organization</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by name or ID..."
+                maxLength={30}
+                value={searchQuery}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val.length <= 30) {
+                    setSearchQuery(val);
+                  }
+                }}
+                className="w-full rounded-lg border border-slate-700 bg-slate-900/50 py-2 pl-9 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              />
+            </div>
+          </div>
+
+          {/* Plan Scope Filter */}
+          <div className="w-full sm:w-48">
+            <label className="mb-1 block text-[11px] font-medium text-slate-400">Plan Scope</label>
+            <Select
+              id="org-plan-filter"
+              value={selectedPlanFilter}
+              onChange={(e) => setSelectedPlanFilter(e.target.value)}
+              options={[
+                { value: 'ALL', label: 'All Plans' },
+                ...plans.map((p) => ({ value: p.id, label: p.name })),
+              ]}
+            />
+          </div>
+
+          {/* Status Scope Filter */}
+          <div className="w-full sm:w-40">
+            <label className="mb-1 block text-[11px] font-medium text-slate-400">Status</label>
+            <Select
+              id="org-status-filter"
+              value={selectedStatusFilter}
+              onChange={(e) => setSelectedStatusFilter(e.target.value)}
+              options={[
+                { value: 'ALL', label: 'All Statuses' },
+                { value: 'ACTIVE', label: 'Active' },
+                { value: 'INACTIVE', label: 'Inactive' },
+              ]}
+            />
+          </div>
         </div>
-      </Card>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => fetchOrganizations()}
+          leftIcon={<RefreshCw className="h-4 w-4" />}
+          className="shrink-0 self-start lg:self-center"
+        >
+          Refresh Data
+        </Button>
+      </div>
 
       {/* ── Main Data View ── */}
       {isLoading ? (
@@ -736,11 +785,23 @@ export function OrganizationsPage() {
       ) : filteredOrganizations.length === 0 ? (
         <EmptyState
           title="No organizations found"
-          description={searchQuery ? 'No organizations matched your search query.' : 'Get started by adding your first tenant organization.'}
+          description={
+            searchQuery || selectedPlanFilter !== 'ALL' || selectedStatusFilter !== 'ALL'
+              ? 'No organizations matched your search or filter criteria.'
+              : 'Get started by adding your first tenant organization.'
+          }
           action={
-            searchQuery ? (
-              <Button variant="outline" size="sm" onClick={() => setSearchQuery('')}>
-                Clear Search
+            searchQuery || selectedPlanFilter !== 'ALL' || selectedStatusFilter !== 'ALL' ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedPlanFilter('ALL');
+                  setSelectedStatusFilter('ALL');
+                }}
+              >
+                Clear Filters
               </Button>
             ) : (
               <Button variant="primary" size="sm" onClick={handleOpenCreateModal} leftIcon={<Plus className="h-4 w-4" />}>

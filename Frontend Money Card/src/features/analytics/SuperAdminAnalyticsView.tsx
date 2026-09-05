@@ -19,6 +19,7 @@ import {
   StatCard,
   Modal,
   ModalFooter,
+  Select,
   LoadingState,
   ErrorState,
 } from '@/components/ui';
@@ -41,8 +42,6 @@ import {
   Eye,
   Download,
   Clock,
-  CalendarDays,
-  X,
 } from 'lucide-react';
 
 export type DatePreset = 'all' | 'today' | 'yesterday' | 'last7' | 'last30' | 'thisMonth' | 'custom';
@@ -91,7 +90,6 @@ export function SuperAdminAnalyticsView() {
   const [datePreset, setDatePreset] = useState<DatePreset>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
-  const [showCustomPicker, setShowCustomPicker] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -103,21 +101,11 @@ export function SuperAdminAnalyticsView() {
 
   const handlePresetChange = (preset: DatePreset) => {
     setDatePreset(preset);
-    if (preset === 'custom') {
-      setShowCustomPicker(true);
-    } else {
-      setShowCustomPicker(false);
+    if (preset !== 'custom') {
       const { startDate: s, endDate: e } = getPresetDates(preset);
       setStartDate(s);
       setEndDate(e);
     }
-  };
-
-  const handleClearDateFilter = () => {
-    setDatePreset('all');
-    setStartDate('');
-    setEndDate('');
-    setShowCustomPicker(false);
   };
 
   const fetchPlatformData = useCallback(async () => {
@@ -399,98 +387,76 @@ export function SuperAdminAnalyticsView() {
         <ErrorState title="Failed to load platform analytics" message={error} onRetry={fetchPlatformData} />
       ) : analytics ? (
         <div className="space-y-8">
-          {/* ── Simple Time & Cafeteria Filter ───────────────────────────── */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm space-y-4">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-              {/* Quick Date Presets */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 mr-2">
-                  <CalendarDays className="h-4 w-4 text-violet-400" />
-                  Time Period:
-                </span>
-
-                {(
-                  [
-                    { id: 'all', label: 'All Time' },
-                    { id: 'today', label: 'Today' },
-                    { id: 'yesterday', label: 'Yesterday' },
-                    { id: 'last7', label: 'Last 7 Days' },
-                    { id: 'thisMonth', label: 'This Month' },
-                    { id: 'custom', label: 'Custom Dates' },
-                  ] as const
-                ).map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => handlePresetChange(preset.id)}
-                    className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-all ${
-                      datePreset === preset.id
-                        ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                        : 'bg-slate-950 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
-                    }`}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
+          {/* ── Filter Toolbar (Cafeteria Scope, Time Window, Refresh Data) ── */}
+          <div className="flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Cafeteria Scope Filter */}
+              <div className="w-full sm:w-56">
+                <label className="mb-1 block text-[11px] font-medium text-slate-400">Cafeteria Scope</label>
+                <Select
+                  id="analytics-cafeteria-filter"
+                  value={selectedOrgId}
+                  onChange={(e) => setSelectedOrgId(e.target.value)}
+                  options={[
+                    { value: '', label: 'All Cafeterias' },
+                    ...orgs.map((o) => ({ value: o.id, label: o.name })),
+                  ]}
+                />
               </div>
 
-              {/* Cafeteria Dropdown & Reset */}
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-slate-400">Cafeteria:</span>
-                  <select
-                    value={selectedOrgId}
-                    onChange={(e) => setSelectedOrgId(e.target.value)}
-                    className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 focus:border-violet-500 focus:outline-none"
-                  >
-                    <option value="">All Cafeterias</option>
-                    {orgs.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.name}
-                      </option>
-                    ))}
-                  </select>
+              {/* Time Window Filter */}
+              <div className="w-full sm:w-48">
+                <label className="mb-1 block text-[11px] font-medium text-slate-400">Time Window</label>
+                <Select
+                  id="analytics-preset-filter"
+                  value={datePreset}
+                  onChange={(e) => handlePresetChange(e.target.value as DatePreset)}
+                  options={[
+                    { value: 'all', label: 'All Time' },
+                    { value: 'today', label: 'Today' },
+                    { value: 'yesterday', label: 'Yesterday' },
+                    { value: 'last7', label: 'Last 7 Days' },
+                    { value: 'last30', label: 'Last 30 Days' },
+                    { value: 'thisMonth', label: 'This Month' },
+                    { value: 'custom', label: 'Custom Range' },
+                  ]}
+                />
+              </div>
+
+              {/* Custom Date Inputs (if selected) */}
+              {datePreset === 'custom' && (
+                <div className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-400">Start Date</label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-400">End Date</label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
+                    />
+                  </div>
                 </div>
-
-                {(startDate || endDate || selectedOrgId || datePreset !== 'all') && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleClearDateFilter();
-                      setSelectedOrgId('');
-                    }}
-                    className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 transition-colors"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                    Reset Filters
-                  </button>
-                )}
-              </div>
+              )}
             </div>
 
-            {/* Custom Date Pickers Drawer */}
-            {showCustomPicker && (
-              <div className="grid gap-3 pt-3 border-t border-slate-800/80 sm:grid-cols-2 max-w-md animate-in fade-in">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 mb-1">From Date</label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 mb-1">To Date</label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 focus:border-violet-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchPlatformData()}
+              leftIcon={<RefreshCw className="h-4 w-4" />}
+              className="shrink-0 self-start lg:self-center"
+            >
+              Refresh Data
+            </Button>
           </div>
 
           {/* Top Platform KPI Cards */}
