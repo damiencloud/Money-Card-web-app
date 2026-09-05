@@ -71,21 +71,14 @@ export function AdminPlansSubscriptionsView() {
   const [selectedPlanFilter, setSelectedPlanFilter] = useState<string>('ALL');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('ALL');
 
-  // Search & Filter for Plan Requests
-  const [requestFilter, setRequestFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>(
-    searchParams.get('status') === 'PENDING' ? 'PENDING' : 'ALL'
-  );
+  // Search for Plan Requests
   const [requestSearchQuery, setRequestSearchQuery] = useState('');
 
-  // Sync activeTab and requestFilter when searchParams change
+  // Sync activeTab when searchParams change
   useEffect(() => {
     const currentTab = searchParams.get('tab') as 'plans' | 'org_subscriptions' | 'requests' | 'payments' | null;
     if (currentTab && ['plans', 'org_subscriptions', 'requests', 'payments'].includes(currentTab)) {
       setActiveTab(currentTab);
-    }
-    const currentStatus = searchParams.get('status');
-    if (currentStatus === 'PENDING') {
-      setRequestFilter('PENDING');
     }
   }, [searchParams]);
 
@@ -571,28 +564,25 @@ export function AdminPlansSubscriptionsView() {
     });
   }, [orgs, subscriptions, plans, orgSearchQuery, selectedPlanFilter, selectedStatusFilter]);
 
-  // Filtered & Sorted Plan Change Requests (Prioritizing Pending Approvals)
-  const filteredAndSortedRequests = useMemo(() => {
-    return [...planRequests]
-      .filter((req) => {
-        const matchesStatus = requestFilter === 'ALL' || req.status === requestFilter;
-        const matchesSearch =
-          !requestSearchQuery.trim() ||
-          (req.organizationName || '').toLowerCase().includes(requestSearchQuery.toLowerCase()) ||
-          (req.requestedPlanName || '').toLowerCase().includes(requestSearchQuery.toLowerCase()) ||
-          (req.currentPlanName || '').toLowerCase().includes(requestSearchQuery.toLowerCase()) ||
-          req.id.toLowerCase().includes(requestSearchQuery.toLowerCase());
+  // Pending Plan Change Requests Only (Exclusively showing requests awaiting Super Admin action)
+  const pendingRequestsList = useMemo(() => {
+    return planRequests.filter((r) => r.status === 'PENDING');
+  }, [planRequests]);
 
-        return matchesStatus && matchesSearch;
+  const filteredAndSortedRequests = useMemo(() => {
+    return pendingRequestsList
+      .filter((req) => {
+        if (!requestSearchQuery.trim()) return true;
+        const q = requestSearchQuery.toLowerCase().trim();
+        return (
+          (req.organizationName || '').toLowerCase().includes(q) ||
+          (req.requestedPlanName || '').toLowerCase().includes(q) ||
+          (req.currentPlanName || '').toLowerCase().includes(q) ||
+          req.id.toLowerCase().includes(q)
+        );
       })
-      .sort((a, b) => {
-        // Pending requests always come first
-        if (a.status === 'PENDING' && b.status !== 'PENDING') return -1;
-        if (a.status !== 'PENDING' && b.status === 'PENDING') return 1;
-        // Then sort by submission date descending
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
-  }, [planRequests, requestFilter, requestSearchQuery]);
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [pendingRequestsList, requestSearchQuery]);
 
   // Selected Plan for Org Sub Modal (for real-time default vs override preview)
   const previewSelectedPlan = plans.find((p) => p.id === subFormPlanId) || plans[0];
@@ -609,7 +599,6 @@ export function AdminPlansSubscriptionsView() {
           </div>
           <div>
             <p className="font-semibold text-slate-100">{plan.name}</p>
-            <p className="text-xs text-slate-500">{plan.id}</p>
           </div>
         </div>
       ),
@@ -793,11 +782,6 @@ export function AdminPlansSubscriptionsView() {
               </span>
             )}
           </div>
-          {req.reason && (
-            <span className="text-[11px] text-slate-400 truncate max-w-xs" title={req.reason}>
-              Note: {req.reason}
-            </span>
-          )}
         </div>
       ),
     },
@@ -807,7 +791,6 @@ export function AdminPlansSubscriptionsView() {
       render: (req: PlanChangeRequest) => (
         <div>
           <span className="font-bold text-slate-100">{req.requestedPlanName}</span>
-          <p className="text-[11px] text-slate-400">Current: {req.currentPlanName}</p>
         </div>
       ),
     },
@@ -1059,9 +1042,6 @@ export function AdminPlansSubscriptionsView() {
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-lg font-bold text-slate-100">Global Plan Catalog Definitions</h2>
-                  <p className="text-xs text-slate-400">
-                    Create and manage standard catalog blueprints. Changes here affect default limits for new subscriptions only; existing organization overrides remain preserved.
-                  </p>
                 </div>
                 <Button variant="primary" size="sm" onClick={openCreatePlanModal} leftIcon={<Plus className="h-4 w-4" />}>
                   Create Plan Definition
@@ -1084,9 +1064,6 @@ export function AdminPlansSubscriptionsView() {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-lg font-bold text-slate-100">Organization Subscriptions & Custom Limits</h2>
-                  <p className="text-xs text-slate-400">
-                    Manage tenant-specific subscriptions. Set custom branch, staff, or card limits for individual organizations without modifying global plan definitions.
-                  </p>
                 </div>
               </div>
 
@@ -1095,7 +1072,13 @@ export function AdminPlansSubscriptionsView() {
                 <Input
                   placeholder="Search organization by name or ID..."
                   value={orgSearchQuery}
-                  onChange={(e) => setOrgSearchQuery(e.target.value)}
+                  maxLength={30}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val.length <= 30) {
+                      setOrgSearchQuery(val);
+                    }
+                  }}
                 />
                 <Select
                   value={selectedPlanFilter}
@@ -1136,20 +1119,17 @@ export function AdminPlansSubscriptionsView() {
             </div>
           )}
 
-          {/* TAB 4: PLAN REQUESTS */}
+          {/* TAB 4: PLAN REQUESTS (PENDING ONLY) */}
           {activeTab === 'requests' && (
             <div className="space-y-6">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-slate-100">Tenant Plan Change Requests</h2>
-                  <p className="text-xs text-slate-400">
-                    Review tenant requests to upgrade, downgrade, or switch plans. Verify direct payment before approving.
-                  </p>
+                  <h2 className="text-lg font-bold text-slate-100">Pending Plan Change Requests</h2>
                 </div>
               </div>
 
               {/* Highlight Banner for Pending Requests */}
-              {pendingRequestsCount > 0 && (
+              {pendingRequestsList.length > 0 && (
                 <div className="rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-amber-500/5">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400">
@@ -1158,60 +1138,41 @@ export function AdminPlansSubscriptionsView() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-slate-100">
-                          {pendingRequestsCount} Request{pendingRequestsCount > 1 ? 's' : ''} Awaiting Approval
+                          {pendingRequestsList.length} Request{pendingRequestsList.length > 1 ? 's' : ''} Awaiting Approval
                         </span>
                         <Badge variant="warning" className="text-[10px] font-bold">ATTENTION NEEDED</Badge>
                       </div>
                       <p className="text-xs text-slate-300 mt-0.5">
-                        Highlighted below in gold. Click "Review / Approve" on any pending request to accept or decline.
+                        Highlighted below in gold. Click "Review / Approve" on any request to accept or decline.
                       </p>
                     </div>
                   </div>
-                  {requestFilter !== 'PENDING' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setRequestFilter('PENDING')}
-                      className="border-amber-500/40 text-amber-300 hover:bg-amber-500/15 shrink-0 self-start sm:self-center"
-                    >
-                      Show Only Pending ({pendingRequestsCount})
-                    </Button>
-                  )}
                 </div>
               )}
 
-              {/* Search & Status Filters */}
+              {/* Search Bar */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="w-full sm:w-72">
+                <div className="w-full sm:w-80">
                   <Input
-                    placeholder="Search by cafeteria or plan..."
+                    placeholder="Search pending requests by cafeteria or plan..."
                     value={requestSearchQuery}
                     maxLength={30}
                     onChange={(e) => setRequestSearchQuery(e.target.value)}
                   />
                 </div>
-                <div className="w-full sm:w-64">
-                  <Select
-                    value={requestFilter}
-                    onChange={(e) => setRequestFilter(e.target.value as 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED')}
-                    options={[
-                      { value: 'ALL', label: `All Requests (${planRequests.length})` },
-                      { value: 'PENDING', label: `Pending Approval (${pendingRequestsCount})` },
-                      { value: 'APPROVED', label: 'Approved Requests' },
-                      { value: 'REJECTED', label: 'Rejected Requests' },
-                    ]}
-                  />
+                <div className="text-xs text-slate-400 font-medium">
+                  Showing <span className="text-amber-400 font-bold">{filteredAndSortedRequests.length}</span> pending request{filteredAndSortedRequests.length === 1 ? '' : 's'}
                 </div>
               </div>
 
               {filteredAndSortedRequests.length === 0 ? (
                 <EmptyState
                   icon={<Inbox className="h-8 w-8 text-slate-500" />}
-                  title="No plan change requests found"
+                  title={requestSearchQuery ? "No matching pending requests" : "No pending plan requests"}
                   description={
-                    requestFilter !== 'ALL' || requestSearchQuery
-                      ? 'No requests match your current filters.'
-                      : 'When organization admins submit plan adjustment requests, they will appear here.'
+                    requestSearchQuery
+                      ? 'No pending requests match your search.'
+                      : 'All caught up! There are no cafeteria plan change requests currently awaiting approval.'
                   }
                 />
               ) : (
@@ -1220,11 +1181,7 @@ export function AdminPlansSubscriptionsView() {
                     data={filteredAndSortedRequests}
                     columns={requestColumns}
                     keyExtractor={(item: PlanChangeRequest) => item.id}
-                    rowClassName={(req) =>
-                      req.status === 'PENDING'
-                        ? 'bg-amber-500/[0.08] hover:bg-amber-500/[0.14] border-l-4 border-l-amber-500'
-                        : undefined
-                    }
+                    rowClassName={() => 'bg-amber-500/[0.08] hover:bg-amber-500/[0.14] border-l-4 border-l-amber-500'}
                   />
                 </Card>
               )}
