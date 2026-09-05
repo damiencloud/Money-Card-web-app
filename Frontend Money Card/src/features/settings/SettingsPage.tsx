@@ -60,16 +60,12 @@ function SuperAdminSettingsView({
           <SettingsIcon className="h-7 w-7 text-violet-400" />
           <h1 className="text-2xl font-bold text-slate-100">Super Admin Account Settings</h1>
         </div>
-        <p className="mt-1 text-sm text-slate-400">
-          Manage your platform Super Admin profile and account authentication credentials.
-        </p>
       </div>
 
       {/* Profile Card */}
       <Card>
         <CardHeader
           title="Platform Administrator Profile"
-          description="Your authenticated Super Admin account credentials."
         />
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">

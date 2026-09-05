@@ -19,6 +19,7 @@ export interface DataTableProps<T> {
   data: T[];
   keyExtractor?: (item: T) => string;
   onRowClick?: (item: T) => void;
+  rowClassName?: (item: T) => string | undefined;
   className?: string;
   emptyMessage?: string;
 }
@@ -28,6 +29,7 @@ export function DataTable<T>({
   data,
   keyExtractor,
   onRowClick,
+  rowClassName,
   className,
   emptyMessage = 'No data available',
 }: DataTableProps<T>) {
@@ -74,6 +76,7 @@ export function DataTable<T>({
                 onRowClick
                   ? 'cursor-pointer hover:bg-slate-800/30 active:bg-slate-800/50'
                   : 'hover:bg-slate-800/20',
+                rowClassName?.(item),
               )}
             >
               {columns.map((col, idx) => {

@@ -149,7 +149,7 @@ export function SuperAdminDashboard() {
       if (analyticsRes.success) setAnalytics(analyticsRes.data);
       if (reqsRes.success) setPlanRequests(reqsRes.data || []);
     } catch {
-      setError('Unable to connect to server. Please check your connection.');
+      setError('Unable to load platform data. Please try again.');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -157,56 +157,24 @@ export function SuperAdminDashboard() {
   }, [selectedOrgId, startDate, endDate]);
 
   useEffect(() => {
-    let isCancelled = false;
-    const load = async () => {
-      setError(null);
-      try {
-        const [orgsRes, plansRes, analyticsRes, reqsRes] = await Promise.all([
-          apiService.organizations.getOrganizations(),
-          apiService.plans.getPlans(),
-          apiService.analytics.getAnalyticsOverview({
-            organizationId: selectedOrgId || undefined,
-            startDate: startDate || undefined,
-            endDate: endDate || undefined,
-          }),
-          apiService.subscriptions.getPlanRequests(),
-        ]);
-        if (isCancelled) return;
+    fetchPlatformData(false);
+  }, [fetchPlatformData]);
 
-        if (!orgsRes.success) {
-          setError(orgsRes.error.message || 'Failed to load dashboard data');
-          return;
-        }
-
-        setOrgs(orgsRes.data.items);
-        if (plansRes.success) setPlans(plansRes.data);
-        if (analyticsRes.success) setAnalytics(analyticsRes.data);
-        if (reqsRes.success) setPlanRequests(reqsRes.data || []);
-      } catch {
-        if (!isCancelled) setError('Unable to connect to server. Please try again.');
-      } finally {
-        if (!isCancelled) setIsLoading(false);
-      }
-    };
-
-    load();
-    return () => {
-      isCancelled = true;
-    };
-  }, [selectedOrgId, startDate, endDate]);
-
-  const activeOrgsCount = orgs.filter((o) => o.status === 'ACTIVE').length;
-
-  const selectedOrgName = useMemo(() => {
-    if (!selectedOrgId) return 'All Cafeterias';
-    const found = orgs.find((o) => o.id === selectedOrgId);
-    return found ? found.name : 'Selected Cafeteria';
-  }, [selectedOrgId, orgs]);
+  const activeOrgsCount = useMemo(
+    () => orgs.filter((o) => o.status === 'ACTIVE').length,
+    [orgs]
+  );
 
   const pendingRequests = useMemo(
     () => planRequests.filter((r) => r.status === 'PENDING'),
     [planRequests]
   );
+
+  const selectedOrgName = useMemo(() => {
+    if (!selectedOrgId) return 'All Cafeterias';
+    const found = orgs.find((o) => o.id === selectedOrgId);
+    return found ? found.name : 'All Cafeterias';
+  }, [orgs, selectedOrgId]);
 
   const filteredOrgs = useMemo(() => {
     if (!searchOrgTerm.trim()) return orgs;
@@ -320,7 +288,7 @@ export function SuperAdminDashboard() {
             <Button
               variant="primary"
               size="md"
-              onClick={() => navigate('/subscriptions')}
+              onClick={() => navigate('/subscriptions?tab=requests')}
               rightIcon={<ArrowRight className="h-4 w-4" />}
               className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 shrink-0 shadow-md shadow-amber-500/25"
             >
@@ -363,7 +331,7 @@ export function SuperAdminDashboard() {
           </button>
 
           <button
-            onClick={() => navigate('/subscriptions')}
+            onClick={() => navigate('/subscriptions?tab=requests')}
             className="group flex flex-col sm:flex-row items-center sm:items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 text-center sm:text-left transition-all hover:border-amber-500/50 hover:bg-slate-900 hover:shadow-md hover:shadow-amber-500/10"
           >
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/15 text-amber-400 group-hover:scale-105 transition-transform">
@@ -380,7 +348,7 @@ export function SuperAdminDashboard() {
             onClick={() => navigate('/plans')}
             className="group flex flex-col sm:flex-row items-center sm:items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 text-center sm:text-left transition-all hover:border-indigo-500/50 hover:bg-slate-900 hover:shadow-md hover:shadow-indigo-500/10"
           >
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-400 group-hover:scale-105 transition-transform">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-400 group-hover:scale-105 transition-transform">
               <Layers className="h-5 w-5" />
             </div>
             <div>
@@ -394,7 +362,7 @@ export function SuperAdminDashboard() {
             onClick={() => navigate('/analytics')}
             className="group flex flex-col sm:flex-row items-center sm:items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 text-center sm:text-left transition-all hover:border-sky-500/50 hover:bg-slate-900 hover:shadow-md hover:shadow-sky-500/10"
           >
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-500/15 text-sky-400 group-hover:scale-105 transition-transform">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-50 text-sky-400 group-hover:scale-105 transition-transform">
               <BarChart3 className="h-5 w-5" />
             </div>
             <div>
@@ -499,7 +467,7 @@ export function SuperAdminDashboard() {
                       handleClearDateFilter();
                       setSelectedOrgId('');
                     }}
-                    className="inline-flex items-center gap-1 rounded-xl bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                    className="inline-flex items-center gap-1 rounded-xl bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-50/10 transition-colors"
                   >
                     <X className="h-3.5 w-3.5" />
                     <span>Reset</span>

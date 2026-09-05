@@ -567,9 +567,14 @@ export function AdminPlansView() {
             <Input
               id="create-plan-price"
               type="number"
+              min="0"
               label="Commercial Price"
               value={formPrice}
-              onChange={(e) => setFormPrice(e.target.value)}
+              onKeyDown={(e) => { if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault(); }}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '' || parseFloat(val) >= 0) setFormPrice(val);
+              }}
               error={formErrors.price}
               disabled={isSubmitting}
             />
@@ -597,25 +602,40 @@ export function AdminPlansView() {
             <Input
               id="create-branch-limit"
               type="number"
+              min="0"
               label="Max Branches"
               value={formBranchLimit}
-              onChange={(e) => setFormBranchLimit(e.target.value)}
+              onKeyDown={(e) => { if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault(); }}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '' || parseInt(val, 10) >= 0) setFormBranchLimit(val);
+              }}
               disabled={isSubmitting}
             />
             <Input
               id="create-staff-limit"
               type="number"
+              min="0"
               label="Max Staff Accounts"
               value={formStaffLimit}
-              onChange={(e) => setFormStaffLimit(e.target.value)}
+              onKeyDown={(e) => { if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault(); }}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '' || parseInt(val, 10) >= 0) setFormStaffLimit(val);
+              }}
               disabled={isSubmitting}
             />
             <Input
               id="create-card-limit"
               type="number"
+              min="0"
               label="Max Active Cards"
               value={formCardLimit}
-              onChange={(e) => setFormCardLimit(e.target.value)}
+              onKeyDown={(e) => { if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault(); }}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '' || parseInt(val, 10) >= 0) setFormCardLimit(val);
+              }}
               disabled={isSubmitting}
             />
           </div>
@@ -661,9 +681,14 @@ export function AdminPlansView() {
             <Input
               id="edit-plan-price"
               type="number"
+              min="0"
               label="Price (₹)"
               value={formPrice}
-              onChange={(e) => setFormPrice(e.target.value)}
+              onKeyDown={(e) => { if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault(); }}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '' || parseFloat(val) >= 0) setFormPrice(val);
+              }}
               error={formErrors.price}
               disabled={isSubmitting}
             />
@@ -682,25 +707,40 @@ export function AdminPlansView() {
             <Input
               id="edit-branch-limit"
               type="number"
+              min="0"
               label="Max Branches"
               value={formBranchLimit}
-              onChange={(e) => setFormBranchLimit(e.target.value)}
+              onKeyDown={(e) => { if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault(); }}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '' || parseInt(val, 10) >= 0) setFormBranchLimit(val);
+              }}
               disabled={isSubmitting}
             />
             <Input
               id="edit-staff-limit"
               type="number"
+              min="0"
               label="Max Staff"
               value={formStaffLimit}
-              onChange={(e) => setFormStaffLimit(e.target.value)}
+              onKeyDown={(e) => { if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault(); }}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '' || parseInt(val, 10) >= 0) setFormStaffLimit(val);
+              }}
               disabled={isSubmitting}
             />
             <Input
               id="edit-card-limit"
               type="number"
+              min="0"
               label="Max Cards"
               value={formCardLimit}
-              onChange={(e) => setFormCardLimit(e.target.value)}
+              onKeyDown={(e) => { if (e.key === '-' || e.key === 'e' || e.key === 'E' || e.key === '+') e.preventDefault(); }}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '' || parseInt(val, 10) >= 0) setFormCardLimit(val);
+              }}
               disabled={isSubmitting}
             />
           </div>

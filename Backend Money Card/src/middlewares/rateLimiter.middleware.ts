@@ -18,7 +18,7 @@ export const authRateLimiter = rateLimit({
 
 export const apiRateLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
-  max: 200,
+  max: process.env.NODE_ENV === 'development' ? 2000 : 200,
   standardHeaders: true,
   legacyHeaders: false,
   handler: (_req, res) => {
