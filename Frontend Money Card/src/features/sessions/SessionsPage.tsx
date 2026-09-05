@@ -28,6 +28,7 @@ import {
   ErrorState,
 } from '@/components/ui';
 import { DataTable } from '@/components/tables';
+import { toast } from 'sonner';
 import { formatDate, formatCurrency, formatBlockedCardMessage, extractTransactionItems } from '@/utils';
 import {
   CreditCard,
@@ -47,7 +48,7 @@ import {
   Lock,
   Unlock,
   FileText,
-  Trash2,
+  CheckCircle2,
 } from 'lucide-react';
 
 // ─── Customer Session Record Model ──────────────────────────────────
@@ -87,7 +88,6 @@ export function SessionsPage() {
   const [sessionStatusFilter, setSessionStatusFilter] = useState<SessionStatus | 'ALL'>('ALL');
   const [branchFilter, setBranchFilter] = useState<string>('ALL');
   const [dateRangeFilter, setDateRangeFilter] = useState<'ALL' | 'today' | 'yesterday' | '7d' | '30d'>('ALL');
-  const [cardActionFilter, setCardActionFilter] = useState<'ALL' | 'CARD_BLOCKED' | 'CARD_UNBLOCKED' | 'CARD_DELETED'>('ALL');
 
   // ─── Session Details Inspection Modal ─────────────────────────────
   const [selectedItem, setSelectedItem] = useState<CustomerHistoryItem | null>(null);
@@ -95,6 +95,12 @@ export function SessionsPage() {
   const [sessionTxns, setSessionTxns] = useState<Transaction[]>([]);
   const [isLoadingTxns, setIsLoadingTxns] = useState(false);
   const [detailTab, setDetailTab] = useState<'overview' | 'timeline' | 'purchases' | 'recharges' | 'card_status'>('overview');
+
+  // ─── Unblock Card State & Permission ──────────────────────────────
+  const canUnblock = hasPermission('CARD_UNBLOCK');
+  const [selectedCardToUnblock, setSelectedCardToUnblock] = useState<any | null>(null);
+  const [showUnblockModal, setShowUnblockModal] = useState(false);
+  const [isUnblocking, setIsUnblocking] = useState(false);
 
   const extractArray = <T,>(data: any): T[] => {
     if (!data) return [];
@@ -252,67 +258,69 @@ export function SessionsPage() {
     });
   }, [customerHistoryItems, searchQuery, sessionStatusFilter, branchFilter, dateRangeFilter]);
 
-  // ─── Realtime Card Audit Events ──────────────────────────────────
-  const allCardAuditEvents = useMemo<CustomerHistoryEvent[]>(() => {
-    // Start with all recorded history events
-    const events = [...historyEvents];
-
-    // Check if any currently BLOCKED card has no event in historyEvents, and add fallback
+  // ─── Currently Blocked Cards Only ────────────────────────────────
+  // Cards currently in BLOCKED status. If a card gets unblocked, it immediately goes away.
+  const blockedCardItems = useMemo(() => {
     const blockedCards = rawCards.filter((c) => c.status === 'BLOCKED');
-    for (const card of blockedCards) {
-      const exists = events.some(
-        (e) => (e.cardId === card.id || e.physicalCardNumber === card.physicalCardNumber) && e.action === 'CARD_BLOCKED',
-      );
-      if (!exists) {
-        const branchObj = branches.find((b) => b.id === card.currentBranchId);
-        events.push({
-          id: `blocked-${card.id}`,
-          cardId: card.id,
-          physicalCardNumber: card.physicalCardNumber || card.qrToken,
-          action: 'CARD_BLOCKED' as any,
-          previousStatus: 'ACTIVE' as any,
-          newStatus: 'BLOCKED' as any,
-          customerName: null,
-          customerPhone: null,
-          performedByName: 'Staff Member',
-          branchName: branchObj?.name || 'Main Cafeteria',
-          branchId: card.currentBranchId,
-          reason: 'Card Blocked',
-          createdAt: card.updatedAt || new Date().toISOString(),
-        });
-      }
-    }
 
-    return events.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return blockedCards.map((card) => {
+      const matchingEvents = historyEvents
+        .filter(
+          (e) =>
+            (e.cardId === card.id || e.physicalCardNumber === card.physicalCardNumber) &&
+            e.action === 'CARD_BLOCKED',
+        )
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      const latestBlockEvent = matchingEvents[0];
+      const branchObj = branches.find((b) => b.id === card.currentBranchId);
+
+      const customerName = card.activeSession?.customerName || latestBlockEvent?.customerName || null;
+      const customerPhone = card.activeSession?.customerPhone || latestBlockEvent?.customerPhone || null;
+      const reason = card.blockedReason || latestBlockEvent?.reason || 'Card Blocked';
+      const performedByName = card.blockedBy || latestBlockEvent?.performedByName || 'Staff Member';
+      const blockedAt = card.blockedAt || latestBlockEvent?.createdAt || card.updatedAt;
+
+      return {
+        id: card.id,
+        cardId: card.id,
+        physicalCardNumber: card.physicalCardNumber || card.qrToken,
+        qrToken: card.qrToken,
+        status: 'BLOCKED' as const,
+        customerName,
+        customerPhone,
+        reason,
+        performedByName,
+        branchName: branchObj?.name || latestBlockEvent?.branchName || 'Main Cafeteria',
+        branchId: card.currentBranchId || latestBlockEvent?.branchId,
+        blockedAt,
+      };
+    });
   }, [rawCards, historyEvents, branches]);
 
-  // ─── Filter Realtime Card Audit Events ───────────────────────────
-  const filteredEvents = useMemo(() => {
-    return allCardAuditEvents.filter((event) => {
-      if (cardActionFilter !== 'ALL' && event.action !== cardActionFilter) {
-        return false;
-      }
-
+  // ─── Filter Currently Blocked Cards ──────────────────────────────
+  const filteredBlockedCards = useMemo(() => {
+    return blockedCardItems.filter((item) => {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const matchesCustomer = event.customerName?.toLowerCase().includes(q) ?? false;
-        const matchesPhone = event.customerPhone?.toLowerCase().includes(q) ?? false;
-        const matchesCard = event.physicalCardNumber?.toLowerCase().includes(q) ?? false;
-        const matchesStaff = event.performedByName?.toLowerCase().includes(q) ?? false;
-        const matchesReason = event.reason?.toLowerCase().includes(q) ?? false;
-        const matchesBranch = event.branchName?.toLowerCase().includes(q) ?? false;
+        const matchesCustomer = item.customerName?.toLowerCase().includes(q) ?? false;
+        const matchesPhone = item.customerPhone?.toLowerCase().includes(q) ?? false;
+        const matchesCard = item.physicalCardNumber.toLowerCase().includes(q);
+        const matchesStaff = item.performedByName.toLowerCase().includes(q);
+        const matchesReason = item.reason.toLowerCase().includes(q);
+        const matchesBranch = item.branchName.toLowerCase().includes(q);
 
         if (!matchesCustomer && !matchesPhone && !matchesCard && !matchesStaff && !matchesReason && !matchesBranch) {
           return false;
         }
       }
 
-      if (branchFilter !== 'ALL' && event.branchId && event.branchId !== branchFilter) {
+      if (branchFilter !== 'ALL' && item.branchId && item.branchId !== branchFilter) {
         return false;
       }
 
-      if (dateRangeFilter !== 'ALL' && event.createdAt) {
-        const itemDate = new Date(event.createdAt);
+      if (dateRangeFilter !== 'ALL' && item.blockedAt) {
+        const itemDate = new Date(item.blockedAt);
         const now = new Date();
         const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
         const itemTime = itemDate.getTime();
@@ -334,20 +342,23 @@ export function SessionsPage() {
 
       return true;
     });
-  }, [allCardAuditEvents, cardActionFilter, searchQuery, branchFilter, dateRangeFilter]);
+  }, [blockedCardItems, searchQuery, branchFilter, dateRangeFilter]);
 
-  // ─── KPI Metrics ─────────────────────────────────────────────────
+  // ─── KPI Metrics (Business Logic) ────────────────────────────────
   const activeCount = useMemo(
     () => customerHistoryItems.filter((i) => i.sessionStatus === 'ACTIVE').length,
     [customerHistoryItems],
+  );
+
+  const availableCardsCount = useMemo(
+    () => rawCards.filter((c) => c.status === 'AVAILABLE' && !c.activeSession).length,
+    [rawCards],
   );
 
   const blockedCardsCount = useMemo(
     () => rawCards.filter((c) => c.status === 'BLOCKED').length,
     [rawCards],
   );
-
-  const totalAuditEventsCount = historyEvents.length;
 
   const totalActiveBalance = useMemo(
     () =>
@@ -356,6 +367,28 @@ export function SessionsPage() {
         .reduce((sum, i) => sum + i.balance, 0),
     [customerHistoryItems],
   );
+
+  // ─── Unblock Action Handler ──────────────────────────────────────
+  const handleConfirmUnblock = async () => {
+    if (!selectedCardToUnblock) return;
+    setIsUnblocking(true);
+    try {
+      const res = await apiService.cards.unblockCard(selectedCardToUnblock.cardId);
+      if (res.success) {
+        toast.success(`Card ${selectedCardToUnblock.physicalCardNumber} has been unblocked.`);
+        setShowUnblockModal(false);
+        setSelectedCardToUnblock(null);
+        fetchCustomerHistoryData(true);
+        window.dispatchEvent(new Event('cards-updated'));
+      } else {
+        toast.error(res.error.message || 'Failed to unblock card');
+      }
+    } catch {
+      toast.error('Network error while unblocking card');
+    } finally {
+      setIsUnblocking(false);
+    }
+  };
 
   // ─── Open Session Detail Inspection ──────────────────────────────
   const handleOpenDetails = async (item: CustomerHistoryItem) => {
@@ -402,15 +435,29 @@ export function SessionsPage() {
       header: 'Customer',
       render: (item: CustomerHistoryItem) => (
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400 font-bold text-sm">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400 font-bold text-sm shrink-0">
             {item.customerName ? item.customerName.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
           </div>
           <div>
-            <p className="font-bold text-slate-100 dark:text-slate-100">
-              {item.customerName || 'Walk-in Customer'}
-            </p>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-100 dark:text-slate-100">
+                {item.customerName || 'Walk-in Customer'}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenDetails(item);
+                }}
+                className="p-1 rounded-md text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/15 border border-slate-700/60 hover:border-emerald-500/30 transition-colors cursor-pointer"
+                title="View customer session details"
+                aria-label={`View session for ${item.customerName || 'Walk-in Customer'}`}
+              >
+                <Eye className="h-3.5 w-3.5" />
+              </button>
+            </div>
             {item.customerPhone && (
-              <p className="text-xs text-slate-300 dark:text-slate-300 font-medium flex items-center gap-1">
+              <p className="text-xs text-slate-300 dark:text-slate-300 font-medium flex items-center gap-1 mt-0.5">
                 <Phone className="h-3 w-3 text-slate-400" />
                 {item.customerPhone}
               </p>
@@ -468,137 +515,113 @@ export function SessionsPage() {
         </span>
       ),
     },
-    {
-      key: 'actions',
-      header: 'Actions',
-      render: (item: CustomerHistoryItem) => (
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 border-slate-700 text-slate-100 hover:bg-slate-800"
-          onClick={() => handleOpenDetails(item)}
-        >
-          <Eye className="h-3.5 w-3.5 text-emerald-400" />
-          <span>Inspect</span>
-        </Button>
-      ),
-    },
   ];
 
-  // ─── Columns for Card Status & Block/Unblock Audit Events ─────────
-  const eventColumns = [
+  // ─── Columns for Currently Blocked Cards ─────────────────────────
+  const blockedCardColumns = [
+    {
+      key: 'physicalCardNumber',
+      header: 'Card Number',
+      render: (card: any) => (
+        <div className="flex items-center gap-2">
+          <ShieldAlert className="h-4 w-4 text-rose-400" />
+          <span className="font-mono font-bold text-slate-100 dark:text-slate-100">
+            {card.physicalCardNumber}
+          </span>
+        </div>
+      ),
+    },
     {
       key: 'customerName',
-      header: 'Customer',
-      render: (event: CustomerHistoryEvent) => (
+      header: 'Customer / Holder',
+      render: (card: any) => (
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/20 text-violet-300 font-bold text-xs">
-            {event.customerName ? event.customerName.charAt(0).toUpperCase() : <User className="h-3.5 w-3.5" />}
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-500/20 text-rose-300 font-bold text-xs">
+            {card.customerName ? card.customerName.charAt(0).toUpperCase() : <User className="h-3.5 w-3.5" />}
           </div>
           <div>
             <p className="font-bold text-slate-100 dark:text-slate-100 text-sm">
-              {event.customerName || 'Registered Customer'}
+              {card.customerName || 'Unassigned / General Card'}
             </p>
-            {event.customerPhone && (
-              <p className="text-xs text-slate-300 dark:text-slate-300">{event.customerPhone}</p>
+            {card.customerPhone && (
+              <p className="text-xs text-slate-300 dark:text-slate-300">{card.customerPhone}</p>
             )}
           </div>
         </div>
       ),
     },
     {
-      key: 'physicalCardNumber',
-      header: 'Card',
-      render: (event: CustomerHistoryEvent) => (
-        <span className="font-mono font-bold text-slate-100 dark:text-slate-100">
-          {event.physicalCardNumber}
-        </span>
+      key: 'status',
+      header: 'Status',
+      render: () => (
+        <Badge variant="danger" className="gap-1 font-semibold text-xs">
+          <Lock className="h-3 w-3" />
+          Blocked
+        </Badge>
       ),
     },
     {
-      key: 'action',
-      header: 'Action',
-      render: (event: CustomerHistoryEvent) => {
-        if (event.action === 'CARD_DELETED') {
-          return (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-950/80 text-amber-200 border border-amber-800">
-              <Trash2 className="h-3 w-3 text-amber-400" />
-              Card Deleted
-            </span>
-          );
-        }
-        const isBlock = event.action === 'CARD_BLOCKED';
+      key: 'reason',
+      header: 'Blocked Reason',
+      render: (card: any) => {
+        const displayReason = formatBlockedCardMessage(card.reason, card.performedByName);
         return (
           <span
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
-              isBlock
-                ? 'bg-rose-950/80 text-rose-200 border border-rose-800'
-                : 'bg-emerald-950/80 text-emerald-200 border border-emerald-800'
-            }`}
+            className="text-xs text-rose-300 font-medium max-w-xs truncate block"
+            title={displayReason}
           >
-            {isBlock ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
-            {isBlock ? 'Card Blocked' : 'Card Unblocked'}
-          </span>
-        );
-      },
-    },
-    {
-      key: 'transition',
-      header: 'Status Transition',
-      render: (e: CustomerHistoryEvent) => {
-        if (e.action === 'CARD_DELETED') {
-          return (
-            <span className="text-xs text-rose-300 font-mono font-semibold">
-              {e.previousStatus} → <strong className="text-rose-400">DELETED</strong>
-            </span>
-          );
-        }
-        return (
-          <span className="text-xs text-slate-200 dark:text-slate-200 font-mono font-semibold">
-            {e.previousStatus} → <strong className="text-white">{e.newStatus}</strong>
+            {displayReason || 'Card Blocked'}
           </span>
         );
       },
     },
     {
       key: 'performedByName',
-      header: 'Performed By',
-      render: (event: CustomerHistoryEvent) => (
+      header: 'Blocked By',
+      render: (card: any) => (
         <span className="text-sm font-semibold text-slate-100 dark:text-slate-100">
-          {event.performedByName || 'Staff'}
+          {card.performedByName || 'Staff Member'}
         </span>
       ),
     },
     {
       key: 'branchName',
       header: 'Branch',
-      render: (event: CustomerHistoryEvent) => (
-        <span className="text-xs font-medium text-slate-200 dark:text-slate-200">{event.branchName}</span>
-      ),
-    },
-    {
-      key: 'createdAt',
-      header: 'Date & Time',
-      render: (event: CustomerHistoryEvent) => (
-        <span className="text-xs font-medium text-slate-200 dark:text-slate-200">
-          {formatDate(event.createdAt)}
+      render: (card: any) => (
+        <span className="text-xs font-medium text-slate-200 dark:text-slate-200 flex items-center gap-1">
+          <Building2 className="h-3.5 w-3.5 text-slate-400" />
+          {card.branchName}
         </span>
       ),
     },
     {
-      key: 'reason',
-      header: 'Reason',
-      render: (event: CustomerHistoryEvent) => {
-        const displayReason = formatBlockedCardMessage(event.reason, event.performedByName);
-        return (
-          <span
-            className="text-xs text-slate-300 dark:text-slate-300 italic max-w-xs truncate block font-medium"
-            title={displayReason}
+      key: 'blockedAt',
+      header: 'Blocked At',
+      render: (card: any) => (
+        <span className="text-xs font-medium text-slate-200 dark:text-slate-200">
+          {formatDate(card.blockedAt)}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      className: 'text-right whitespace-nowrap',
+      render: (card: any) =>
+        canUnblock ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs py-1 px-2.5 border-slate-700 text-emerald-400 hover:border-emerald-500 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+            onClick={() => {
+              setSelectedCardToUnblock(card);
+              setShowUnblockModal(true);
+            }}
+            leftIcon={<Unlock className="h-3.5 w-3.5" />}
           >
-            {displayReason || '—'}
-          </span>
-        );
-      },
+            Unblock
+          </Button>
+        ) : null,
     },
   ];
 
@@ -638,14 +661,14 @@ export function SessionsPage() {
           icon={<CreditCard className="h-5 w-5 text-blue-600" />}
         />
         <StatCard
-          title="Blocked Cards"
-          value={blockedCardsCount}
-          icon={<ShieldAlert className="h-5 w-5 text-rose-600" />}
+          title="Available Cards Ready for Issue"
+          value={availableCardsCount}
+          icon={<CheckCircle2 className="h-5 w-5 text-emerald-400" />}
         />
         <StatCard
-          title="Audit Trail Records"
-          value={totalAuditEventsCount}
-          icon={<History className="h-5 w-5 text-violet-600" />}
+          title="Currently Blocked Cards"
+          value={blockedCardsCount}
+          icon={<ShieldAlert className="h-5 w-5 text-rose-600" />}
         />
       </div>
 
@@ -667,12 +690,12 @@ export function SessionsPage() {
           onClick={() => setActiveTab('card_events')}
           className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold transition-all ${
             activeTab === 'card_events'
-              ? 'border-violet-600 text-violet-600 dark:border-violet-400 dark:text-violet-400'
+              ? 'border-rose-600 text-rose-600 dark:border-rose-400 dark:text-rose-400'
               : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
           }`}
         >
-          <History className="h-4 w-4" />
-          <span>Card Audit Trail & History ({filteredEvents.length})</span>
+          <ShieldAlert className="h-4 w-4" />
+          <span>Blocked Cards ({filteredBlockedCards.length})</span>
         </button>
       </div>
 
@@ -692,7 +715,7 @@ export function SessionsPage() {
             />
           </div>
 
-          {/* Second Field: Status Filter in Sessions / Action Filter in Audit Trail */}
+          {/* Second Field: Status Filter in Sessions / Active Blocked Status in Blocked Cards */}
           {activeTab === 'sessions' ? (
             <Select
               value={sessionStatusFilter}
@@ -704,16 +727,10 @@ export function SessionsPage() {
               ]}
             />
           ) : (
-            <Select
-              value={cardActionFilter}
-              onChange={(e) => setCardActionFilter(e.target.value as any)}
-              options={[
-                { value: 'ALL', label: 'All Card Actions' },
-                { value: 'CARD_BLOCKED', label: 'Blocked Cards' },
-                { value: 'CARD_UNBLOCKED', label: 'Unblocked Cards' },
-                { value: 'CARD_DELETED', label: 'Deleted Cards' },
-              ]}
-            />
+            <div className="flex items-center justify-center px-3 py-2 rounded-lg bg-rose-950/30 border border-rose-500/30 text-xs font-bold text-rose-300">
+              <span className="flex h-2 w-2 rounded-full bg-rose-500 animate-pulse mr-2" />
+              <span>Currently Blocked Cards</span>
+            </div>
           )}
 
           {/* Branch Filter */}
@@ -773,18 +790,17 @@ export function SessionsPage() {
         ) : (
           <DataTable data={filteredSessions} columns={sessionColumns} />
         )
-      ) : filteredEvents.length === 0 ? (
+      ) : filteredBlockedCards.length === 0 ? (
         <EmptyState
-          icon={<History className="h-8 w-8 text-slate-400" />}
-          title={searchQuery || cardActionFilter !== 'ALL' || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? "No matching audit records" : "No audit records"}
-          description={searchQuery || cardActionFilter !== 'ALL' || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? "Try clearing search or filters to see all audit records." : "No card actions recorded yet. Audit events will appear here when cards are blocked, unblocked, or deleted."}
+          icon={<ShieldCheck className="h-8 w-8 text-emerald-400" />}
+          title={searchQuery || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? "No matching blocked cards" : "No currently blocked cards"}
+          description={searchQuery || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? "Try clearing search or filters to see all blocked cards." : "All cards are currently active or ready in the registry. When a card is blocked, it will appear here."}
           action={
-            searchQuery || cardActionFilter !== 'ALL' || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? (
+            searchQuery || branchFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? (
               <Button
                 variant="outline"
                 onClick={() => {
                   setSearchQuery('');
-                  setCardActionFilter('ALL');
                   setBranchFilter('ALL');
                   setDateRangeFilter('ALL');
                 }}
@@ -797,7 +813,49 @@ export function SessionsPage() {
           }
         />
       ) : (
-        <DataTable data={filteredEvents} columns={eventColumns} />
+        <DataTable data={filteredBlockedCards} columns={blockedCardColumns} keyExtractor={(c) => c.id} />
+      )}
+
+      {/* ─── Unblock Card Confirmation Modal ─────────────────────── */}
+      {showUnblockModal && selectedCardToUnblock && (
+        <Modal
+          isOpen={showUnblockModal}
+          onClose={() => {
+            setShowUnblockModal(false);
+            setSelectedCardToUnblock(null);
+          }}
+          title={`Unblock Card — ${selectedCardToUnblock.physicalCardNumber}`}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-slate-300">
+              Are you sure you want to unblock card{' '}
+              <strong className="text-white font-mono">{selectedCardToUnblock.physicalCardNumber}</strong>?
+            </p>
+            <p className="text-xs text-slate-400">
+              This card will be restored to active operational status in the registry and will immediately be removed from the blocked cards list.
+            </p>
+            <ModalFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowUnblockModal(false);
+                  setSelectedCardToUnblock(null);
+                }}
+                disabled={isUnblocking}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleConfirmUnblock}
+                isLoading={isUnblocking}
+                className="bg-emerald-600 hover:bg-emerald-500 font-bold"
+              >
+                Confirm Unblock
+              </Button>
+            </ModalFooter>
+          </div>
+        </Modal>
       )}
 
       {/* ─── Session & Card Inspection Modal ──────────────────────── */}

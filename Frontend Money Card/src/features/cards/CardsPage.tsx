@@ -52,8 +52,6 @@ import {
   CameraOff,
   Scan,
   X,
-  ChevronDown,
-  ChevronUp,
   ArrowDown,
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
@@ -95,9 +93,6 @@ export function CardsPage() {
   const [showUnblockModal, setShowUnblockModal] = useState(false);
   const [selectedQrCard, setSelectedQrCard] = useState<CardEntity | null>(null);
   const [isCopiedToken, setIsCopiedToken] = useState(false);
-  const [isCardsInUseOpen, setIsCardsInUseOpen] = useState(false);
-  const [inUseSearchQuery, setInUseSearchQuery] = useState('');
-  const [inUsePage, setInUsePage] = useState(1);
 
   // Selected Card for Details, Assign, or Block
   const [selectedCard, setSelectedCard] = useState<CardEntity | null>(null);
@@ -187,32 +182,6 @@ export function CardsPage() {
   const availableCardsCount = allCards.filter((c) => c.status === 'AVAILABLE' && !c.activeSession).length;
   const blockedCardsCount = allCards.filter((c) => c.status === 'BLOCKED').length;
   const effectiveCardLimit = (orgOverview as any)?.effectiveLimits?.cardLimit ?? 100;
-
-  // ─── Filtered & Paginated In-Use Cards for Dropdown View ─────────
-  const filteredInUseCards = useMemo(() => {
-    if (!inUseSearchQuery.trim()) return activeCardsList;
-    const q = inUseSearchQuery.toLowerCase().trim();
-    return activeCardsList.filter((c) => {
-      const cardNum = (c.physicalCardNumber || c.activeSession?.sessionCardNumber || '').toLowerCase();
-      const name = (c.activeSession?.customerName || '').toLowerCase();
-      const phone = (c.activeSession?.customerPhone || '').toLowerCase();
-      return cardNum.includes(q) || name.includes(q) || phone.includes(q);
-    });
-  }, [activeCardsList, inUseSearchQuery]);
-
-  const IN_USE_PAGE_SIZE = 12;
-  const totalInUsePages = Math.max(1, Math.ceil(filteredInUseCards.length / IN_USE_PAGE_SIZE));
-  const currentInUsePage = Math.min(inUsePage, totalInUsePages);
-
-  const paginatedInUseCards = useMemo(() => {
-    const start = (currentInUsePage - 1) * IN_USE_PAGE_SIZE;
-    return filteredInUseCards.slice(start, start + IN_USE_PAGE_SIZE);
-  }, [filteredInUseCards, currentInUsePage]);
-
-  const handleInUseSearchChange = (val: string) => {
-    setInUseSearchQuery(val.slice(0, 30));
-    setInUsePage(1);
-  };
 
   const handleViewAllInMainTable = () => {
     setAssignmentFilter('ASSIGNED');
@@ -539,20 +508,42 @@ export function CardsPage() {
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => setSelectedQrCard(card)}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700/60"
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700/60 shrink-0"
               title="Click to view QR code"
             >
               <QrCode className="h-4 w-4 text-emerald-400" />
             </button>
-            <div>
+            <div className="flex items-center gap-2">
               {isAssigned ? (
-                <span className="font-mono font-bold text-slate-100 text-sm">
-                  {card.physicalCardNumber}
-                </span>
+                <>
+                  <span className="font-mono font-bold text-slate-100 text-sm">
+                    {card.physicalCardNumber}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenDetails(card)}
+                    className="p-1 rounded-md text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/15 border border-slate-700/60 hover:border-emerald-500/30 transition-colors cursor-pointer"
+                    title="View card details & actions"
+                    aria-label={`View card ${card.physicalCardNumber}`}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </button>
+                </>
               ) : (
-                <span className="inline-flex items-center text-amber-400 text-xs font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                  Unassigned
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center text-amber-400 text-xs font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                    Unassigned
+                  </span>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="gap-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs py-0.5 px-2 shadow-sm"
+                    onClick={() => handleOpenAssignModal(card)}
+                  >
+                    <Tag className="h-3 w-3" />
+                    <span>Assign</span>
+                  </Button>
+                </div>
               )}
             </div>
           </div>
@@ -624,81 +615,6 @@ export function CardsPage() {
           <span className="text-xs text-slate-300">
             {branch ? branch.name : 'All Branches'}
           </span>
-        );
-      },
-    },
-    {
-      key: 'actions',
-      header: 'Actions',
-      render: (card: CardEntity) => {
-        const isUnassigned = !card.physicalCardNumber || card.assignmentStatus === 'UNASSIGNED';
-
-        return (
-          <div className="flex items-center gap-1.5">
-            {isUnassigned ? (
-              <Button
-                variant="primary"
-                size="sm"
-                className="gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs py-1 px-2.5 shadow-sm"
-                onClick={() => handleOpenAssignModal(card)}
-              >
-                <Tag className="h-3.5 w-3.5" />
-                <span>Assign Card Number</span>
-              </Button>
-            ) : (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1 text-xs py-1 px-2"
-                  onClick={() => handleOpenDetails(card)}
-                >
-                  <Eye className="h-3.5 w-3.5 text-slate-400" />
-                  <span>Inspect</span>
-                </Button>
-
-                {canBlock && card.status !== 'BLOCKED' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs py-1 px-2 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 border-rose-900/40"
-                    onClick={() => {
-                      setSelectedCard(card);
-                      setShowBlockModal(true);
-                    }}
-                  >
-                    <Lock className="h-3 w-3" />
-                  </Button>
-                )}
-
-                {canUnblock && card.status === 'BLOCKED' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs py-1 px-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40 border-emerald-900/40"
-                    onClick={() => {
-                      setSelectedCard(card);
-                      setShowUnblockModal(true);
-                    }}
-                  >
-                    <Unlock className="h-3 w-3" />
-                  </Button>
-                )}
-                {/* Delete / Deactivate Card */}
-                {canBlock && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs py-1 px-2 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40"
-                    title="Delete / Deactivate Card"
-                    onClick={() => handleOpenDeleteCard(card)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                )}
-              </>
-            )}
-          </div>
         );
       },
     },
@@ -784,157 +700,28 @@ export function CardsPage() {
         </Card>
       </div>
 
-      {/* ─── Cards In Use Right Now (Collapsible Dropdown) ─────────── */}
+      {/* ─── Cards In Use Right Now Summary Banner ───────────────────── */}
       {!isLoading && activeCardsList.length > 0 && (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/15 overflow-hidden transition-all duration-200 shadow-sm">
-          {/* Collapsible Header Bar Button */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <span className="text-sm font-bold text-slate-100">
+              Cards in use rn — <span className="text-emerald-400 font-mono">{activeCardsList.length}</span>
+            </span>
+            <span className="text-slate-500">—</span>
+            <span className="text-sm font-semibold text-emerald-300">
+              {formatCurrency(activeCardsList.reduce((sum, c) => sum + (c.activeSession?.balance || 0), 0))} active balance
+            </span>
+          </div>
+
           <button
             type="button"
-            onClick={() => setIsCardsInUseOpen(!isCardsInUseOpen)}
-            className="w-full flex items-center justify-between p-3.5 hover:bg-emerald-900/20 transition-colors text-left select-none cursor-pointer"
+            onClick={handleViewAllInMainTable}
+            className="self-start sm:self-auto flex items-center gap-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-colors cursor-pointer"
           >
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
-              <h3 className="font-bold text-sm text-slate-100">
-                Cards In Use Right Now ({activeCardsList.length})
-              </h3>
-              <span className="text-xs text-slate-400 font-normal hidden sm:inline">
-                • {formatCurrency(activeCardsList.reduce((sum, c) => sum + (c.activeSession?.balance || 0), 0))} active balance
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400">
-              <span>{isCardsInUseOpen ? 'Hide Cards' : 'View Cards'}</span>
-              {isCardsInUseOpen ? (
-                <ChevronUp className="h-4 w-4 transition-transform text-emerald-400" />
-              ) : (
-                <ChevronDown className="h-4 w-4 transition-transform text-emerald-400" />
-              )}
-            </div>
+            <span>View active cards in table</span>
+            <ArrowDown className="h-3.5 w-3.5" />
           </button>
-
-          {/* Collapsible Content Grid with Capped Height, Search & Pagination */}
-          {isCardsInUseOpen && (
-            <div className="p-4 pt-2 border-t border-emerald-500/20 space-y-3">
-              {/* Controls Toolbar inside Dropdown */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-slate-950/60 p-2.5 rounded-xl border border-emerald-500/20">
-                <div className="relative flex-1 max-w-md">
-                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search in-use cards by #, diner, or phone..."
-                    value={inUseSearchQuery}
-                    maxLength={30}
-                    onChange={(e) => handleInUseSearchChange(e.target.value)}
-                    className="w-full rounded-lg border border-slate-800 bg-slate-900 pl-8 pr-7 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
-                  />
-                  {inUseSearchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => handleInUseSearchChange('')}
-                      className="absolute right-2 top-2 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
-                      title="Clear search"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-slate-400 text-[11px] hidden md:inline">
-                    {filteredInUseCards.length} in-use card(s)
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleViewAllInMainTable}
-                    className="flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-semibold px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-colors cursor-pointer"
-                  >
-                    <span>View all in table below</span>
-                    <ArrowDown className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Cards Grid with Capped Max Height (prevents page going way down) */}
-              <div className="max-h-[360px] overflow-y-auto pr-1">
-                {paginatedInUseCards.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-slate-400">
-                    <p>No in-use cards match "{inUseSearchQuery}".</p>
-                    <button
-                      type="button"
-                      onClick={() => handleInUseSearchChange('')}
-                      className="mt-2 text-emerald-400 hover:underline"
-                    >
-                      Clear search
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {paginatedInUseCards.map((c) => (
-                      <button
-                        type="button"
-                        key={c.id}
-                        onClick={() => handleOpenDetails(c)}
-                        className="p-3.5 rounded-xl border border-slate-800 bg-slate-900/90 hover:border-emerald-500/50 hover:bg-slate-900 transition-all text-left cursor-pointer select-none space-y-2.5 shadow-sm group"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono text-xs font-extrabold text-emerald-300 group-hover:text-emerald-200">
-                            {c.physicalCardNumber || c.activeSession?.sessionCardNumber || 'MC-Card'}
-                          </span>
-                          <Badge variant="success" className="text-[10px] py-0">Active</Badge>
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-slate-200 truncate">
-                            {c.activeSession?.customerName || 'Customer'}
-                          </p>
-                          <p className="text-[11px] text-slate-400">
-                            {c.activeSession?.customerPhone || 'Cafeteria Diner'}
-                          </p>
-                        </div>
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
-                          <span className="text-slate-400">Balance:</span>
-                          <span className="font-mono font-bold text-violet-300">
-                            {formatCurrency(c.activeSession?.balance || 0)}
-                          </span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Pagination Bar for High Card Volumes */}
-              {totalInUsePages > 1 && (
-                <div className="flex items-center justify-between pt-2 border-t border-emerald-500/20 text-xs text-slate-400">
-                  <span>
-                    Showing <strong className="text-slate-200">{((currentInUsePage - 1) * IN_USE_PAGE_SIZE) + 1}</strong>–<strong className="text-slate-200">{Math.min(currentInUsePage * IN_USE_PAGE_SIZE, filteredInUseCards.length)}</strong> of {filteredInUseCards.length} active cards
-                  </span>
-
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setInUsePage((p) => Math.max(1, p - 1))}
-                      disabled={currentInUsePage === 1}
-                      className="px-2.5 py-1 rounded border border-slate-800 bg-slate-900 text-xs font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
-                    >
-                      Previous
-                    </button>
-                    <span className="px-2 font-mono text-[11px] text-slate-300">
-                      Page {currentInUsePage} of {totalInUsePages}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setInUsePage((p) => Math.min(totalInUsePages, p + 1))}
-                      disabled={currentInUsePage === totalInUsePages}
-                      className="px-2.5 py-1 rounded border border-slate-800 bg-slate-900 text-xs font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
 
@@ -1378,9 +1165,60 @@ export function CardsPage() {
           </div>
 
           <ModalFooter>
-            <Button variant="outline" onClick={() => setShowDetailsModal(false)}>
-              Close
-            </Button>
+            <div className="flex w-full flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {canBlock && selectedCard.status !== 'BLOCKED' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-rose-400 border-rose-500/30 hover:bg-rose-500/10 hover:border-rose-500/50"
+                    onClick={() => {
+                      setShowDetailsModal(false);
+                      setBlockReasonCategory('Lost or Stolen Card');
+                      setAdditionalBlockReason('');
+                      setShowBlockModal(true);
+                    }}
+                  >
+                    <Lock className="h-3.5 w-3.5" />
+                    <span>Block Card</span>
+                  </Button>
+                )}
+
+                {canUnblock && selectedCard.status === 'BLOCKED' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 hover:border-emerald-500/50"
+                    onClick={() => {
+                      setShowDetailsModal(false);
+                      setShowUnblockModal(true);
+                    }}
+                  >
+                    <Unlock className="h-3.5 w-3.5" />
+                    <span>Unblock Card</span>
+                  </Button>
+                )}
+
+                {canBlock && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-slate-400 border-slate-700 hover:text-rose-400 hover:border-rose-500/40 hover:bg-rose-500/10"
+                    onClick={() => {
+                      setShowDetailsModal(false);
+                      handleOpenDeleteCard(selectedCard);
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Delete Card</span>
+                  </Button>
+                )}
+              </div>
+
+              <Button variant="outline" onClick={() => setShowDetailsModal(false)}>
+                Close
+              </Button>
+            </div>
           </ModalFooter>
         </Modal>
       )}
